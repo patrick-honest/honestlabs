@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: runbookbot
+  labels:
+    app: runbookbot
+spec:
+  selector:
+    app: runbookbot
+  ports:
+    - name: health
+      port: 8080
+      targetPort: health
+      protocol: TCP
+  type: ClusterIP

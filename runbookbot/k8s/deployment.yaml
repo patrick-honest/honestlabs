@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: runbookbot
+  labels:
+    app: runbookbot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: runbookbot
+  template:
+    metadata:
+      labels:
+        app: runbookbot
+    spec:
+      containers:
+        - name: runbookbot
+          image: gcr.io/PROJECT_ID/runbookbot:latest
+          ports:
+            - containerPort: 8080
+              name: health
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          envFrom:
+            - secretRef:
+                name: runbookbot-secrets
+          env:
+            - name: LOG_LEVEL
+              value: "info"
+            - name: HEALTH_PORT
+              value: "8080"
+      restartPolicy: Always
