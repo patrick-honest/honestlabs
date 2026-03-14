@@ -10,7 +10,7 @@ import (
 	"github.com/slack-go/slack/slackevents"
 	"github.com/slack-go/slack/socketmode"
 
-	"github.com/honestbank/runbookbot/claude"
+	"github.com/honestbank/runbookbot/llm"
 	"github.com/honestbank/runbookbot/notion"
 )
 
@@ -19,7 +19,7 @@ type Handler struct {
 	slackClient      *slack.Client
 	socketClient     *socketmode.Client
 	notionClient     *notion.Client
-	claudeClient     *claude.Client
+	llmClient        llm.Client
 	threadReader     *ThreadReader
 	incidentSearcher *IncidentSearcher
 	channelID        string
@@ -32,7 +32,7 @@ func NewHandler(
 	slackClient *slack.Client,
 	socketClient *socketmode.Client,
 	notionClient *notion.Client,
-	claudeClient *claude.Client,
+	llmClient llm.Client,
 	channelID string,
 	logger *slog.Logger,
 ) (*Handler, error) {
@@ -48,7 +48,7 @@ func NewHandler(
 		slackClient:      slackClient,
 		socketClient:     socketClient,
 		notionClient:     notionClient,
-		claudeClient:     claudeClient,
+		llmClient:        llmClient,
 		threadReader:     NewThreadReader(slackClient, botUID, logger),
 		incidentSearcher: NewIncidentSearcher(slackClient, logger),
 		channelID:        channelID,
@@ -175,10 +175,10 @@ func (h *Handler) handleMessage(ctx context.Context, ev *slackevents.MessageEven
 		pastIncidents = nil
 	}
 
-	// Generate response from Claude.
-	response, err := h.claudeClient.GenerateResponse(ctx, messages, runbooks, pastIncidents)
+	// Generate response from the LLM.
+	response, err := h.llmClient.GenerateResponse(ctx, messages, runbooks, pastIncidents)
 	if err != nil {
-		h.logger.Error("failed to generate claude response", "error", err)
+		h.logger.Error("failed to generate llm response", "error", err)
 		h.postErrorReply(ev.Channel, threadTS)
 		return
 	}
@@ -215,8 +215,8 @@ func (h *Handler) captureThreadLearnings(ctx context.Context, channel, threadTS 
 		return
 	}
 
-	// Ask Claude to extract learnings from the thread.
-	learnings, err := h.claudeClient.ExtractLearnings(ctx, messages)
+	// Extract learnings from the thread via the LLM.
+	learnings, err := h.llmClient.ExtractLearnings(ctx, messages)
 	if err != nil {
 		h.logger.Error("failed to extract learnings from thread", "error", err)
 		return

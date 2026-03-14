@@ -14,6 +14,8 @@ import (
 	"github.com/honestbank/runbookbot/bot"
 	"github.com/honestbank/runbookbot/claude"
 	"github.com/honestbank/runbookbot/config"
+	"github.com/honestbank/runbookbot/gemini"
+	"github.com/honestbank/runbookbot/llm"
 	"github.com/honestbank/runbookbot/notion"
 )
 
@@ -41,6 +43,7 @@ func main() {
 	logger.Info("starting runbookbot",
 		"channel_id", cfg.SlackChannelID,
 		"notion_db_id", cfg.NotionDBID,
+		"llm_provider", cfg.LLMProvider,
 	)
 
 	// Start health check server.
@@ -60,15 +63,26 @@ func main() {
 	// Initialize Notion client.
 	notionClient := notion.NewClient(cfg.NotionAPIKey, cfg.NotionDBID, logger)
 
-	// Initialize Claude client.
-	claudeClient := claude.NewClient(logger)
+	// Initialize LLM client based on configured provider.
+	ctx := context.Background()
+	var llmClient llm.Client
+	switch cfg.LLMProvider {
+	case "gemini":
+		llmClient, err = gemini.NewClient(ctx, cfg.GeminiAPIKey, logger)
+		if err != nil {
+			logger.Error("failed to create gemini client", "error", err)
+			os.Exit(1)
+		}
+	default: // "claude"
+		llmClient = claude.NewClient(logger)
+	}
 
 	// Create the event handler.
 	handler, err := bot.NewHandler(
 		slackClient,
 		socketClient,
 		notionClient,
-		claudeClient,
+		llmClient,
 		cfg.SlackChannelID,
 		logger,
 	)
@@ -78,7 +92,7 @@ func main() {
 	}
 
 	// Set up graceful shutdown.
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	sigCh := make(chan os.Signal, 1)

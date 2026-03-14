@@ -11,6 +11,8 @@ type Config struct {
 	SlackBotToken   string
 	SlackAppToken   string
 	AnthropicAPIKey string
+	GeminiAPIKey    string
+	LLMProvider     string // "claude" (default) or "gemini"
 	NotionAPIKey    string
 	NotionDBID      string
 	SlackChannelID  string
@@ -25,6 +27,8 @@ func Load() (*Config, error) {
 		SlackBotToken:   os.Getenv("SLACK_BOT_TOKEN"),
 		SlackAppToken:   os.Getenv("SLACK_APP_TOKEN"),
 		AnthropicAPIKey: os.Getenv("ANTHROPIC_API_KEY"),
+		GeminiAPIKey:    os.Getenv("GEMINI_API_KEY"),
+		LLMProvider:     getEnvOrDefault("LLM_PROVIDER", "claude"),
 		NotionAPIKey:    os.Getenv("NOTION_API_KEY"),
 		NotionDBID:      getEnvOrDefault("NOTION_DATABASE_ID", "dc28849a-42b5-47f6-abc6-15385afbf57f"),
 		SlackChannelID:  getEnvOrDefault("SLACK_CHANNEL_ID", "C0ALJE5SDL6"),
@@ -39,11 +43,21 @@ func Load() (*Config, error) {
 	if cfg.SlackAppToken == "" {
 		missing = append(missing, "SLACK_APP_TOKEN")
 	}
-	if cfg.AnthropicAPIKey == "" {
-		missing = append(missing, "ANTHROPIC_API_KEY")
-	}
 	if cfg.NotionAPIKey == "" {
 		missing = append(missing, "NOTION_API_KEY")
+	}
+
+	switch cfg.LLMProvider {
+	case "claude":
+		if cfg.AnthropicAPIKey == "" {
+			missing = append(missing, "ANTHROPIC_API_KEY")
+		}
+	case "gemini":
+		if cfg.GeminiAPIKey == "" {
+			missing = append(missing, "GEMINI_API_KEY")
+		}
+	default:
+		return nil, fmt.Errorf("unknown LLM_PROVIDER %q: must be \"claude\" or \"gemini\"", cfg.LLMProvider)
 	}
 
 	if len(missing) > 0 {
@@ -54,7 +68,7 @@ func Load() (*Config, error) {
 }
 
 func getEnvOrDefault(key, defaultVal string) string {
-	if v := os.Getenv(key); v != "" {
+	if v := os.Getenv(key); v != ""  {
 		return v
 	}
 	return defaultVal

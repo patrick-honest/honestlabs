@@ -8,7 +8,7 @@ import (
 
 	"github.com/slack-go/slack"
 
-	"github.com/honestbank/runbookbot/claude"
+	"github.com/honestbank/runbookbot/llm"
 )
 
 const (
@@ -35,7 +35,7 @@ func NewIncidentSearcher(client *slack.Client, logger *slog.Logger) *IncidentSea
 // SearchPastIncidents fetches recent channel history (newest first) and returns the latest
 // messages or threads that contain any of the given keywords, excluding the current thread.
 // For thread-parent messages, replies are also checked so incidents discussed in threads are found.
-func (s *IncidentSearcher) SearchPastIncidents(ctx context.Context, channelID, excludeThreadTS string, keywords []string) ([]claude.PastIncident, error) {
+func (s *IncidentSearcher) SearchPastIncidents(ctx context.Context, channelID, excludeThreadTS string, keywords []string) ([]llm.PastIncident, error) {
 	if len(keywords) == 0 {
 		return nil, nil
 	}
@@ -53,7 +53,7 @@ func (s *IncidentSearcher) SearchPastIncidents(ctx context.Context, channelID, e
 		lowered[i] = strings.ToLower(kw)
 	}
 
-	var incidents []claude.PastIncident
+	var incidents []llm.PastIncident
 	threadChecks := 0
 
 	// Slack returns messages newest-first, so the first matches are the most recent.
@@ -73,7 +73,7 @@ func (s *IncidentSearcher) SearchPastIncidents(ctx context.Context, channelID, e
 
 		// Check the top-level message text.
 		if containsKeyword(msg.Text, lowered) {
-			incidents = append(incidents, claude.PastIncident{Text: msg.Text, URL: threadURL})
+			incidents = append(incidents, llm.PastIncident{Text: msg.Text, URL: threadURL})
 			continue
 		}
 
@@ -81,7 +81,7 @@ func (s *IncidentSearcher) SearchPastIncidents(ctx context.Context, channelID, e
 		if msg.ReplyCount > 0 && threadChecks < maxThreadChecks {
 			threadChecks++
 			if text, found := s.threadContainsKeyword(ctx, channelID, ts, lowered); found {
-				incidents = append(incidents, claude.PastIncident{Text: text, URL: threadURL})
+				incidents = append(incidents, llm.PastIncident{Text: text, URL: threadURL})
 			}
 		}
 	}
