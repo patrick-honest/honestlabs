@@ -10,6 +10,7 @@ import (
 	"github.com/slack-go/slack/slackevents"
 	"github.com/slack-go/slack/socketmode"
 
+	bq "github.com/honestbank/runbookbot/bigquery"
 	"github.com/honestbank/runbookbot/llm"
 	"github.com/honestbank/runbookbot/notion"
 )
@@ -20,6 +21,7 @@ type Handler struct {
 	socketClient     *socketmode.Client
 	notionClient     *notion.Client
 	llmClient        llm.Client
+	bqClient         *bq.Client
 	threadReader     *ThreadReader
 	incidentSearcher *IncidentSearcher
 	channelID        string
@@ -33,6 +35,7 @@ func NewHandler(
 	socketClient *socketmode.Client,
 	notionClient *notion.Client,
 	llmClient llm.Client,
+	bqClient *bq.Client,
 	channelID string,
 	logger *slog.Logger,
 ) (*Handler, error) {
@@ -49,6 +52,7 @@ func NewHandler(
 		socketClient:     socketClient,
 		notionClient:     notionClient,
 		llmClient:        llmClient,
+		bqClient:         bqClient,
 		threadReader:     NewThreadReader(slackClient, botUID, logger),
 		incidentSearcher: NewIncidentSearcher(slackClient, logger),
 		channelID:        channelID,
@@ -158,6 +162,26 @@ func (h *Handler) handleMessage(ctx context.Context, ev *slackevents.MessageEven
 		searchText = messages[0] + " " + searchText
 	}
 
+	// Extract user IDs from the thread and look up customer info from BigQuery.
+	var customers []*bq.CustomerInfo
+	if h.bqClient != nil {
+		allText := strings.Join(messages, " ")
+		userIDs := bq.ExtractUserIDs(allText)
+		if len(userIDs) > 0 {
+			h.logger.Info("extracted user IDs from thread", "user_ids", userIDs)
+		}
+		for _, uid := range userIDs {
+			info, lookupErr := h.bqClient.LookupCustomer(ctx, uid)
+			if lookupErr != nil {
+				h.logger.Error("failed to look up customer", "user_id", uid, "error", lookupErr)
+				continue
+			}
+			if info != nil {
+				customers = append(customers, info)
+			}
+		}
+	}
+
 	// Search Notion for relevant runbooks.
 	runbooks, err := h.notionClient.SearchRunbooks(ctx, searchText)
 	if err != nil {
@@ -176,7 +200,7 @@ func (h *Handler) handleMessage(ctx context.Context, ev *slackevents.MessageEven
 	}
 
 	// Generate response from the LLM.
-	response, err := h.llmClient.GenerateResponse(ctx, messages, runbooks, pastIncidents)
+	response, err := h.llmClient.GenerateResponse(ctx, messages, runbooks, pastIncidents, customers)
 	if err != nil {
 		h.logger.Error("failed to generate llm response", "error", err)
 		h.postErrorReply(ev.Channel, threadTS)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	bq "github.com/honestbank/runbookbot/bigquery"
 	"github.com/honestbank/runbookbot/notion"
 )
 
@@ -28,6 +29,14 @@ Your response MUST follow this exact structure:
 
 *Relevant Runbooks*
 • {List each runbook with its link and a brief description — these are provided to you}
+
+*Customer Info*
+{ONLY include this section if customer information was found from the user_id in the incident. Show:}
+• User ID: {user_id}
+• URN: {urn}
+• LOC Account: {loc_acct}
+• Card Brand: {card_brand - translate LC=Local, VS=Visa, MC=MasterCard, UP=UnionPay}
+• Card Product: {card_product - translate C=Classic, G=Gold, P=Platinum}
 
 *Vendor point-of-contact*
 {ONLY include this section if the incident involves an external vendor/third-party service (e.g., Finexus, VIDA, Mastercard, Visa, Twilio, Durianpay, XL, Indosat, Telkomsel, Meta, Anteraja, etc.). If no vendor is involved, omit this section entirely.}
@@ -76,17 +85,68 @@ type PastIncident struct {
 
 // Client is the interface that both Claude and Gemini backends implement.
 type Client interface {
-	GenerateResponse(ctx context.Context, threadMessages []string, runbooks []notion.Runbook, pastIncidents []PastIncident) (string, error)
+	GenerateResponse(ctx context.Context, threadMessages []string, runbooks []notion.Runbook, pastIncidents []PastIncident, customers []*bq.CustomerInfo) (string, error)
 	ExtractLearnings(ctx context.Context, threadMessages []string) (string, error)
 }
 
-// BuildUserMessage assembles the prompt with thread context, runbook references, and past incidents.
-func BuildUserMessage(threadMessages []string, runbooks []notion.Runbook, pastIncidents []PastIncident) string {
+// cardBrandName translates card brand codes to human-readable names.
+func cardBrandName(code string) string {
+	switch strings.ToUpper(strings.TrimSpace(code)) {
+	case "LC":
+		return "Local"
+	case "VS":
+		return "Visa"
+	case "MC":
+		return "MasterCard"
+	case "UP":
+		return "UnionPay"
+	default:
+		return code
+	}
+}
+
+// cardProductName translates card product codes to human-readable names.
+func cardProductName(code string) string {
+	switch strings.ToUpper(strings.TrimSpace(code)) {
+	case "C":
+		return "Classic"
+	case "G":
+		return "Gold"
+	case "P":
+		return "Platinum"
+	default:
+		return code
+	}
+}
+
+// BuildUserMessage assembles the prompt with thread context, runbook references, past incidents, and customer info.
+func BuildUserMessage(threadMessages []string, runbooks []notion.Runbook, pastIncidents []PastIncident, customers []*bq.CustomerInfo) string {
 	var sb strings.Builder
 
 	sb.WriteString("## Incident Thread Context\n\n")
 	for i, msg := range threadMessages {
 		sb.WriteString(fmt.Sprintf("Message %d: %s\n\n", i+1, msg))
+	}
+
+	if len(customers) > 0 {
+		sb.WriteString("## Customer Information (from BigQuery)\n\n")
+		for _, c := range customers {
+			sb.WriteString(fmt.Sprintf("- User ID: %s\n", c.UserID))
+			if c.URN != "" {
+				sb.WriteString(fmt.Sprintf("  URN: %s\n", c.URN))
+			}
+			if c.LocAcct != "" {
+				sb.WriteString(fmt.Sprintf("  LOC Account: %s\n", c.LocAcct))
+			}
+			if c.CardBrand != "" {
+				sb.WriteString(fmt.Sprintf("  Card Brand: %s (%s)\n", c.CardBrand, cardBrandName(c.CardBrand)))
+			}
+			if c.CardProduct != "" {
+				sb.WriteString(fmt.Sprintf("  Card Product: %s (%s)\n", c.CardProduct, cardProductName(c.CardProduct)))
+			}
+			sb.WriteString("\n")
+		}
+		sb.WriteString("Include this customer information in your response under the *Customer Info* section.\n\n")
 	}
 
 	if len(runbooks) > 0 {

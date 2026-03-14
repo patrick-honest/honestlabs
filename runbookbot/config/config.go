@@ -16,6 +16,7 @@ type Config struct {
 	NotionAPIKey    string
 	NotionDBID      string
 	SlackChannelID  string
+	GCPProjectID    string
 	LogLevel        string
 	HealthPort      string
 }
@@ -32,6 +33,7 @@ func Load() (*Config, error) {
 		NotionAPIKey:    os.Getenv("NOTION_API_KEY"),
 		NotionDBID:      getEnvOrDefault("NOTION_DATABASE_ID", "dc28849a-42b5-47f6-abc6-15385afbf57f"),
 		SlackChannelID:  getEnvOrDefault("SLACK_CHANNEL_ID", "C0ALJE5SDL6"),
+		GCPProjectID:    getEnvOrDefault("GCP_PROJECT_ID", "storage-58f5a02c"),
 		LogLevel:        getEnvOrDefault("LOG_LEVEL", "info"),
 		HealthPort:      getEnvOrDefault("HEALTH_PORT", "8080"),
 	}

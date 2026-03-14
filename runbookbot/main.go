@@ -11,6 +11,7 @@ import (
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/socketmode"
 
+	bq "github.com/honestbank/runbookbot/bigquery"
 	"github.com/honestbank/runbookbot/bot"
 	"github.com/honestbank/runbookbot/claude"
 	"github.com/honestbank/runbookbot/config"
@@ -77,12 +78,22 @@ func main() {
 		llmClient = claude.NewClient(logger)
 	}
 
+	// Initialize BigQuery client for customer lookups.
+	bqClient, bqErr := bq.NewClient(ctx, cfg.GCPProjectID, logger)
+	if bqErr != nil {
+		logger.Warn("failed to initialize BigQuery client — customer lookups will be disabled", "error", bqErr)
+		bqClient = nil
+	} else {
+		defer bqClient.Close()
+	}
+
 	// Create the event handler.
 	handler, err := bot.NewHandler(
 		slackClient,
 		socketClient,
 		notionClient,
 		llmClient,
+		bqClient,
 		cfg.SlackChannelID,
 		logger,
 	)

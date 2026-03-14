@@ -8,6 +8,7 @@ import (
 
 	"google.golang.org/genai"
 
+	bq "github.com/honestbank/runbookbot/bigquery"
 	"github.com/honestbank/runbookbot/llm"
 	"github.com/honestbank/runbookbot/notion"
 )
@@ -32,9 +33,9 @@ func NewClient(ctx context.Context, apiKey string, logger *slog.Logger) (*Client
 	return &Client{client: client, logger: logger}, nil
 }
 
-// GenerateResponse sends thread context, runbooks, and past incidents to Gemini and returns the response.
-func (c *Client) GenerateResponse(ctx context.Context, threadMessages []string, runbooks []notion.Runbook, pastIncidents []llm.PastIncident) (string, error) {
-	userMessage := llm.BuildUserMessage(threadMessages, runbooks, pastIncidents)
+// GenerateResponse sends thread context, runbooks, past incidents, and customer info to Gemini and returns the response.
+func (c *Client) GenerateResponse(ctx context.Context, threadMessages []string, runbooks []notion.Runbook, pastIncidents []llm.PastIncident, customers []*bq.CustomerInfo) (string, error) {
+	userMessage := llm.BuildUserMessage(threadMessages, runbooks, pastIncidents, customers)
 
 	c.logger.Info("calling gemini API",
 		"thread_messages", len(threadMessages),

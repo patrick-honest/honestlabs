@@ -8,6 +8,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
+	bq "github.com/honestbank/runbookbot/bigquery"
 	"github.com/honestbank/runbookbot/llm"
 	"github.com/honestbank/runbookbot/notion"
 )
@@ -29,9 +30,9 @@ func NewClient(logger *slog.Logger) *Client {
 	}
 }
 
-// GenerateResponse sends thread context, runbooks, and past incidents to Claude and returns the response.
-func (c *Client) GenerateResponse(ctx context.Context, threadMessages []string, runbooks []notion.Runbook, pastIncidents []llm.PastIncident) (string, error) {
-	userMessage := llm.BuildUserMessage(threadMessages, runbooks, pastIncidents)
+// GenerateResponse sends thread context, runbooks, past incidents, and customer info to Claude and returns the response.
+func (c *Client) GenerateResponse(ctx context.Context, threadMessages []string, runbooks []notion.Runbook, pastIncidents []llm.PastIncident, customers []*bq.CustomerInfo) (string, error) {
+	userMessage := llm.BuildUserMessage(threadMessages, runbooks, pastIncidents, customers)
 
 	c.logger.Info("calling claude API",
 		"thread_messages", len(threadMessages),
