@@ -16,14 +16,15 @@ import (
 
 // Handler processes incoming Slack events.
 type Handler struct {
-	slackClient   *slack.Client
-	socketClient  *socketmode.Client
-	notionClient  *notion.Client
-	claudeClient  *claude.Client
-	threadReader  *ThreadReader
-	channelID     string
-	botUID        string
-	logger        *slog.Logger
+	slackClient      *slack.Client
+	socketClient     *socketmode.Client
+	notionClient     *notion.Client
+	claudeClient     *claude.Client
+	threadReader     *ThreadReader
+	incidentSearcher *IncidentSearcher
+	channelID        string
+	botUID           string
+	logger           *slog.Logger
 }
 
 // NewHandler creates a new event handler.
@@ -44,14 +45,15 @@ func NewHandler(
 	logger.Info("bot authenticated", "bot_user_id", botUID, "team", authResp.Team)
 
 	return &Handler{
-		slackClient:  slackClient,
-		socketClient: socketClient,
-		notionClient: notionClient,
-		claudeClient: claudeClient,
-		threadReader: NewThreadReader(slackClient, botUID, logger),
-		channelID:    channelID,
-		botUID:       botUID,
-		logger:       logger,
+		slackClient:      slackClient,
+		socketClient:     socketClient,
+		notionClient:     notionClient,
+		claudeClient:     claudeClient,
+		threadReader:     NewThreadReader(slackClient, botUID, logger),
+		incidentSearcher: NewIncidentSearcher(slackClient, logger),
+		channelID:        channelID,
+		botUID:           botUID,
+		logger:           logger,
 	}, nil
 }
 
@@ -164,8 +166,17 @@ func (h *Handler) handleMessage(ctx context.Context, ev *slackevents.MessageEven
 		runbooks = nil
 	}
 
+	// Search Slack history for related past incidents.
+	keywords := notion.ExtractKeywords(searchText)
+	pastIncidents, err := h.incidentSearcher.SearchPastIncidents(ctx, ev.Channel, threadTS, keywords)
+	if err != nil {
+		h.logger.Error("failed to search slack history for past incidents", "error", err)
+		// Continue without past incidents.
+		pastIncidents = nil
+	}
+
 	// Generate response from Claude.
-	response, err := h.claudeClient.GenerateResponse(ctx, messages, runbooks)
+	response, err := h.claudeClient.GenerateResponse(ctx, messages, runbooks, pastIncidents)
 	if err != nil {
 		h.logger.Error("failed to generate claude response", "error", err)
 		h.postErrorReply(ev.Channel, threadTS)
@@ -187,6 +198,7 @@ func (h *Handler) handleMessage(ctx context.Context, ev *slackevents.MessageEven
 		"channel", ev.Channel,
 		"thread_ts", threadTS,
 		"runbooks_found", len(runbooks),
+		"past_incidents_found", len(pastIncidents),
 	)
 
 	// After replying, check if the thread now contains actionable learnings

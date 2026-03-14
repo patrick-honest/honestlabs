@@ -58,7 +58,7 @@ type queryRequest struct {
 // SearchRunbooks queries the Notion database for runbooks matching the given keywords.
 // It extracts keywords from the message and searches the Title property.
 func (c *Client) SearchRunbooks(ctx context.Context, message string) ([]Runbook, error) {
-	keywords := extractKeywords(message)
+	keywords := ExtractKeywords(message)
 	if len(keywords) == 0 {
 		c.logger.Debug("no keywords extracted from message")
 		return nil, nil
@@ -301,9 +301,9 @@ func extractTitle(props map[string]interface{}) string {
 	return strings.Join(parts, "")
 }
 
-// extractKeywords splits the message into meaningful search terms.
+// ExtractKeywords splits the message into meaningful search terms.
 // It filters out common stop words and very short tokens.
-func extractKeywords(message string) []string {
+func ExtractKeywords(message string) []string {
 	stopWords := map[string]bool{
 		"the": true, "a": true, "an": true, "is": true, "are": true,
 		"was": true, "were": true, "be": true, "been": true, "being": true,

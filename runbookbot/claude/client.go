@@ -28,7 +28,7 @@ Your response MUST follow this exact structure:
 3. {Continue with numbered steps — be specific, reference actual tools like Grafana dashboards, BigQuery, kubectl commands, log queries, etc.}
 
 *Links to most recent related incidents*
-• {If you can identify related past incidents from the thread context or runbooks, list them here. Otherwise say "No recent related incidents found — check PagerDuty history for this service."}
+• {List related past incidents from the Slack history provided to you, with their links. If none were provided, say "No recent related incidents found — check PagerDuty history for this service."}
 
 *Relevant Runbooks*
 • {List each runbook with its link and a brief description — these are provided to you}
@@ -59,6 +59,7 @@ Respond with "NO_LEARNINGS" if:
 TASK 2 - IF THERE ARE LEARNINGS, EXTRACT THEM:
 Summarize the learnings in a clear, structured format:
 
+**Key Words:** The alert name or a one-phrase summary of the incident for future searching
 **Root Cause:** What caused the incident
 **Resolution:** What was done to fix it
 **Troubleshooting Steps Taken:**
@@ -70,6 +71,12 @@ Summarize the learnings in a clear, structured format:
 Keep it concise and factual — this will be appended to a Notion runbook page for future reference.
 Do NOT include Slack formatting (* for bold) — use plain text with markdown ** for bold since this goes to Notion.`
 )
+
+// PastIncident represents a related incident found in Slack history.
+type PastIncident struct {
+	Text string
+	URL  string
+}
 
 // Client wraps the Anthropic SDK.
 type Client struct {
@@ -86,13 +93,14 @@ func NewClient(logger *slog.Logger) *Client {
 	}
 }
 
-// GenerateResponse sends thread context and runbooks to Claude and returns the response.
-func (c *Client) GenerateResponse(ctx context.Context, threadMessages []string, runbooks []notion.Runbook) (string, error) {
-	userMessage := buildUserMessage(threadMessages, runbooks)
+// GenerateResponse sends thread context, runbooks, and past incidents to Claude and returns the response.
+func (c *Client) GenerateResponse(ctx context.Context, threadMessages []string, runbooks []notion.Runbook, pastIncidents []PastIncident) (string, error) {
+	userMessage := buildUserMessage(threadMessages, runbooks, pastIncidents)
 
 	c.logger.Info("calling claude API",
 		"thread_messages", len(threadMessages),
 		"runbooks", len(runbooks),
+		"past_incidents", len(pastIncidents),
 	)
 
 	resp, err := c.client.Messages.New(ctx, anthropic.MessageNewParams{
@@ -176,8 +184,8 @@ func (c *Client) ExtractLearnings(ctx context.Context, threadMessages []string) 
 	return text, nil
 }
 
-// buildUserMessage assembles the prompt with thread context and runbook references.
-func buildUserMessage(threadMessages []string, runbooks []notion.Runbook) string {
+// buildUserMessage assembles the prompt with thread context, runbook references, and past incidents.
+func buildUserMessage(threadMessages []string, runbooks []notion.Runbook, pastIncidents []PastIncident) string {
 	var sb strings.Builder
 
 	sb.WriteString("## Incident Thread Context\n\n")
@@ -193,6 +201,15 @@ func buildUserMessage(threadMessages []string, runbooks []notion.Runbook) string
 		sb.WriteString("\nPlease reference these runbooks in your response and include the links.\n")
 	} else {
 		sb.WriteString("## Runbooks\nNo matching runbooks were found for this incident.\n")
+	}
+
+	if len(pastIncidents) > 0 {
+		sb.WriteString("\n## Related Past Incidents from Slack History\n\n")
+		for i, inc := range pastIncidents {
+			sb.WriteString(fmt.Sprintf("%d. %s\n   Link: %s\n\n", i+1, inc.Text, inc.URL))
+		}
+	} else {
+		sb.WriteString("\n## Related Past Incidents from Slack History\nNo related past incidents found in channel history.\n")
 	}
 
 	sb.WriteString("\nPlease provide incident triage assistance based on the thread above.")
