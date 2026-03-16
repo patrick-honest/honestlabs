@@ -1,4 +1,5 @@
 import { BigQuery } from "@google-cloud/bigquery";
+import crypto from "crypto";
 
 const PROJECT_ID = process.env.BIGQUERY_PROJECT_ID || "storage-58f5a02c";
 
@@ -14,7 +15,87 @@ export function getBigQueryClient(): BigQuery {
   return _client;
 }
 
+// ---------------------------------------------------------------------------
+// In-memory query cache — prevents duplicate BigQuery hits for the same SQL
+// within the server process. Each entry has a 10-minute TTL.
+// Also deduplicates concurrent identical queries (request coalescing).
+// ---------------------------------------------------------------------------
+
+interface MemCacheEntry {
+  data: unknown[];
+  expiresAt: number;
+}
+
+const MEM_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const MEM_CACHE_MAX_ENTRIES = 200;
+
+const _memCache = new Map<string, MemCacheEntry>();
+const _inflight = new Map<string, Promise<unknown[]>>();
+
+// Query execution stats for monitoring
+let _queryStats = { hits: 0, misses: 0, coalesced: 0, totalBytesAvoided: 0 };
+
+function makeQueryKey(sql: string, params?: Record<string, unknown>): string {
+  const hash = crypto
+    .createHash("sha256")
+    .update(sql + (params ? JSON.stringify(params) : ""))
+    .digest("hex")
+    .slice(0, 16);
+  return hash;
+}
+
+function evictExpired(): void {
+  const now = Date.now();
+  for (const [key, entry] of _memCache) {
+    if (entry.expiresAt < now) _memCache.delete(key);
+  }
+  // If still over limit, evict oldest entries
+  if (_memCache.size > MEM_CACHE_MAX_ENTRIES) {
+    const entries = [..._memCache.entries()].sort(
+      (a, b) => a[1].expiresAt - b[1].expiresAt,
+    );
+    const toRemove = entries.slice(0, entries.length - MEM_CACHE_MAX_ENTRIES);
+    for (const [key] of toRemove) _memCache.delete(key);
+  }
+}
+
 export async function runQuery<T = Record<string, unknown>>(
+  sql: string,
+  params?: Record<string, unknown>
+): Promise<T[]> {
+  const key = makeQueryKey(sql, params);
+
+  // 1. Check in-memory cache
+  const cached = _memCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) {
+    _queryStats.hits++;
+    return cached.data as T[];
+  }
+
+  // 2. Check if same query is already in-flight (request coalescing)
+  const inflight = _inflight.get(key);
+  if (inflight) {
+    _queryStats.coalesced++;
+    return inflight as Promise<T[]>;
+  }
+
+  // 3. Execute query and cache the result
+  _queryStats.misses++;
+  const promise = executeQuery<T>(sql, params).then((rows) => {
+    _memCache.set(key, { data: rows, expiresAt: Date.now() + MEM_CACHE_TTL_MS });
+    _inflight.delete(key);
+    evictExpired();
+    return rows;
+  }).catch((err) => {
+    _inflight.delete(key);
+    throw err;
+  });
+
+  _inflight.set(key, promise as Promise<unknown[]>);
+  return promise;
+}
+
+async function executeQuery<T = Record<string, unknown>>(
   sql: string,
   params?: Record<string, unknown>
 ): Promise<T[]> {
@@ -28,6 +109,25 @@ export async function runQuery<T = Record<string, unknown>>(
   }
   const [rows] = await client.query(options);
   return rows as T[];
+}
+
+/**
+ * Get query cache statistics for monitoring.
+ */
+export function getQueryStats() {
+  return {
+    ..._queryStats,
+    memoryCacheSize: _memCache.size,
+    inflightQueries: _inflight.size,
+  };
+}
+
+/**
+ * Clear the in-memory cache (useful after cron refresh).
+ */
+export function clearMemoryCache(): void {
+  _memCache.clear();
+  _inflight.clear();
 }
 
 export async function estimateQueryCost(sql: string): Promise<{ bytesProcessed: number; estimatedCostUsd: number }> {
@@ -81,4 +181,13 @@ export const TABLES = {
 
   // Collections
   regular_activity: "`storage-58f5a02c.mart_collections.regular_activity`",
+
+  // Freshworks
+  freshdesk_ticket_summary: "`storage-58f5a02c.mart_freshworks.freshdesk_ticket_summary`",
+
+  // Savings
+  opened_savings_accounts: "`storage-58f5a02c.refined_savings_account_service.opened_savings_accounts`",
+
+  // Card delivery (AWB)
+  card_delivery_tracking: "`storage-58f5a02c.raw_raw_card_delivery_tracking_job.ss_card_delivery_anteraja_tracking_notification`",
 } as const;

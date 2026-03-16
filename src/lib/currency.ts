@@ -30,9 +30,9 @@ export function formatAmountCompact(amountIdr: number, currency: "IDR" | "USD"):
   const value = currency === "USD" ? idrToUsd(amountIdr) : amountIdr;
   const prefix = currency === "USD" ? "$" : "Rp ";
 
-  if (Math.abs(value) >= 1_000_000_000_000) return `${prefix}${(value / 1_000_000_000_000).toFixed(1)}T`;
-  if (Math.abs(value) >= 1_000_000_000) return `${prefix}${(value / 1_000_000_000).toFixed(1)}B`;
-  if (Math.abs(value) >= 1_000_000) return `${prefix}${(value / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(value) >= 1_000) return `${prefix}${(value / 1_000).toFixed(1)}K`;
-  return `${prefix}${value.toFixed(currency === "USD" ? 2 : 0)}`;
+  if (Math.abs(value) >= 1_000_000_000_000) return `${prefix}${Number((value / 1_000_000_000_000).toFixed(2))}T`;
+  if (Math.abs(value) >= 1_000_000_000) return `${prefix}${Number((value / 1_000_000_000).toFixed(2))}B`;
+  if (Math.abs(value) >= 1_000_000) return `${prefix}${Number((value / 1_000_000).toFixed(2))}M`;
+  if (Math.abs(value) >= 1_000) return `${prefix}${Number((value / 1_000).toFixed(2))}K`;
+  return `${prefix}${value.toFixed(Math.min(currency === "USD" ? 2 : 0, 2))}`;
 }

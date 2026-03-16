@@ -1,8 +1,35 @@
 "use client";
 
 import { signIn } from "next-auth/react";
+import { useState } from "react";
 
 export default function LoginPage() {
+  const [showCredentials, setShowCredentials] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleCredentialsLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    const result = await signIn("credentials", {
+      username,
+      password,
+      redirect: false,
+      callbackUrl: "/dashboard",
+    });
+
+    if (result?.error) {
+      setError("Invalid username or password");
+      setLoading(false);
+    } else if (result?.url) {
+      window.location.href = result.url;
+    }
+  };
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-950">
       <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-8">
@@ -16,7 +43,7 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Sign-in button */}
+        {/* Google Sign-in button */}
         <button
           onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
           className="flex w-full items-center justify-center gap-3 rounded-lg bg-blue-500 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-600"
@@ -42,9 +69,56 @@ export default function LoginPage() {
           Sign in with Google
         </button>
 
+        {/* Divider */}
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-slate-700" />
+          </div>
+          <div className="relative flex justify-center">
+            <button
+              onClick={() => setShowCredentials(!showCredentials)}
+              className="bg-slate-900 px-3 text-xs text-slate-500 hover:text-slate-400 transition-colors"
+            >
+              {showCredentials ? "Hide admin login" : "Admin login"}
+            </button>
+          </div>
+        </div>
+
+        {/* Credentials form */}
+        {showCredentials && (
+          <form onSubmit={handleCredentialsLogin} className="space-y-3">
+            <input
+              type="text"
+              placeholder="Username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+              required
+            />
+            <input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+              required
+            />
+            {error && (
+              <p className="text-xs text-red-400">{error}</p>
+            )}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-lg bg-slate-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-slate-600 disabled:opacity-50"
+            >
+              {loading ? "Signing in..." : "Sign in"}
+            </button>
+          </form>
+        )}
+
         {/* Restriction note */}
         <p className="mt-6 text-center text-xs text-slate-500">
-          Restricted to @honest.co.id accounts
+          Restricted to @honestbank.com and @honest.co.id accounts
         </p>
       </div>
     </div>

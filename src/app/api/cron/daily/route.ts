@@ -14,6 +14,7 @@ import {
   getPortfolioSnapshot,
   getRepaymentMetrics,
 } from "@/services/queries/kpi";
+import { clearMemoryCache } from "@/lib/bigquery";
 import type { Cycle } from "@/lib/dates";
 
 // ---------------------------------------------------------------------------
@@ -91,6 +92,9 @@ export async function POST(request: NextRequest) {
 
       summary[cycle] = cycleSummary;
     }
+
+    // Clear in-memory cache so fresh data is picked up on next request
+    clearMemoryCache();
 
     const durationMs = Date.now() - startTime;
 

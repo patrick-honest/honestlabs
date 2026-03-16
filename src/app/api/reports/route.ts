@@ -57,13 +57,20 @@ export async function GET(request: NextRequest) {
       status: r.status,
     }));
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       reports: formatted,
       total,
       page,
       limit,
       asOf: new Date().toISOString(),
     });
+
+    // Reports list is fairly static — cache for 5 min
+    response.headers.set(
+      "Cache-Control",
+      "public, max-age=300, s-maxage=600, stale-while-revalidate=300",
+    );
+    return response;
   } catch (err) {
     console.error("[GET /api/reports]", err);
     return NextResponse.json(

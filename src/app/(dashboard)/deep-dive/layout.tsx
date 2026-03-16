@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/hooks/use-theme";
 
 const tabs = [
   { label: "Acquisition", href: "/deep-dive/acquisition" },
@@ -11,6 +12,7 @@ const tabs = [
   { label: "Risk", href: "/deep-dive/risk" },
   { label: "Activation", href: "/deep-dive/activation" },
   { label: "Collections", href: "/deep-dive/collections" },
+  { label: "Repayments", href: "/deep-dive/repayments" },
   { label: "Customer Service", href: "/deep-dive/customer-service" },
 ];
 
@@ -20,11 +22,17 @@ export default function DeepDiveLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const { isDark } = useTheme();
 
   return (
     <div className="flex flex-col h-full">
       {/* Tab navigation */}
-      <nav className="sticky top-0 z-20 border-b border-slate-800 bg-slate-950/80 backdrop-blur-sm px-6">
+      <nav className={cn(
+        "sticky top-0 z-20 border-b backdrop-blur-sm px-6",
+        isDark
+          ? "border-[var(--border)] bg-[var(--background)]/80"
+          : "border-[var(--border)] bg-[var(--background)]/90"
+      )}>
         <div className="flex gap-1 overflow-x-auto scrollbar-none">
           {tabs.map((tab) => {
             const isActive = pathname === tab.href;
@@ -35,8 +43,10 @@ export default function DeepDiveLayout({
                 className={cn(
                   "shrink-0 px-4 py-3 text-sm font-medium border-b-2 transition-colors",
                   isActive
-                    ? "border-blue-500 text-white"
-                    : "border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-600"
+                    ? isDark
+                      ? "border-[#5B22FF] text-[var(--text-primary)]"
+                      : "border-[#D00083] text-[var(--text-primary)]"
+                    : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--border)]"
                 )}
               >
                 {tab.label}

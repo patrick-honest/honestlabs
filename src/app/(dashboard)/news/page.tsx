@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { ExternalLink } from "lucide-react";
+import { useTheme } from "@/hooks/use-theme";
 
 type Relevance = "high" | "medium" | "low";
 type Category = "BI Policy" | "OJK Regulation" | "Consumer Trends" | "QRIS/Payments" | "Market Analysis";
@@ -14,6 +16,7 @@ interface NewsItem {
   summary: string;
   relevance: Relevance;
   category: Category;
+  url: string;
 }
 
 const mockNews: NewsItem[] = [
@@ -26,6 +29,7 @@ const mockNews: NewsItem[] = [
       "BI kept its benchmark rate unchanged for the third consecutive month, citing stable inflation and supportive domestic demand. This maintains favorable conditions for consumer credit growth.",
     relevance: "high",
     category: "BI Policy",
+    url: "https://www.bloomberg.com/news/articles/2026-03-14/bank-indonesia-rate-decision",
   },
   {
     id: "2",
@@ -36,6 +40,7 @@ const mockNews: NewsItem[] = [
       "The Financial Services Authority released updated guidelines requiring enhanced affordability checks and stricter maximum debt-to-income ratios for digital lending products. Implementation deadline Q3 2026.",
     relevance: "high",
     category: "OJK Regulation",
+    url: "https://www.bisnis.com/ojk-consumer-lending-guidelines-2026",
   },
   {
     id: "3",
@@ -46,6 +51,7 @@ const mockNews: NewsItem[] = [
       "QRIS adoption continues to accelerate with merchant acceptance points surpassing 35 million nationwide. Average ticket size stable at Rp 85,000.",
     relevance: "high",
     category: "QRIS/Payments",
+    url: "https://www.kontan.co.id/qris-transaction-volume-february-2026",
   },
   {
     id: "4",
@@ -56,6 +62,7 @@ const mockNews: NewsItem[] = [
       "Consumer confidence reached its highest level in 18 months, driven by stable employment outlook and rising household incomes. Positive signal for card spending volumes.",
     relevance: "medium",
     category: "Consumer Trends",
+    url: "https://www.reuters.com/markets/indonesia-consumer-confidence-march-2026",
   },
   {
     id: "5",
@@ -66,6 +73,7 @@ const mockNews: NewsItem[] = [
       "Major banks reported double-digit credit card receivables growth in FY2025, with spend volumes up 22% YoY. Industry-wide asset quality remains stable.",
     relevance: "medium",
     category: "Market Analysis",
+    url: "https://www.thejakartapost.com/business/bca-mandiri-credit-card-growth-2025",
   },
   {
     id: "6",
@@ -76,6 +84,7 @@ const mockNews: NewsItem[] = [
       "The government extended its digital payment cashback program through Q4 2026, allocating Rp 2.5T in incentives to boost financial inclusion.",
     relevance: "medium",
     category: "QRIS/Payments",
+    url: "https://finance.detik.com/digital-payment-cashback-incentive-2026",
   },
   {
     id: "7",
@@ -86,6 +95,7 @@ const mockNews: NewsItem[] = [
       "The Rupiah remained relatively stable against the dollar despite regional FX volatility, supported by BI intervention and strong trade surplus.",
     relevance: "low",
     category: "Market Analysis",
+    url: "https://www.cnbcindonesia.com/market/rupiah-stable-march-2026",
   },
   {
     id: "8",
@@ -96,14 +106,30 @@ const mockNews: NewsItem[] = [
       "Online retail growth moderating from pandemic highs but still representing a significant and growing share of total retail. Implications for online card spend mix.",
     relevance: "low",
     category: "Consumer Trends",
+    url: "https://www.techinasia.com/indonesia-ecommerce-growth-q1-2026",
   },
 ];
 
-const relevanceColors: Record<Relevance, { badge: string; border: string }> = {
-  high: { badge: "bg-red-500/20 text-red-400", border: "border-l-red-500" },
-  medium: { badge: "bg-amber-500/20 text-amber-400", border: "border-l-amber-500" },
-  low: { badge: "bg-slate-500/20 text-slate-400", border: "border-l-slate-600" },
-};
+function getRelevanceColors(relevance: Relevance, isDark: boolean) {
+  const map: Record<Relevance, { badge: { dark: string; light: string }; border: string }> = {
+    high: {
+      badge: { dark: "bg-red-500/20 text-red-400", light: "bg-red-100 text-red-700" },
+      border: "border-l-red-500",
+    },
+    medium: {
+      badge: { dark: "bg-amber-500/20 text-amber-400", light: "bg-amber-100 text-amber-700" },
+      border: "border-l-amber-500",
+    },
+    low: {
+      badge: { dark: "bg-gray-500/20 text-gray-400", light: "bg-gray-200 text-gray-600" },
+      border: isDark ? "border-l-gray-600" : "border-l-gray-400",
+    },
+  };
+  return {
+    badge: isDark ? map[relevance].badge.dark : map[relevance].badge.light,
+    border: map[relevance].border,
+  };
+}
 
 const categories: Category[] = [
   "BI Policy",
@@ -116,6 +142,7 @@ const categories: Category[] = [
 export default function NewsPage() {
   const [relevanceFilter, setRelevanceFilter] = useState<Relevance | "all">("all");
   const [categoryFilter, setCategoryFilter] = useState<Category | "all">("all");
+  const { isDark } = useTheme();
 
   const filtered = mockNews.filter((item) => {
     if (relevanceFilter !== "all" && item.relevance !== relevanceFilter) return false;
@@ -126,8 +153,8 @@ export default function NewsPage() {
   return (
     <div className="space-y-6 p-6">
       <div>
-        <h1 className="text-xl font-bold text-white">Market News</h1>
-        <p className="text-sm text-slate-400 mt-1">
+        <h1 className="text-xl font-bold text-[var(--text-primary)]">Market News</h1>
+        <p className="text-sm text-[var(--text-secondary)] mt-1">
           Curated news relevant to Honest Bank credit card operations
         </p>
       </div>
@@ -136,8 +163,8 @@ export default function NewsPage() {
       <div className="flex flex-wrap gap-4">
         {/* Relevance filter */}
         <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500 uppercase tracking-wider">Relevance:</span>
-          <div className="flex gap-1 bg-slate-800 rounded-lg p-0.5">
+          <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Relevance:</span>
+          <div className="flex gap-1 bg-[var(--surface-elevated)] rounded-lg p-0.5">
             {(["all", "high", "medium", "low"] as const).map((level) => (
               <button
                 key={level}
@@ -145,8 +172,10 @@ export default function NewsPage() {
                 className={cn(
                   "px-3 py-1 text-xs rounded-md font-medium transition-colors",
                   relevanceFilter === level
-                    ? "bg-blue-600 text-white"
-                    : "text-slate-400 hover:text-white"
+                    ? isDark
+                      ? "bg-[#5B22FF] text-white"
+                      : "bg-[#D00083] text-white"
+                    : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                 )}
               >
                 {level === "all" ? "All" : level.charAt(0).toUpperCase() + level.slice(1)}
@@ -157,15 +186,17 @@ export default function NewsPage() {
 
         {/* Category filter */}
         <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500 uppercase tracking-wider">Category:</span>
-          <div className="flex gap-1 bg-slate-800 rounded-lg p-0.5 overflow-x-auto">
+          <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Category:</span>
+          <div className="flex gap-1 bg-[var(--surface-elevated)] rounded-lg p-0.5 overflow-x-auto">
             <button
               onClick={() => setCategoryFilter("all")}
               className={cn(
                 "px-3 py-1 text-xs rounded-md font-medium transition-colors whitespace-nowrap",
                 categoryFilter === "all"
-                  ? "bg-blue-600 text-white"
-                  : "text-slate-400 hover:text-white"
+                  ? isDark
+                    ? "bg-[#5B22FF] text-white"
+                    : "bg-[#D00083] text-white"
+                  : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
               )}
             >
               All
@@ -177,8 +208,10 @@ export default function NewsPage() {
                 className={cn(
                   "px-3 py-1 text-xs rounded-md font-medium transition-colors whitespace-nowrap",
                   categoryFilter === cat
-                    ? "bg-blue-600 text-white"
-                    : "text-slate-400 hover:text-white"
+                    ? isDark
+                      ? "bg-[#5B22FF] text-white"
+                      : "bg-[#D00083] text-white"
+                    : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                 )}
               >
                 {cat}
@@ -191,42 +224,59 @@ export default function NewsPage() {
       {/* News cards */}
       <div className="space-y-3">
         {filtered.length === 0 && (
-          <p className="text-slate-500 text-sm py-8 text-center">
+          <p className="text-[var(--text-muted)] text-sm py-8 text-center">
             No news articles match the selected filters.
           </p>
         )}
         {filtered.map((item) => {
-          const colors = relevanceColors[item.relevance];
+          const colors = getRelevanceColors(item.relevance, isDark);
           return (
-            <article
+            <a
               key={item.id}
+              href={item.url}
+              target="_blank"
+              rel="noopener noreferrer"
               className={cn(
-                "rounded-xl border border-slate-800 bg-slate-900 p-4 border-l-4",
+                "block rounded-xl border p-4 border-l-4 transition-colors cursor-pointer group",
+                isDark
+                  ? "border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-elevated)] hover:border-[var(--border)]"
+                  : "border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-elevated)] hover:border-[var(--border)]",
                 colors.border
               )}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <h3 className="text-sm font-semibold text-white leading-snug">
+                  <h3 className={cn(
+                    "text-sm font-semibold leading-snug transition-colors",
+                    isDark
+                      ? "text-[var(--text-primary)] group-hover:text-[#7C4DFF]"
+                      : "text-[var(--text-primary)] group-hover:text-[#D00083]"
+                  )}>
                     {item.title}
+                    <ExternalLink className="inline-block h-3 w-3 ml-1.5 opacity-0 group-hover:opacity-100 transition-opacity" />
                   </h3>
                   <div className="flex items-center gap-2 mt-1.5">
-                    <span className="text-xs text-slate-500">{item.source}</span>
-                    <span className="text-xs text-slate-600">&middot;</span>
-                    <span className="text-xs text-slate-500">{item.date}</span>
+                    <span className="text-xs text-[var(--text-muted)]">{item.source}</span>
+                    <span className="text-xs text-[var(--text-muted)]">&middot;</span>
+                    <span className="text-xs text-[var(--text-muted)]">{item.date}</span>
                     <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium", colors.badge)}>
                       {item.relevance}
                     </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-medium">
+                    <span className={cn(
+                      "text-[10px] px-2 py-0.5 rounded-full font-medium",
+                      isDark
+                        ? "bg-[var(--surface-elevated)] text-[var(--text-muted)]"
+                        : "bg-[var(--surface-elevated)] text-[var(--text-muted)]"
+                    )}>
                       {item.category}
                     </span>
                   </div>
                 </div>
               </div>
-              <p className="text-sm text-slate-300 mt-2 leading-relaxed">
+              <p className="text-sm text-[var(--text-secondary)] mt-2 leading-relaxed">
                 {item.summary}
               </p>
-            </article>
+            </a>
           );
         })}
       </div>

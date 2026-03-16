@@ -1,15 +1,18 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
+import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
+import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { usePeriod } from "@/hooks/use-period";
+import { getPeriodRange, getPeriodInsightLabels, scaleTrendData, scaleMetricValue } from "@/lib/period-data";
 
 const AS_OF = "Mar 15, 2026";
-const DATA_RANGE = { start: "Mar 10, 2026", end: "Mar 16, 2026" };
+// DATA_RANGE is now computed inside the component via useMemo
 
 // Mock data
 const activationRateTrend = [
@@ -53,6 +56,25 @@ const deliveryToActivation = [
   { days: "30+", count: 70 },
 ];
 
+// Sample data — Revolving Rate (blocked by mart_finance)
+const revolvingRateTrend = [
+  { date: "Oct", rate: 63.2 },
+  { date: "Nov", rate: 64.8 },
+  { date: "Dec", rate: 66.1 },
+  { date: "Jan", rate: 67.5 },
+  { date: "Feb", rate: 68.9 },
+  { date: "Mar", rate: 70.3 },
+];
+
+// Sample data — Monthly Income Distribution (blocked by Credit Bureau + mart_finance)
+const monthlyIncomeDistribution = [
+  { bucket: "$400–$600", count: 820 },
+  { bucket: "$600–$800", count: 1450 },
+  { bucket: "$800–$1,000", count: 1180 },
+  { bucket: "$1,000–$1,200", count: 640 },
+  { bucket: "$1,200+", count: 310 },
+];
+
 const actionItems: ActionItem[] = [
   {
     id: "act-1",
@@ -75,7 +97,67 @@ const actionItems: ActionItem[] = [
 ];
 
 export default function ActivationPage() {
-  const { periodLabel } = usePeriod();
+  const { period, periodLabel } = usePeriod();
+
+  const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
+
+  const periodActivationRate = useMemo(() => scaleTrendData(activationRateTrend, period), [period]);
+  const periodAvgDays = useMemo(() => scaleTrendData(avgDaysToFirstTxn, period), [period]);
+  const periodDormancy = useMemo(() => scaleTrendData(dormancy, period, "bucket"), [period]);
+  const periodActivationByProduct = useMemo(() => scaleTrendData(activationByProduct, period, "product"), [period]);
+  const periodDeliveryToActivation = useMemo(() => scaleTrendData(deliveryToActivation, period, "days"), [period]);
+
+  const p = useMemo(() => getPeriodInsightLabels(period), [period]);
+
+  const activationRateInsights = useMemo<ChartInsight[]>(() => [
+    { text: `Activation rate climbed from 58.2% to 65.2% over ${p.span}, a 7pp improvement driven by onboarding flow optimizations launched in Nov.`, type: "positive" },
+    { text: `Current rate of 65.2% still falls 4.8pp short of the 70% target. Gap is closing but needs sustained push to hit goal by Q2.`, type: "negative" },
+    { text: `${p.lastLabel} ${p.changeAbbrev} acceleration (+1.8pp) coincides with the push notification welcome series rollout, suggesting high-touch nudges are effective.`, type: "positive" },
+    { text: `Ramadan spending uplift in ${p.lastLabel} may be inflating activation; expect a seasonal pullback as discretionary spend normalizes.`, type: "hypothesis" },
+  ], [p]);
+
+  const avgDaysInsights = useMemo<ChartInsight[]>(() => [
+    { text: `Average days to first transaction dropped from 5.8 to 4.5 over ${p.span}, a 22.41% improvement.`, type: "positive" },
+    { text: `Steepest decline occurred mid-period, aligning with year-end holiday shopping behavior.`, type: "neutral" },
+    { text: `A slight regression mid-period is likely due to post-holiday spending fatigue and lower merchant promotion activity.`, type: "hypothesis" },
+    { text: `If the current trajectory holds, reaching sub-4-day activation by Q3 is feasible with continued SMS/push reminders within 48 hours of card delivery.`, type: "positive" },
+  ], [p]);
+
+  const dormancyInsights = useMemo<ChartInsight[]>(() => [
+    { text: `22.5% of accounts have no transaction within 7 days, the largest dormancy bucket and the primary drag on overall activation rate.`, type: "negative" },
+    { text: `Dormancy drops sharply after 14 days (18.3% to 14.1%), suggesting accounts that survive the first two weeks are significantly more likely to remain active.`, type: "neutral" },
+    { text: `The 90-day dormancy cohort at 6.2% represents structurally disengaged users who may require win-back campaigns rather than onboarding nudges.`, type: "negative" },
+    { text: `High early dormancy may reflect customers who applied for credit limit access but have no immediate spending need, common in emerging market card portfolios.`, type: "hypothesis" },
+    { text: `A day-3 welcome offer (e.g., cashback on first transaction) could convert a meaningful share of the 7-day dormant bucket before habits solidify.`, type: "neutral" },
+  ], [p]);
+
+  const activationByProductInsights = useMemo<ChartInsight[]>(() => [
+    { text: `Standard CC leads activation at 75% (2,100 of 2,800), benefiting from the most mature onboarding flow and highest credit limits.`, type: "positive" },
+    { text: `Prepaid activates at 68.89% (620 of 900), the lowest rate across products. Users may not perceive urgency to load and spend on a prepaid card.`, type: "negative" },
+    { text: `Opening Fee product activates at 76% (380 of 500), outperforming Standard CC despite a smaller base, suggesting high-intent applicants.`, type: "positive" },
+    { text: `The 7.11pp gap between Prepaid and Opening Fee indicates product-level UX and value-prop clarity matter more than volume for activation outcomes.`, type: "neutral" },
+  ], [p]);
+
+  const deliveryToActivationInsights = useMemo<ChartInsight[]>(() => [
+    { text: `The 2-3 day bucket captures the most activations (1,200 accounts), confirming that the critical engagement window is 48-72 hours post-delivery.`, type: "positive" },
+    { text: `850 accounts activate on day 0-1, indicating strong intent among roughly 25% of recipients who transact almost immediately.`, type: "positive" },
+    { text: `The long tail (15-30 days: 180, 30+: 70) accounts for 7.35% of activations and likely requires separate re-engagement treatment.`, type: "negative" },
+    { text: `Distribution shape resembles a right-skewed Poisson, typical of card activation in markets where digital wallet linking delays first physical-card use.`, type: "hypothesis" },
+  ], [p]);
+
+  const revolvingRateInsights = useMemo<ChartInsight[]>(() => [
+    { text: `Revolving ratio rose steadily from 63.2% to 70.3% over ${p.span}, indicating growing reliance on credit among active cardholders.`, type: "negative" },
+    { text: `The 7.1pp increase suggests minimum-due payment behavior is becoming entrenched — a profitability tailwind but a credit risk concern.`, type: "neutral" },
+    { text: `Holiday-period jump of 1.4pp aligns with seasonal spending that was not fully repaid, converting transactors into revolvers.`, type: "hypothesis" },
+    { text: `If revolving rate exceeds 72%, delinquency inflow may accelerate — monitor Bucket 1 entries alongside this metric.`, type: "negative" },
+  ], [p]);
+
+  const monthlyIncomeInsights = useMemo<ChartInsight[]>(() => [
+    { text: `The $600–$800 bracket is the largest segment at 1,450 customers, representing the core middle-income target demographic.`, type: "neutral" },
+    { text: `Only 310 customers (7%) earn above $1,200/month — high-income penetration remains limited, constraining average credit limit upside.`, type: "negative" },
+    { text: `Weighted average monthly income across activated customers is approximately $842, consistent with Indonesia urban salaried workers.`, type: "neutral" },
+    { text: `Income verification via credit bureau could be cross-referenced with stated income to flag discrepancies and reduce fraud risk.`, type: "hypothesis" },
+  ], [p]);
 
   const handleRefresh = useCallback(async () => {
     await new Promise((r) => setTimeout(r, 800));
@@ -84,29 +166,29 @@ export default function ActivationPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-white">Activation Deep Dive</h1>
-        <p className="text-sm text-slate-400 mt-1">{periodLabel}</p>
+        <h1 className="text-xl font-bold text-[var(--text-primary)]">Activation Deep Dive</h1>
+        <p className="text-sm text-[var(--text-secondary)] mt-1">{periodLabel}</p>
       </div>
 
       {/* KPI row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           metricKey="act_activation_rate"
-          label="Activation Rate (7d)"
-          value={65.2}
-          prevValue={63.4}
+          label="Activation (1st Txn ≤7d of Approval)"
+          value={scaleMetricValue(65.2, period, true)}
+          prevValue={scaleMetricValue(63.4, period, true)}
           unit="percent"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
-          sparklineData={activationRateTrend.map((d) => d.rate)}
+          sparklineData={periodActivationRate.map((d) => d.rate)}
           target={70}
           onRefresh={handleRefresh}
         />
         <MetricCard
           metricKey="act_cards_activated"
           label="Cards Activated"
-          value={3100}
-          prevValue={2850}
+          value={scaleMetricValue(3100, period, false)}
+          prevValue={scaleMetricValue(2850, period, false)}
           unit="count"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -126,8 +208,8 @@ export default function ActivationPage() {
         <MetricCard
           metricKey="act_dormant_30d"
           label="Dormant 30d+"
-          value={14.1}
-          prevValue={15.2}
+          value={scaleMetricValue(14.1, period, true)}
+          prevValue={scaleMetricValue(15.2, period, true)}
           unit="percent"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -139,17 +221,18 @@ export default function ActivationPage() {
       {/* Hero chart */}
       <ChartCard
         title="New Customer Activation Rate"
-        subtitle="% making first purchase within 7 days of card delivery"
+        subtitle="% making first purchase within 7 days of approval"
         asOf={AS_OF}
         dataRange={DATA_RANGE}
         onRefresh={handleRefresh}
       >
         <DashboardLineChart
-          data={activationRateTrend}
+          data={periodActivationRate}
           lines={[{ key: "rate", color: "#22c55e", label: "Activation Rate %" }]}
           valueType="percent"
           height={300}
         />
+        <ChartInsights insights={activationRateInsights} />
       </ChartCard>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -160,10 +243,11 @@ export default function ActivationPage() {
           onRefresh={handleRefresh}
         >
           <DashboardLineChart
-            data={avgDaysToFirstTxn}
+            data={periodAvgDays}
             lines={[{ key: "days", color: "#f59e0b", label: "Avg Days" }]}
             height={280}
           />
+          <ChartInsights insights={avgDaysInsights} />
         </ChartCard>
 
         <ChartCard
@@ -174,11 +258,12 @@ export default function ActivationPage() {
           onRefresh={handleRefresh}
         >
           <DashboardBarChart
-            data={dormancy}
+            data={periodDormancy}
             bars={[{ key: "percent", color: "#ef4444", label: "% Dormant" }]}
             xAxisKey="bucket"
             height={280}
           />
+          <ChartInsights insights={dormancyInsights} />
         </ChartCard>
       </div>
 
@@ -191,7 +276,7 @@ export default function ActivationPage() {
           onRefresh={handleRefresh}
         >
           <DashboardBarChart
-            data={activationByProduct}
+            data={periodActivationByProduct}
             bars={[
               { key: "total", color: "#475569", label: "Total" },
               { key: "activated", color: "#22c55e", label: "Activated" },
@@ -199,6 +284,7 @@ export default function ActivationPage() {
             xAxisKey="product"
             height={280}
           />
+          <ChartInsights insights={activationByProductInsights} />
         </ChartCard>
 
         <ChartCard
@@ -209,13 +295,58 @@ export default function ActivationPage() {
           onRefresh={handleRefresh}
         >
           <DashboardBarChart
-            data={deliveryToActivation}
+            data={periodDeliveryToActivation}
             bars={[{ key: "count", color: "#8b5cf6", label: "Accounts" }]}
             xAxisKey="days"
             height={280}
           />
+          <ChartInsights insights={deliveryToActivationInsights} />
         </ChartCard>
       </div>
+
+      {/* Revolving Rate — blocked by mart_finance */}
+      <SampleDataBanner
+        dataset="mart_finance"
+        reason="Revolving rate data requires mart_finance access for balance and minimum due calculations"
+      >
+        <ChartCard
+          title="Revolving Rate Trend"
+          subtitle="% of accounts revolving (paying less than full statement balance)"
+          asOf={AS_OF}
+          dataRange={DATA_RANGE}
+          onRefresh={handleRefresh}
+        >
+          <DashboardLineChart
+            data={revolvingRateTrend}
+            lines={[{ key: "rate", color: "#ef4444", label: "Revolving Rate %" }]}
+            valueType="percent"
+            height={300}
+          />
+          <ChartInsights insights={revolvingRateInsights} />
+        </ChartCard>
+      </SampleDataBanner>
+
+      {/* Monthly Income Distribution — blocked by Credit Bureau + mart_finance */}
+      <SampleDataBanner
+        dataset="Credit Bureau + mart_finance"
+        reason="Customer income data requires credit bureau integration and mart_finance access"
+      >
+        <ChartCard
+          title="Monthly Income Distribution"
+          subtitle="Activated customer income brackets (avg $560–$1,204)"
+          asOf={AS_OF}
+          dataRange={DATA_RANGE}
+          onRefresh={handleRefresh}
+        >
+          <DashboardBarChart
+            data={monthlyIncomeDistribution}
+            bars={[{ key: "count", color: "#6366f1", label: "Customers" }]}
+            xAxisKey="bucket"
+            height={300}
+          />
+          <ChartInsights insights={monthlyIncomeInsights} />
+        </ChartCard>
+      </SampleDataBanner>
 
       <ActionItems section="Activation" items={actionItems} />
     </div>

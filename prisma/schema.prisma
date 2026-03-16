@@ -54,6 +54,21 @@ model VintageCohort {
   @@index([cohortMonth])
 }
 
+model AppUser {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  name        String   @default("")
+  role        String   @default("viewer") // "admin" | "viewer"
+  pages       String   @default("[]") // JSON array of allowed page prefixes, e.g. ["/orico", "/deep-dive"]
+  invitedBy   String   @default("")
+  invitedAt   DateTime @default(now())
+  acceptedAt  DateTime?
+  status      String   @default("pending") // "pending" | "active" | "revoked"
+
+  @@index([email])
+  @@index([status])
+}
+
 model NewsArticle {
   id          String   @id @default(cuid())
   title       String

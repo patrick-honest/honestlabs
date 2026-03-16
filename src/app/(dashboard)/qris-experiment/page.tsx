@@ -1,11 +1,14 @@
 "use client";
 
+import { useCallback, useMemo } from "react";
 import { Header } from "@/components/layout/header";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { DashboardAreaChart } from "@/components/charts/area-chart";
+import { usePeriod } from "@/hooks/use-period";
+import { getPeriodRange, scaleTrendData, scaleMetricValue } from "@/lib/period-data";
 import {
   QrCode, TrendingUp, TrendingDown, Users, Zap, ArrowUpRight, ArrowDownRight,
   ShoppingCart, CreditCard, BarChart3, Target, CheckCircle2, AlertTriangle,
@@ -16,24 +19,19 @@ import { cn } from "@/lib/utils";
 // Mock Data — tells the story: QRIS users are significantly more engaged
 // ==========================================================================
 
-const PERIOD = { start: "2025-09-01", end: "2026-03-15" };
 const AS_OF = "2026-03-15";
 
 // -- Adoption trend (weekly) --
 const adoptionData = [
-  { week: "Sep 1", adoption_rate: 8.2, new_users: 320 },
-  { week: "Sep 15", adoption_rate: 9.1, new_users: 385 },
-  { week: "Oct 1", adoption_rate: 10.4, new_users: 410 },
-  { week: "Oct 15", adoption_rate: 11.8, new_users: 455 },
-  { week: "Nov 1", adoption_rate: 13.5, new_users: 520 },
-  { week: "Nov 15", adoption_rate: 15.2, new_users: 580 },
-  { week: "Dec 1", adoption_rate: 17.1, new_users: 640 },
-  { week: "Dec 15", adoption_rate: 18.8, new_users: 710 },
-  { week: "Jan 1", adoption_rate: 20.4, new_users: 680 },
-  { week: "Jan 15", adoption_rate: 22.1, new_users: 750 },
-  { week: "Feb 1", adoption_rate: 23.6, new_users: 790 },
-  { week: "Feb 15", adoption_rate: 25.0, new_users: 820 },
-  { week: "Mar 1", adoption_rate: 26.3, new_users: 850 },
+  { week: "Nov 1", adoption_rate: 3.2, new_users: 220 },
+  { week: "Nov 15", adoption_rate: 5.8, new_users: 380 },
+  { week: "Dec 1", adoption_rate: 8.5, new_users: 520 },
+  { week: "Dec 15", adoption_rate: 11.2, new_users: 640 },
+  { week: "Jan 1", adoption_rate: 14.1, new_users: 680 },
+  { week: "Jan 15", adoption_rate: 17.0, new_users: 750 },
+  { week: "Feb 1", adoption_rate: 19.8, new_users: 790 },
+  { week: "Feb 15", adoption_rate: 22.5, new_users: 820 },
+  { week: "Mar 1", adoption_rate: 25.1, new_users: 850 },
   { week: "Mar 15", adoption_rate: 27.4, new_users: 870 },
 ];
 
@@ -61,22 +59,18 @@ const comparisonData = {
 
 // -- Profitability (monthly) --
 const profitabilityData = [
-  { month: "Sep", qris_interchange: 42_000_000, card_interchange: 890_000_000, qris_user_spend: 28_500_000_000, non_qris_user_spend: 48_200_000_000, qris_volume: 6_000_000_000, card_volume: 59_300_000_000 },
-  { month: "Oct", qris_interchange: 56_000_000, card_interchange: 920_000_000, qris_user_spend: 32_800_000_000, non_qris_user_spend: 49_100_000_000, qris_volume: 8_000_000_000, card_volume: 61_300_000_000 },
-  { month: "Nov", qris_interchange: 72_000_000, card_interchange: 945_000_000, qris_user_spend: 37_200_000_000, non_qris_user_spend: 49_500_000_000, qris_volume: 10_300_000_000, card_volume: 63_000_000_000 },
-  { month: "Dec", qris_interchange: 95_000_000, card_interchange: 1_010_000_000, qris_user_spend: 44_100_000_000, non_qris_user_spend: 51_200_000_000, qris_volume: 13_600_000_000, card_volume: 67_300_000_000 },
-  { month: "Jan", qris_interchange: 108_000_000, card_interchange: 985_000_000, qris_user_spend: 48_600_000_000, non_qris_user_spend: 50_800_000_000, qris_volume: 15_400_000_000, card_volume: 65_700_000_000 },
+  { month: "Nov", qris_interchange: 42_000_000, card_interchange: 945_000_000, qris_user_spend: 28_500_000_000, non_qris_user_spend: 49_500_000_000, qris_volume: 6_000_000_000, card_volume: 63_000_000_000 },
+  { month: "Dec", qris_interchange: 72_000_000, card_interchange: 1_010_000_000, qris_user_spend: 37_200_000_000, non_qris_user_spend: 51_200_000_000, qris_volume: 10_300_000_000, card_volume: 67_300_000_000 },
+  { month: "Jan", qris_interchange: 95_000_000, card_interchange: 985_000_000, qris_user_spend: 44_100_000_000, non_qris_user_spend: 50_800_000_000, qris_volume: 13_600_000_000, card_volume: 65_700_000_000 },
   { month: "Feb", qris_interchange: 122_000_000, card_interchange: 1_020_000_000, qris_user_spend: 52_300_000_000, non_qris_user_spend: 51_400_000_000, qris_volume: 17_400_000_000, card_volume: 68_000_000_000 },
   { month: "Mar*", qris_interchange: 68_000_000, card_interchange: 540_000_000, qris_user_spend: 28_800_000_000, non_qris_user_spend: 26_200_000_000, qris_volume: 9_700_000_000, card_volume: 36_000_000_000 },
 ];
 
 // -- Revenue per user (monthly) --
 const revenuePerUserData = [
-  { month: "Sep", qris_rev_per_user: 15_200, non_qris_rev_per_user: 9_400 },
-  { month: "Oct", qris_rev_per_user: 17_800, non_qris_rev_per_user: 9_600 },
-  { month: "Nov", qris_rev_per_user: 19_500, non_qris_rev_per_user: 9_700 },
-  { month: "Dec", qris_rev_per_user: 22_100, non_qris_rev_per_user: 10_100 },
-  { month: "Jan", qris_rev_per_user: 23_400, non_qris_rev_per_user: 9_900 },
+  { month: "Nov", qris_rev_per_user: 15_200, non_qris_rev_per_user: 9_700 },
+  { month: "Dec", qris_rev_per_user: 19_500, non_qris_rev_per_user: 10_100 },
+  { month: "Jan", qris_rev_per_user: 22_100, non_qris_rev_per_user: 9_900 },
   { month: "Feb", qris_rev_per_user: 24_800, non_qris_rev_per_user: 10_200 },
   { month: "Mar*", qris_rev_per_user: 25_300, non_qris_rev_per_user: 10_300 },
 ];
@@ -289,6 +283,19 @@ function HorizontalBar({
 // ==========================================================================
 
 export default function QrisExperimentPage() {
+  const { period, periodLabel } = usePeriod();
+
+  const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
+
+  // Scale trend data arrays for the selected period
+  const pAdoptionData = useMemo(() => scaleTrendData(adoptionData, period, "week"), [period]);
+  const pProfitabilityData = useMemo(() => scaleTrendData(profitabilityData, period, "month"), [period]);
+  const pRevenuePerUserData = useMemo(() => scaleTrendData(revenuePerUserData, period, "month"), [period]);
+
+  const handleRefresh = useCallback(async () => {
+    await new Promise((r) => setTimeout(r, 800));
+  }, []);
+
   const q = comparisonData.qris;
   const nq = comparisonData.nonQris;
 
@@ -329,20 +336,20 @@ export default function QrisExperimentPage() {
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-white">QRIS Experiment Report</h2>
-                  <p className="text-sm text-white/70">Quick Response Code Indonesian Standard</p>
+                  <p className="text-sm text-white/70">Quick Response Code Indonesian Standard &middot; {periodLabel}</p>
                 </div>
               </div>
 
               <p className="text-sm text-white/80 max-w-2xl leading-relaxed mt-2">
-                QRIS has been running as an experiment since September 2025. This report analyzes whether
+                QRIS has been running as an experiment since November 2025. This report analyzes whether
                 enabling QR payments on Honest credit cards increases overall engagement and spend enough
                 to justify the lower interchange revenue per transaction.
               </p>
 
               <div className="flex flex-wrap gap-4 mt-4 text-xs text-white/60">
-                <span>Launch: Sep 2025</span>
+                <span>Launch: Nov 2025</span>
                 <span className="text-white/30">|</span>
-                <span>Test Period: 6.5 months</span>
+                <span>Test Period: 4.5 months</span>
                 <span className="text-white/30">|</span>
                 <span>Sample: {fmtNum(totalUsers)} transacting users</span>
                 <span className="text-white/30">|</span>
@@ -376,12 +383,12 @@ export default function QrisExperimentPage() {
               </div>
               <span className="text-[11px] font-medium uppercase tracking-wider text-[#9B94C4]">Adoption Rate</span>
             </div>
-            <p className="text-3xl font-bold text-[#F0EEFF]">{currentAdoptionRate}%</p>
+            <p className="text-3xl font-bold text-[#F0EEFF]">{scaleMetricValue(currentAdoptionRate, period, true)}%</p>
             <div className="flex items-center gap-1 mt-1 text-[#06D6A0]">
               <TrendingUp className="h-3 w-3" />
               <span className="text-xs font-medium">+19.2pp since launch</span>
             </div>
-            <p className="text-[10px] text-[#6B6394] mt-2">{fmtNum(totalQrisUsers)} of {fmtNum(totalUsers)} users</p>
+            <p className="text-[10px] text-[#6B6394] mt-2">{fmtNum(scaleMetricValue(totalQrisUsers, period, false))} of {fmtNum(scaleMetricValue(totalUsers, period, false))} users</p>
           </div>
 
           {/* Card 2: New QRIS Users */}
@@ -392,7 +399,7 @@ export default function QrisExperimentPage() {
               </div>
               <span className="text-[11px] font-medium uppercase tracking-wider text-[#9B94C4]">New QRIS Users</span>
             </div>
-            <p className="text-3xl font-bold text-[#F0EEFF]">{fmtNum(totalNewUsers)}</p>
+            <p className="text-3xl font-bold text-[#F0EEFF]">{fmtNum(scaleMetricValue(totalNewUsers, period, false))}</p>
             <div className="flex items-center gap-1 mt-1 text-[#06D6A0]">
               <TrendingUp className="h-3 w-3" />
               <span className="text-xs font-medium">870 this week</span>
@@ -408,7 +415,7 @@ export default function QrisExperimentPage() {
               </div>
               <span className="text-[11px] font-medium uppercase tracking-wider text-[#9B94C4]">QRIS Transactions</span>
             </div>
-            <p className="text-3xl font-bold text-[#F0EEFF]">{fmtNum(totalQrisTxns)}</p>
+            <p className="text-3xl font-bold text-[#F0EEFF]">{fmtNum(scaleMetricValue(totalQrisTxns, period, false))}</p>
             <div className="flex items-center gap-1 mt-1 text-[#06D6A0]">
               <TrendingUp className="h-3 w-3" />
               <span className="text-xs font-medium">+18% MoM</span>
@@ -424,7 +431,7 @@ export default function QrisExperimentPage() {
               </div>
               <span className="text-[11px] font-medium uppercase tracking-wider text-[#9B94C4]">QRIS % of Volume</span>
             </div>
-            <p className="text-3xl font-bold text-[#F0EEFF]">{qrisShareOfVolume}%</p>
+            <p className="text-3xl font-bold text-[#F0EEFF]">{scaleMetricValue(parseFloat(qrisShareOfVolume), period, true)}%</p>
             <div className="flex items-center gap-1 mt-1 text-[#06D6A0]">
               <TrendingUp className="h-3 w-3" />
               <span className="text-xs font-medium">+12.4pp since launch</span>
@@ -498,10 +505,11 @@ export default function QrisExperimentPage() {
             title="QRIS Adoption Rate"
             subtitle="Percentage of active users who have used QRIS"
             asOf={AS_OF}
-            dataRange={PERIOD}
+            dataRange={DATA_RANGE}
+            onRefresh={handleRefresh}
           >
             <DashboardLineChart
-              data={adoptionData}
+              data={pAdoptionData}
               lines={[
                 { key: "adoption_rate", color: "#7C4DFF", label: "Adoption Rate %" },
               ]}
@@ -515,10 +523,11 @@ export default function QrisExperimentPage() {
             title="New QRIS Users per Week"
             subtitle="First-time QRIS transactions by week"
             asOf={AS_OF}
-            dataRange={PERIOD}
+            dataRange={DATA_RANGE}
+            onRefresh={handleRefresh}
           >
             <DashboardBarChart
-              data={adoptionData}
+              data={pAdoptionData}
               bars={[
                 { key: "new_users", color: "#06D6A0", label: "New Users" },
               ]}
@@ -568,7 +577,7 @@ export default function QrisExperimentPage() {
               <div>
                 <h4 className="text-sm font-semibold text-[#F0EEFF] mb-3">Interchange Revenue (Monthly)</h4>
                 <DashboardBarChart
-                  data={profitabilityData}
+                  data={pProfitabilityData}
                   bars={[
                     { key: "qris_interchange", color: "#7C4DFF", label: "QRIS Interchange" },
                     { key: "card_interchange", color: "#06D6A0", label: "Card Interchange" },
@@ -581,7 +590,7 @@ export default function QrisExperimentPage() {
               <div>
                 <h4 className="text-sm font-semibold text-[#F0EEFF] mb-3">Revenue per User (Monthly)</h4>
                 <DashboardLineChart
-                  data={revenuePerUserData}
+                  data={pRevenuePerUserData}
                   lines={[
                     { key: "qris_rev_per_user", color: "#7C4DFF", label: "QRIS Users" },
                     { key: "non_qris_rev_per_user", color: "#9B94C4", label: "Non-QRIS Users" },
@@ -597,7 +606,7 @@ export default function QrisExperimentPage() {
             <div>
               <h4 className="text-sm font-semibold text-[#F0EEFF] mb-3">Total Spend by User Segment (Monthly)</h4>
               <DashboardAreaChart
-                data={profitabilityData}
+                data={pProfitabilityData}
                 areas={[
                   { key: "qris_user_spend", color: "#7C4DFF", label: "QRIS User Spend (all channels)" },
                   { key: "non_qris_user_spend", color: "#2D2955", label: "Non-QRIS User Spend" },
@@ -667,7 +676,7 @@ export default function QrisExperimentPage() {
             <span className="font-semibold text-[#9B94C4]">Methodology:</span>{" "}
             QRIS transactions are identified by <code className="text-[#7C4DFF] bg-[#5B22FF]/10 px-1 rounded">fx_dw007_txn_typ = &apos;RA&apos;</code> and{" "}
             <code className="text-[#7C4DFF] bg-[#5B22FF]/10 px-1 rounded">fx_dw007_rte_dest = &apos;L&apos;</code>.
-            Interchange estimates use 0.7% MDR for QRIS and ~1.5% weighted average for card transactions.
+            Spend data is based on <strong>authorized transactions</strong>. Interchange estimates use 0.7% MDR for QRIS and ~1.5% weighted average for card transactions.
             &quot;QRIS Users&quot; are customers who have made at least one QRIS transaction during the experiment period.
             All spend figures include both QRIS and non-QRIS transactions for each user segment.
             Mar* data is partial (through {AS_OF}).

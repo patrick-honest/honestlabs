@@ -39,12 +39,18 @@ export function KpiCard({ kpi, sparklineData }: KpiCardProps) {
     direction === "up" ? TrendingUp : direction === "down" ? TrendingDown : Minus;
 
   const changeColor =
-    direction === "up" ? "text-emerald-400" : direction === "down" ? "text-red-400" : "text-slate-400";
+    direction === "up"
+      ? "text-[var(--success)]"
+      : direction === "down"
+        ? "text-[var(--danger)]"
+        : "text-[var(--text-muted)]";
+
+  const sparkColor = direction === "down" ? "var(--danger)" : "var(--accent)";
 
   return (
-    <div className="flex flex-col justify-between rounded-xl border border-slate-800 bg-slate-900 p-4">
+    <div className="flex flex-col justify-between rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 transition-colors">
       <div className="flex items-start justify-between">
-        <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
+        <p className="text-xs font-medium uppercase tracking-wider text-[var(--text-secondary)]">
           {label}
         </p>
         {sparklineData && sparklineData.length > 1 && (
@@ -54,7 +60,7 @@ export function KpiCard({ kpi, sparklineData }: KpiCardProps) {
                 <Line
                   type="monotone"
                   dataKey="value"
-                  stroke={direction === "down" ? "#f87171" : "#3b82f6"}
+                  stroke={sparkColor}
                   strokeWidth={1.5}
                   dot={false}
                 />
@@ -64,7 +70,7 @@ export function KpiCard({ kpi, sparklineData }: KpiCardProps) {
         )}
       </div>
 
-      <p className="mt-2 text-2xl font-bold text-white">
+      <p className="mt-2 text-2xl font-bold text-[var(--text-primary)]">
         {formatValue(value, unit, currency)}
       </p>
 

@@ -6,7 +6,7 @@
   --font-sans: var(--font-manrope), system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
 
-  /* Honest Brand Colors */
+  /* ── Dark theme: Honest purple ── */
   --color-honest-purple: #5B22FF;
   --color-honest-purple-light: #7C4DFF;
   --color-honest-purple-dark: #4A11E0;
@@ -24,17 +24,77 @@
   --color-honest-success: #06D6A0;
   --color-honest-danger: #FF6B6B;
   --color-honest-warning: #FFD166;
+
+  /* ── Light theme: Honest magenta + golden yellow ── */
+  --color-honest-magenta: #D00083;
+  --color-honest-magenta-light: #EF4BDE;
+  --color-honest-magenta-dark: #7C0B67;
+  --color-honest-gold: #F5A623;
+  --color-honest-gold-light: #FFD166;
+  --color-honest-gold-dark: #D4900A;
 }
 
-:root {
+/* ── Dark mode (default) ── */
+:root, .dark {
   --background: #0B0A1A;
   --foreground: #F0EEFF;
+  --surface: #141226;
+  --surface-elevated: #1E1B3A;
+  --border: #2D2955;
+  --text-primary: #F0EEFF;
+  --text-secondary: #9B94C4;
+  --text-muted: #6B6394;
+  --accent: #5B22FF;
+  --accent-light: #7C4DFF;
+  --accent-subtle: rgba(91, 34, 255, 0.10);
+  --accent-subtle-20: rgba(91, 34, 255, 0.20);
+  --success: #06D6A0;
+  --danger: #FF6B6B;
+  --warning: #FFD166;
+  --scrollbar-track: #0B0A1A;
+  --scrollbar-thumb: #2D2955;
+  --scrollbar-hover: #3D3570;
+  --selection-bg: rgba(91, 34, 255, 0.3);
+  --chart-grid: #2D2955;
+  --chart-tooltip-bg: #1E1B3A;
+  --chart-tooltip-border: #2D2955;
+  --chart-tooltip-text: #F0EEFF;
+  --chart-axis: #6B6394;
+}
+
+/* ── Light mode: magenta + golden yellow ── */
+.light {
+  --background: #FAF7F2;
+  --foreground: #2A1F3D;
+  --surface: #FFFFFF;
+  --surface-elevated: #F5F0E8;
+  --border: #F0D9F7;
+  --text-primary: #2A1F3D;
+  --text-secondary: #6B4E7D;
+  --text-muted: #9B87A8;
+  --accent: #D00083;
+  --accent-light: #EF4BDE;
+  --accent-subtle: rgba(208, 0, 131, 0.08);
+  --accent-subtle-20: rgba(208, 0, 131, 0.15);
+  --success: #059669;
+  --danger: #DC2626;
+  --warning: #D4900A;
+  --scrollbar-track: #F5F0E8;
+  --scrollbar-thumb: #E8DDD0;
+  --scrollbar-hover: #D7B3E3;
+  --selection-bg: rgba(208, 0, 131, 0.2);
+  --chart-grid: #F0D9F7;
+  --chart-tooltip-bg: #FFFFFF;
+  --chart-tooltip-border: #F0D9F7;
+  --chart-tooltip-text: #2A1F3D;
+  --chart-axis: #9B87A8;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-feature-settings: "cv11", "ss01";
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 /* Custom scrollbar */
@@ -42,18 +102,18 @@ body {
   width: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #0B0A1A;
+  background: var(--scrollbar-track);
 }
 ::-webkit-scrollbar-thumb {
-  background: #2D2955;
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3D3570;
+  background: var(--scrollbar-hover);
 }
 
 /* Selection */
 ::selection {
-  background: rgba(91, 34, 255, 0.3);
-  color: #F0EEFF;
+  background: var(--selection-bg);
+  color: var(--text-primary);
 }

@@ -1,24 +1,43 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Home, FileText, BarChart3, UserPlus, Briefcase, CreditCard,
   ShieldAlert, Zap, Landmark, Layers, Building, Search, Newspaper,
   ChevronDown, ChevronRight, LogOut, QrCode, Headphones,
+  PanelLeftClose, PanelLeftOpen, GitCompareArrows, ArrowDownCircle, Settings,
   type LucideIcon,
 } from "lucide-react";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { navigation, type NavItem } from "@/config/navigation";
+import { useTheme } from "@/hooks/use-theme";
+import { useSession, signOut } from "next-auth/react";
 
 const iconMap: Record<string, LucideIcon> = {
   Home, FileText, BarChart3, UserPlus, Briefcase, CreditCard,
   ShieldAlert, Zap, Landmark, Layers, Building, Search, Newspaper,
-  QrCode, Headphones,
+  QrCode, Headphones, GitCompareArrows, ArrowDownCircle, Settings,
 };
 
-function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
+const MIN_WIDTH = 56;   // collapsed
+const MAX_WIDTH = 360;
+const DEFAULT_WIDTH = 256;
+const COLLAPSE_THRESHOLD = 100;
+
+// ── Expanded NavLink (full sidebar) ─────────────────────────────────
+
+function NavLinkExpanded({
+  item,
+  pathname,
+  isDark,
+}: {
+  item: NavItem;
+  pathname: string;
+  isDark: boolean;
+}) {
   const [expanded, setExpanded] = useState(
     item.children?.some((c) => pathname.startsWith(c.href)) ?? false
   );
@@ -32,15 +51,25 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
         <button
           onClick={() => setExpanded((p) => !p)}
           className={cn(
-            "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-[#9B94C4] transition-colors hover:bg-[#1E1B3A] hover:text-[#F0EEFF]"
+            "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+            "text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]"
           )}
         >
           <Icon className="h-4 w-4 shrink-0" />
-          <span className="flex-1 text-left">{item.label}</span>
-          {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          <span className="flex-1 text-left truncate">{item.label}</span>
+          {expanded ? (
+            <ChevronDown className="h-4 w-4 shrink-0" />
+          ) : (
+            <ChevronRight className="h-4 w-4 shrink-0" />
+          )}
         </button>
         {expanded && (
-          <div className="ml-4 mt-1 flex flex-col gap-0.5 border-l border-[#2D2955] pl-3">
+          <div
+            className={cn(
+              "ml-4 mt-1 flex flex-col gap-0.5 border-l pl-3",
+              "border-[var(--border)]"
+            )}
+          >
             {item.children!.map((child) => {
               const ChildIcon = iconMap[child.icon] ?? Home;
               const childActive = pathname === child.href;
@@ -51,12 +80,14 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
                   className={cn(
                     "flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm transition-colors",
                     childActive
-                      ? "bg-[#5B22FF]/20 text-[#7C4DFF] font-medium"
-                      : "text-[#6B6394] hover:bg-[#1E1B3A] hover:text-[#F0EEFF]"
+                      ? isDark
+                        ? "bg-[#5B22FF]/20 text-[#7C4DFF] font-medium"
+                        : "bg-[#D00083]/15 text-[#D00083] font-medium"
+                      : "text-[var(--text-muted)] hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]"
                   )}
                 >
                   <ChildIcon className="h-3.5 w-3.5 shrink-0" />
-                  <span>{child.label}</span>
+                  <span className="truncate">{child.label}</span>
                 </Link>
               );
             })}
@@ -72,57 +103,409 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
       className={cn(
         "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
         isActive
-          ? "bg-[#5B22FF] text-white"
-          : "text-[#9B94C4] hover:bg-[#1E1B3A] hover:text-[#F0EEFF]"
+          ? isDark
+            ? "bg-[#5B22FF] text-white"
+            : "bg-[#D00083] text-white"
+          : "text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]"
       )}
     >
       <Icon className="h-4 w-4 shrink-0" />
-      <span>{item.label}</span>
+      <span className="truncate">{item.label}</span>
     </Link>
   );
 }
 
-export function Sidebar() {
-  const pathname = usePathname();
+// ── Collapsed NavLink (icon only + hover flyout) ────────────────────
+
+function NavLinkCollapsed({
+  item,
+  pathname,
+  isDark,
+}: {
+  item: NavItem;
+  pathname: string;
+  isDark: boolean;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const Icon = iconMap[item.icon] ?? Home;
+  const isActive =
+    pathname === item.href ||
+    item.children?.some((c) => pathname.startsWith(c.href));
+  const hasChildren = !!item.children?.length;
+
+  const handleEnter = useCallback(() => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setHovered(true);
+  }, []);
+
+  const handleLeave = useCallback(() => {
+    timeoutRef.current = setTimeout(() => setHovered(false), 150);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
+
+  const iconButton = (
+    <div
+      className={cn(
+        "flex h-9 w-9 items-center justify-center rounded-lg transition-colors cursor-pointer",
+        isActive
+          ? isDark
+            ? "bg-[#5B22FF] text-white"
+            : "bg-[#D00083] text-white"
+          : "text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]"
+      )}
+    >
+      <Icon className="h-4 w-4" />
+    </div>
+  );
 
   return (
-    <aside className="flex h-screen w-64 shrink-0 flex-col bg-[#0B0A1A] border-r border-[#2D2955]">
+    <div
+      className="relative"
+      onMouseEnter={handleEnter}
+      onMouseLeave={handleLeave}
+    >
+      {hasChildren ? (
+        iconButton
+      ) : (
+        <Link href={item.href}>{iconButton}</Link>
+      )}
+
+      {/* Hover flyout — uses fixed positioning to escape stacking context */}
+      {hovered && (
+        <FlyoutPortal item={item} isDark={isDark} isActive={!!isActive} pathname={pathname} onEnter={handleEnter} onLeave={handleLeave} />
+      )}
+    </div>
+  );
+}
+
+// Flyout rendered with fixed positioning to escape parent z-index context
+function FlyoutPortal({
+  item,
+  isDark,
+  isActive,
+  pathname,
+  onEnter,
+  onLeave,
+}: {
+  item: NavItem;
+  isDark: boolean;
+  isActive: boolean;
+  pathname: string;
+  onEnter: () => void;
+  onLeave: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const parentRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const hasChildren = !!item.children?.length;
+
+  // Measure parent position on mount
+  useEffect(() => {
+    const parentEl = ref.current?.parentElement?.parentElement;
+    if (parentEl) {
+      const rect = parentEl.getBoundingClientRect();
+      setPos({ top: rect.top, left: rect.right + 8 });
+    }
+  }, []);
+
+  if (!pos) {
+    // Hidden mount to get parent ref
+    return <div ref={ref} className="hidden" />;
+  }
+
+  return (
+    <>
+      <div ref={ref} className="hidden" />
+      <div
+        ref={parentRef}
+        className={cn(
+          "fixed min-w-[180px] rounded-xl border py-1.5 shadow-2xl",
+          isDark
+            ? "border-[var(--border)] bg-[#141226] shadow-black/50"
+            : "border-[var(--border)] bg-white shadow-black/10"
+        )}
+        style={{ top: pos.top, left: pos.left, zIndex: 9999 }}
+        onMouseEnter={onEnter}
+        onMouseLeave={onLeave}
+      >
+        {!hasChildren ? (
+          <Link
+            href={item.href}
+            className={cn(
+              "flex items-center gap-2 px-3 py-2 text-sm font-medium transition-colors",
+              isActive
+                ? isDark
+                  ? "text-[#7C4DFF]"
+                  : "text-[#D00083]"
+                : "text-[var(--text-primary)] hover:bg-[var(--surface-elevated)]"
+            )}
+          >
+            {item.label}
+          </Link>
+        ) : (
+          <>
+            <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+              {item.label}
+            </div>
+            {item.children!.map((child) => {
+              const ChildIcon = iconMap[child.icon] ?? Home;
+              const childActive = pathname === child.href;
+              return (
+                <Link
+                  key={child.href}
+                  href={child.href}
+                  className={cn(
+                    "flex items-center gap-2.5 px-3 py-1.5 text-sm transition-colors",
+                    childActive
+                      ? isDark
+                        ? "text-[#7C4DFF] font-medium bg-[#5B22FF]/10"
+                        : "text-[#D00083] font-medium bg-[#D00083]/10"
+                      : "text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]"
+                  )}
+                >
+                  <ChildIcon className="h-3.5 w-3.5 shrink-0" />
+                  <span>{child.label}</span>
+                </Link>
+              );
+            })}
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
+// ── Sidebar ─────────────────────────────────────────────────────────
+
+export function Sidebar() {
+  const pathname = usePathname();
+  const { isDark } = useTheme();
+  const { data: session } = useSession();
+  const userName = session?.user?.name || "User";
+  const userEmail = session?.user?.email || "";
+  const userInitial = (userName?.[0] || userEmail?.[0] || "U").toUpperCase();
+  const [width, setWidth] = useState(DEFAULT_WIDTH);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  const collapsed = width <= COLLAPSE_THRESHOLD;
+
+  // Drag handlers
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      dragStartRef.current = { startX: e.clientX, startWidth: width };
+      setIsDragging(true);
+    },
+    [width]
+  );
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!dragStartRef.current) return;
+      const delta = e.clientX - dragStartRef.current.startX;
+      const newWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, dragStartRef.current.startWidth + delta));
+      setWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      dragStartRef.current = null;
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+    // Prevent text selection while dragging
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+  }, [isDragging]);
+
+  const toggleCollapse = useCallback(() => {
+    setWidth((w) => (w <= COLLAPSE_THRESHOLD ? DEFAULT_WIDTH : MIN_WIDTH));
+  }, []);
+
+  return (
+    <aside
+      className={cn(
+        "relative flex h-screen shrink-0 flex-col border-r z-40",
+        isDark
+          ? "bg-[var(--background)] border-[var(--border)]"
+          : "bg-[var(--surface)] border-[var(--border)]",
+        !isDragging && "transition-[width] duration-200"
+      )}
+      style={{ width }}
+    >
       {/* Logo */}
-      <div className="flex h-16 items-center px-6 border-b border-[#2D2955]">
-        <div className="flex items-center gap-2">
-          <div className="h-7 w-7 rounded-lg bg-[#5B22FF] flex items-center justify-center">
-            <span className="text-xs font-bold text-white">H</span>
+      <div
+        className={cn(
+          "flex items-center border-b",
+          isDark ? "border-[var(--border)]" : "border-[var(--border)]",
+          collapsed ? "h-16 justify-center px-2" : "h-[72px] px-6"
+        )}
+      >
+        {collapsed ? (
+          <div className="h-8 w-8 overflow-hidden rounded-lg">
+            <Image
+              src="/honest-logo.png"
+              alt="Honest"
+              width={120}
+              height={40}
+              className={cn(
+                "h-8 w-auto max-w-none object-cover object-left",
+                isDark && "brightness-150"
+              )}
+            />
           </div>
-          <span className="text-xl font-bold tracking-widest text-[#F0EEFF]">
-            HONEST
-          </span>
-        </div>
+        ) : (
+          <div className="flex flex-col items-start min-w-0">
+            <Image
+              src="/honest-logo.png"
+              alt="Honest"
+              width={140}
+              height={40}
+              className={cn(
+                "h-8 w-auto object-contain",
+                isDark && "brightness-150"
+              )}
+            />
+            <p className="mt-0.5 text-[9px] font-medium tracking-wider text-[var(--text-muted)] opacity-60">
+              by claudtrick
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4">
-        <div className="flex flex-col gap-1">
-          {navigation.map((item) => (
-            <NavLink key={item.label} item={item} pathname={pathname} />
-          ))}
+      <nav className={cn("flex-1 py-4", collapsed ? "px-2 overflow-visible" : "px-3 overflow-y-auto")}>
+        <div className={cn("flex flex-col", collapsed ? "items-center gap-1" : "gap-1")}>
+          {navigation.map((item) =>
+            collapsed ? (
+              <NavLinkCollapsed
+                key={item.label}
+                item={item}
+                pathname={pathname}
+                isDark={isDark}
+              />
+            ) : (
+              <NavLinkExpanded
+                key={item.label}
+                item={item}
+                pathname={pathname}
+                isDark={isDark}
+              />
+            )
+          )}
         </div>
       </nav>
 
-      {/* User section */}
-      <div className="border-t border-[#2D2955] px-4 py-3">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#5B22FF] text-xs font-bold text-white">
-            H
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="truncate text-sm font-medium text-[#F0EEFF]">User</p>
-            <p className="truncate text-xs text-[#6B6394]">user@honest.co.id</p>
-          </div>
+      {/* Collapse toggle + user section */}
+      <div
+        className={cn(
+          "border-t",
+          isDark ? "border-[var(--border)]" : "border-[var(--border)]"
+        )}
+      >
+        {/* Collapse toggle */}
+        <div className={cn("px-3 pt-2", collapsed && "flex justify-center px-2")}>
+          <button
+            onClick={toggleCollapse}
+            className={cn(
+              "flex items-center gap-2 rounded-lg py-1.5 text-xs font-medium text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]",
+              collapsed ? "justify-center w-9 h-9 px-0" : "w-full px-3"
+            )}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {collapsed ? (
+              <PanelLeftOpen className="h-4 w-4 shrink-0" />
+            ) : (
+              <>
+                <PanelLeftClose className="h-4 w-4 shrink-0" />
+                <span>Collapse</span>
+              </>
+            )}
+          </button>
         </div>
-        <button className="mt-2 flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-[#6B6394] transition-colors hover:bg-[#1E1B3A] hover:text-[#F0EEFF]">
-          <LogOut className="h-4 w-4" />
-          <span>Sign out</span>
-        </button>
+
+        {/* User section */}
+        <div className={cn("px-4 py-3", collapsed && "px-2 flex justify-center")}>
+          {collapsed ? (
+            <div
+              className={cn(
+                "flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-white cursor-default",
+                isDark ? "bg-[#5B22FF]" : "bg-[#D00083]"
+              )}
+              title={userEmail}
+            >
+              {userInitial}
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-3">
+                <div
+                  className={cn(
+                    "flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-white shrink-0",
+                    isDark ? "bg-[#5B22FF]" : "bg-[#D00083]"
+                  )}
+                >
+                  {userInitial}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="truncate text-sm font-medium text-[var(--text-primary)]">
+                    {userName}
+                  </p>
+                  <p className="truncate text-xs text-[var(--text-muted)]">
+                    {userEmail}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => signOut({ callbackUrl: "/login" })}
+                className="mt-2 flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Sign out</span>
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Resize handle — positioned on the right edge, midway down */}
+      <div
+        onMouseDown={handleMouseDown}
+        className={cn(
+          "absolute right-0 top-0 h-full w-1 cursor-col-resize group",
+          "hover:bg-[var(--accent,#5B22FF)]/30 active:bg-[var(--accent,#5B22FF)]/50",
+          isDragging && "bg-[var(--accent,#5B22FF)]/50"
+        )}
+      >
+        {/* Visible grip indicator at midpoint */}
+        <div
+          className={cn(
+            "absolute right-[-3px] top-1/2 -translate-y-1/2 flex flex-col gap-[3px] items-center rounded-full px-[3px] py-2 transition-opacity",
+            "opacity-0 group-hover:opacity-100",
+            isDragging && "opacity-100"
+          )}
+        >
+          <div className="w-[3px] h-[3px] rounded-full bg-[var(--text-muted)]" />
+          <div className="w-[3px] h-[3px] rounded-full bg-[var(--text-muted)]" />
+          <div className="w-[3px] h-[3px] rounded-full bg-[var(--text-muted)]" />
+        </div>
       </div>
     </aside>
   );

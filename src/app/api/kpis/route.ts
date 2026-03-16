@@ -44,13 +44,20 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       kpis: cached.data.kpis,
       chartData: cached.data.chartData,
       trends: cached.data.trends,
       asOf: cached.updatedAt,
       dataRange: { start: periodStart, end: periodEnd },
     });
+
+    // Browser caches for 5 min, CDN/proxy for 15 min, stale data served while revalidating
+    response.headers.set(
+      "Cache-Control",
+      "public, max-age=300, s-maxage=900, stale-while-revalidate=600",
+    );
+    return response;
   } catch (err) {
     console.error("[GET /api/kpis]", err);
     return NextResponse.json(

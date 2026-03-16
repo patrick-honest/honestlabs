@@ -1,35 +1,86 @@
 import { NextRequest, NextResponse } from "next/server";
-import { searchUserById } from "@/services/queries/user-search";
+import { searchUserById, resolveToUserId } from "@/services/queries/user-search";
+import { getCached, setCached } from "@/lib/cache";
 
 // ---------------------------------------------------------------------------
-// GET /api/search?userId=<uuid>
+// GET /api/search?field=<field>&query=<value>
+// Also supports legacy: ?userId=<uuid>
 //
-// Always hits BigQuery live — single-user queries are cheap.
+// Supported fields: user_id, loc, crn, urn, anonymous_id, application_id, phone, email
+// Checks SQLite cache first (2h TTL), falls back to BigQuery live.
 // PII masking is applied inside searchUserById before data leaves the server.
 // ---------------------------------------------------------------------------
+
+const VALID_FIELDS = new Set([
+  "user_id", "loc", "crn", "urn", "anonymous_id", "application_id", "phone", "email",
+]);
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get("userId");
 
-    if (!userId || userId.trim().length === 0) {
+    // Support both new format (?field=&query=) and legacy (?userId=)
+    let field = searchParams.get("field") || "user_id";
+    let query = searchParams.get("query") || searchParams.get("userId") || "";
+
+    if (!query || query.trim().length === 0) {
       return NextResponse.json(
-        { error: "userId query parameter is required" },
+        { error: "query parameter is required" },
         { status: 400 },
       );
     }
 
-    // Basic UUID format validation
+    query = query.trim();
+    field = field.trim().toLowerCase();
+
+    if (!VALID_FIELDS.has(field)) {
+      return NextResponse.json(
+        { error: `Invalid field: ${field}. Supported: ${[...VALID_FIELDS].join(", ")}` },
+        { status: 400 },
+      );
+    }
+
+    // UUID format validation for user_id field
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(userId.trim())) {
+    if (field === "user_id" && !uuidRegex.test(query)) {
       return NextResponse.json(
-        { error: "userId must be a valid UUID" },
+        { error: "user_id must be a valid UUID" },
         { status: 400 },
       );
     }
 
-    const result = await searchUserById(userId.trim());
+    // Build cache key from field + query
+    const cacheKeyStr = `search:${field}:${query}`;
+
+    // Check cache first (2h TTL for user lookups)
+    const cached = getCached<{ user: unknown }>(cacheKeyStr);
+    if (cached) {
+      const response = NextResponse.json({
+        user: cached.data.user,
+        asOf: cached.updatedAt,
+        dataRange: { start: "cached", end: "cached" },
+        cached: true,
+      });
+      response.headers.set("Cache-Control", "private, max-age=120");
+      return response;
+    }
+
+    // Resolve to user_id if needed
+    let userId: string;
+    if (field === "user_id") {
+      userId = query;
+    } else {
+      const resolved = await resolveToUserId(field, query);
+      if (!resolved) {
+        return NextResponse.json(
+          { error: "No user found for the given identifier", field, query },
+          { status: 404 },
+        );
+      }
+      userId = resolved;
+    }
+
+    const result = await searchUserById(userId);
 
     if (!result) {
       return NextResponse.json(
@@ -38,11 +89,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({
+    // Cache the result for 2 hours
+    setCached(cacheKeyStr, { user: result }, 2);
+
+    const response = NextResponse.json({
       user: result,
       asOf: new Date().toISOString(),
       dataRange: { start: "live", end: "live" },
+      cached: false,
     });
+    response.headers.set("Cache-Control", "private, max-age=120");
+    return response;
   } catch (err) {
     console.error("[GET /api/search]", err);
     return NextResponse.json(

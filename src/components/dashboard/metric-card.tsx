@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { formatNumber, formatPercent } from "@/lib/utils";
 import { formatAmountCompact } from "@/lib/currency";
 import { useCurrency } from "@/hooks/use-currency";
+import { useTheme } from "@/hooks/use-theme";
 import { QueryInspectorButton, type QueryInfo } from "@/components/query-inspector/query-inspector";
 
 interface MetricCardProps {
@@ -65,6 +66,7 @@ export function MetricCard({
   query,
 }: MetricCardProps) {
   const { currency } = useCurrency();
+  const { isDark } = useTheme();
   const [refreshing, setRefreshing] = useState(false);
 
   const { percent: changePercent, direction } = computeChange(value, prevValue);
@@ -78,10 +80,10 @@ export function MetricCard({
 
   const changeColor =
     isPositive === null
-      ? "text-[#9B94C4]"
+      ? "text-[var(--text-secondary)]"
       : isPositive
-        ? "text-[#06D6A0]"
-        : "text-[#FF6B6B]";
+        ? isDark ? "text-[#06D6A0]" : "text-[#059669]"
+        : isDark ? "text-[#FF6B6B]" : "text-[#DC2626]";
 
   const DirectionIcon =
     direction === "up" ? TrendingUp : direction === "down" ? TrendingDown : Minus;
@@ -100,15 +102,23 @@ export function MetricCard({
     }
   }
 
+  const accentColor = isDark ? "#5B22FF" : "#D00083";
+  const sparkColor = isPositive === false ? (isDark ? "#FF6B6B" : "#DC2626") : accentColor;
+
   return (
-    <div className="relative flex flex-col justify-between rounded-xl border border-[#2D2955] bg-[#141226] p-4">
+    <div className={cn(
+      "relative flex flex-col justify-between rounded-xl border p-4 transition-colors",
+      isDark
+        ? "border-[var(--border)] bg-[var(--surface)]"
+        : "border-[var(--border)] bg-[var(--surface)] shadow-sm"
+    )}>
       {/* Header row */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wider text-[#9B94C4]">
+          <p className="text-xs font-medium uppercase tracking-wider text-[var(--text-secondary)]">
             {label}
           </p>
-          <p className="mt-0.5 text-[10px] text-[#6B6394]">
+          <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">
             {dataRange.start} &ndash; {dataRange.end}
           </p>
         </div>
@@ -121,7 +131,7 @@ export function MetricCard({
                   <Line
                     type="monotone"
                     dataKey="value"
-                    stroke={isPositive === false ? "#FF6B6B" : "#5B22FF"}
+                    stroke={sparkColor}
                     strokeWidth={1.5}
                     dot={false}
                   />
@@ -136,7 +146,7 @@ export function MetricCard({
             <button
               onClick={handleRefresh}
               disabled={refreshing}
-              className="text-[#6B6394] hover:text-[#7C4DFF] transition-colors disabled:opacity-50"
+              className="text-[var(--text-muted)] hover:text-[var(--accent-light)] transition-colors disabled:opacity-50"
               aria-label={`Refresh ${label}`}
             >
               <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
@@ -146,7 +156,7 @@ export function MetricCard({
       </div>
 
       {/* Value */}
-      <p className="mt-2 text-2xl font-bold text-white">
+      <p className="mt-2 text-2xl font-bold text-[var(--text-primary)]">
         {formatValue(value, unit, currency)}
       </p>
 
@@ -154,22 +164,29 @@ export function MetricCard({
       {changePercent !== null && (
         <div className={cn("mt-1 flex items-center gap-1 text-xs font-medium", changeColor)}>
           <DirectionIcon className="h-3 w-3" />
-          <span>{Math.abs(changePercent).toFixed(1)}% vs prev period</span>
+          <span>{Math.abs(Math.round(changePercent * 100) / 100)}% vs prev period</span>
         </div>
       )}
 
       {/* Target progress */}
       {targetPercent !== null && target != null && (
         <div className="mt-2">
-          <div className="flex items-center justify-between text-[10px] text-[#6B6394] mb-0.5">
+          <div className="flex items-center justify-between text-[10px] text-[var(--text-muted)] mb-0.5">
             <span>Target: {formatValue(target, unit, currency)}</span>
             <span>{targetPercent.toFixed(0)}%</span>
           </div>
-          <div className="h-1 w-full rounded-full bg-[#1E1B3A]">
+          <div className={cn(
+            "h-1 w-full rounded-full",
+            isDark ? "bg-[var(--surface-elevated)]" : "bg-[var(--border)]"
+          )}>
             <div
               className={cn(
                 "h-1 rounded-full transition-all",
-                targetPercent >= 100 ? "bg-[#06D6A0]" : targetPercent >= 75 ? "bg-[#5B22FF]" : "bg-[#FFD166]"
+                targetPercent >= 100
+                  ? isDark ? "bg-[#06D6A0]" : "bg-[#059669]"
+                  : targetPercent >= 75
+                    ? isDark ? "bg-[#5B22FF]" : "bg-[#D00083]"
+                    : isDark ? "bg-[#FFD166]" : "bg-[#F5A623]"
               )}
               style={{ width: `${targetPercent}%` }}
             />
@@ -178,7 +195,7 @@ export function MetricCard({
       )}
 
       {/* As of date */}
-      <p className="mt-2 text-[10px] text-[#6B6394] text-right">
+      <p className="mt-2 text-[10px] text-[var(--text-muted)] text-right">
         As of: {asOf}
       </p>
     </div>

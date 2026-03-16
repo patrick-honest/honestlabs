@@ -59,17 +59,17 @@ export function analyzeTrends(
     );
   }
 
-  // --- 2. Latest week direction ---
+  // --- 2. Latest data point direction ---
   if (current.length >= 2) {
     const latest = current[current.length - 1].value;
     const prior = current[current.length - 2].value;
-    const weekPct =
+    const ppt =
       prior !== 0 ? ((latest - prior) / Math.abs(prior)) * 100 : 0;
-    const weekDir = weekPct > 0 ? "increased" : weekPct < 0 ? "decreased" : "unchanged";
+    const dir = ppt > 0 ? "increased" : ppt < 0 ? "decreased" : "unchanged";
 
-    if (Math.abs(weekPct) >= 1) {
+    if (Math.abs(ppt) >= 1) {
       bullets.push(
-        `Most recent week ${weekDir} ${Math.abs(weekPct).toFixed(1)}% week-over-week (${fmt(prior)} to ${fmt(latest)}).`,
+        `Most recent data point ${dir} ${Math.abs(ppt).toFixed(1)}% from prior period (${fmt(prior)} to ${fmt(latest)}).`,
       );
     }
   }
@@ -79,7 +79,7 @@ export function analyzeTrends(
   if (streak.length >= 3) {
     const streakDir = streak.direction === "up" ? "growth" : "decline";
     bullets.push(
-      `${metricName} has shown ${streak.length} consecutive weeks of ${streakDir}.`,
+      `${metricName} has shown ${streak.length} consecutive periods of ${streakDir}.`,
     );
   }
 
@@ -99,7 +99,7 @@ export function analyzeTrends(
 
     if (maxVal !== minVal) {
       bullets.push(
-        `Period high of ${fmt(maxVal)} (week of ${maxWeek}), low of ${fmt(minVal)} (week of ${minWeek}).`,
+        `Period high of ${fmt(maxVal)} (${maxWeek}), low of ${fmt(minVal)} (${minWeek}).`,
       );
     }
   }
@@ -185,7 +185,7 @@ function padBullets(
 
   if (padded.length < 3 && current.length > 0) {
     const latest = current[current.length - 1];
-    padded.push(`Latest value for ${metricName}: ${fmt(latest.value)} (week of ${latest.date}).`);
+    padded.push(`Latest value for ${metricName}: ${fmt(latest.value)} (${latest.date}).`);
   }
 
   if (padded.length < 3) {

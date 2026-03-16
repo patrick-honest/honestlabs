@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
 import type { Currency } from "@/types/reports";
 
 interface CurrencyContextValue {
@@ -11,11 +11,34 @@ interface CurrencyContextValue {
 
 const CurrencyContext = createContext<CurrencyContextValue | undefined>(undefined);
 
+function getStoredCurrency(): Currency {
+  if (typeof window === "undefined") return "IDR";
+  try {
+    const stored = localStorage.getItem("honest-currency");
+    if (stored === "IDR" || stored === "USD") return stored;
+  } catch { /* SSR or localStorage blocked */ }
+  return "USD";
+}
+
 export function CurrencyProvider({ children }: { children: ReactNode }) {
-  const [currency, setCurrency] = useState<Currency>("IDR");
+  const [currency, setCurrencyState] = useState<Currency>("USD");
+
+  // Hydrate from localStorage on mount
+  useEffect(() => {
+    setCurrencyState(getStoredCurrency());
+  }, []);
+
+  const setCurrency = useCallback((c: Currency) => {
+    setCurrencyState(c);
+    try { localStorage.setItem("honest-currency", c); } catch { /* noop */ }
+  }, []);
 
   const toggleCurrency = useCallback(() => {
-    setCurrency((prev) => (prev === "IDR" ? "USD" : "IDR"));
+    setCurrencyState((prev) => {
+      const next = prev === "IDR" ? "USD" : "IDR";
+      try { localStorage.setItem("honest-currency", next); } catch { /* noop */ }
+      return next as Currency;
+    });
   }, []);
 
   return (

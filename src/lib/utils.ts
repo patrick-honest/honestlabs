@@ -7,15 +7,28 @@ export function cn(...inputs: ClassValue[]) {
 
 export function formatNumber(value: number, opts?: { compact?: boolean }): string {
   if (opts?.compact) {
-    if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`;
-    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-    if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+    if (value >= 1_000_000_000) {
+      const v = value / 1_000_000_000;
+      return `${Number(v.toFixed(2))}B`;
+    }
+    if (value >= 1_000_000) {
+      const v = value / 1_000_000;
+      return `${Number(v.toFixed(2))}M`;
+    }
+    if (value >= 1_000) {
+      const v = value / 1_000;
+      return `${Number(v.toFixed(2))}K`;
+    }
   }
-  return new Intl.NumberFormat("en-US").format(value);
+  // Cap at 2 decimal places
+  const rounded = Math.round(value * 100) / 100;
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(rounded);
 }
 
 export function formatPercent(value: number): string {
-  return `${value.toFixed(1)}%`;
+  // Cap at 2 decimal places, strip trailing zeros
+  const rounded = Math.round(value * 100) / 100;
+  return `${rounded}%`;
 }
 
 export function formatCurrency(value: number, currency: "IDR" | "USD"): string {

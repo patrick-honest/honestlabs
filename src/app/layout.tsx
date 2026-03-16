@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Manrope } from "next/font/google";
 import { Geist_Mono } from "next/font/google";
+import { AuthProvider } from "@/components/providers";
 import "./globals.css";
 
 const manrope = Manrope({
@@ -25,12 +26,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Inline script prevents theme flash on page load by applying stored theme before paint */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('honest-theme');document.documentElement.className=t==='dark'?'dark':'light'}catch(e){document.documentElement.className='light'}})()`,
+          }}
+        />
+      </head>
       <body
-        className={`${manrope.variable} ${geistMono.variable} font-sans antialiased`}
-        style={{ background: "#0B0A1A", color: "#F0EEFF" }}
+        className={`${manrope.variable} ${geistMono.variable} font-sans antialiased bg-[var(--background)] text-[var(--foreground)] transition-colors`}
       >
-        {children}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

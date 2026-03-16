@@ -4,47 +4,42 @@ import { useState } from "react";
 import { Header } from "@/components/layout/header";
 import { UserSearchForm } from "@/components/search/user-search-form";
 import { UserInfoCard } from "@/components/search/user-info-card";
-import type { UserSearchResult } from "@/types/search";
-
-// Mock result for demo purposes
-const mockUser: UserSearchResult = {
-  user_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  loc_acct: "LOC-0012345",
-  prin_crn: "CRN-9876543",
-  current_urn: "URN-2024-001",
-  historical_urns: ["URN-2023-042", "URN-2023-018"],
-  cma_version: "v3.2.1",
-  cma_contract_id: "CTR-20240315-001",
-  decision_date: "2024-03-15",
-  videocall_verified_date: "2024-03-17",
-  card_activation_date: "2024-03-20",
-  card_active_date: "2024-03-20",
-  first_transaction_date: "2024-03-22",
-  days_dormant: 0,
-  cycle_date: "2024-04-01",
-  next_due_date: "2024-04-25",
-  current_minimum_due: 250000,
-  credit_limit: 15000000,
-  account_status: "ACTIVE",
-};
+import { useTheme } from "@/hooks/use-theme";
+import { AlertCircle, SearchX, Database, Clock } from "lucide-react";
+import type { UserSearchResult, SearchField } from "@/types/search";
 
 export default function SearchPage() {
   const [result, setResult] = useState<UserSearchResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [meta, setMeta] = useState<{ asOf: string; cached: boolean } | null>(null);
+  const { isDark } = useTheme();
 
-  const handleSearch = async (userId: string) => {
+  const handleSearch = async (query: string, field: SearchField) => {
     setLoading(true);
     setSearched(true);
-    // Simulate API call
-    await new Promise((r) => setTimeout(r, 800));
-    // For demo, return mock data if UUID-like, else null
-    if (userId.length >= 8) {
-      setResult({ ...mockUser, user_id: userId });
-    } else {
-      setResult(null);
+    setError(null);
+    setResult(null);
+    setMeta(null);
+
+    try {
+      const params = new URLSearchParams({ field, query });
+      const res = await fetch(`/api/search?${params.toString()}`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || `Search failed (${res.status})`);
+        return;
+      }
+
+      setResult(data.user);
+      setMeta({ asOf: data.asOf, cached: data.cached });
+    } catch (err) {
+      setError(`Network error: ${String(err)}`);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
@@ -53,26 +48,70 @@ export default function SearchPage() {
 
       <div className="flex-1 space-y-6 p-6">
         <div>
-          <h2 className="text-2xl font-bold text-white">User Search</h2>
-          <p className="mt-1 text-sm text-slate-400">
-            Look up a cardholder by user ID to view account details
+          <h2 className="text-2xl font-bold text-[var(--text-primary)]">User Search</h2>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            Look up a cardholder by ID, URN, CRN, LOC, or application ID
           </p>
+          <div className="mt-2 flex items-center gap-1.5 text-[10px] text-[var(--text-muted)]">
+            <AlertCircle className="h-3 w-3" />
+            <span>Phone and email can be used for search but are never stored or displayed in results (PII protection)</span>
+          </div>
         </div>
 
         <UserSearchForm onSearch={handleSearch} isLoading={loading} />
 
         {loading && (
-          <div className="flex items-center justify-center py-12">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+          <div className="flex flex-col items-center justify-center py-12 gap-3">
+            <div className={`h-8 w-8 animate-spin rounded-full border-2 border-t-transparent ${
+              isDark ? "border-[#5B22FF]" : "border-[#D00083]"
+            }`} />
+            <span className="text-xs text-[var(--text-muted)]">Querying BigQuery...</span>
           </div>
         )}
 
-        {!loading && result && <UserInfoCard user={result} />}
+        {/* Error state */}
+        {!loading && error && (
+          <div className={`rounded-xl border p-8 text-center ${
+            isDark ? "border-[var(--danger)]/30 bg-[var(--danger)]/5" : "border-[var(--danger)]/30 bg-[var(--danger)]/5"
+          }`}>
+            <SearchX className="mx-auto h-10 w-10 text-[var(--danger)] mb-3" />
+            <p className="text-sm font-medium text-[var(--text-primary)]">
+              {error}
+            </p>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              Check the identifier and try again.
+            </p>
+          </div>
+        )}
 
-        {!loading && searched && !result && (
-          <div className="rounded-xl border border-slate-800 bg-slate-900 p-12 text-center">
-            <p className="text-sm text-slate-400">
-              No user found. Please check the user ID and try again.
+        {/* Result */}
+        {!loading && result && (
+          <div className="space-y-3">
+            {/* Meta info */}
+            {meta && (
+              <div className="flex items-center gap-4 text-[10px] text-[var(--text-muted)]">
+                <div className="flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  <span>As of: {new Date(meta.asOf).toLocaleString()}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Database className="h-3 w-3" />
+                  <span>{meta.cached ? "Served from cache" : "Live from BigQuery"}</span>
+                </div>
+              </div>
+            )}
+            <UserInfoCard user={result} />
+          </div>
+        )}
+
+        {/* No results */}
+        {!loading && searched && !result && !error && (
+          <div className={`rounded-xl border p-8 text-center ${
+            isDark ? "border-[var(--border)] bg-[var(--surface)]" : "border-[var(--border)] bg-[var(--surface)] shadow-sm"
+          }`}>
+            <SearchX className="mx-auto h-10 w-10 text-[var(--text-muted)] mb-3" />
+            <p className="text-sm font-medium text-[var(--text-primary)]">
+              No results found
             </p>
           </div>
         )}

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Code2, Copy, Check, X, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -58,6 +59,11 @@ function QueryInspectorModal({ query, onClose }: QueryInspectorModalProps) {
   const [copied, setCopied] = useState(false);
   const [showParams, setShowParams] = useState(true);
   const [showResolved, setShowResolved] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Build the resolved SQL (replace @param with actual values)
   const resolvedSql = query.params.reduce((sql, param) => {
@@ -92,13 +98,15 @@ function QueryInspectorModal({ query, onClose }: QueryInspectorModalProps) {
     ? `~$${((query.estimatedBytes / 1_099_511_627_776) * 6.25).toFixed(4)}`
     : null;
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+  if (!mounted) return null;
+
+  const modalContent = (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative w-full max-w-3xl max-h-[85vh] flex flex-col rounded-2xl border border-[#2D2955] bg-[#0B0A1A] shadow-2xl">
+      <div className="relative w-full max-w-5xl max-h-[90vh] flex flex-col rounded-2xl border border-[#2D2955] bg-[#0B0A1A] shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[#2D2955] px-5 py-3">
           <div className="flex items-center gap-2">
@@ -154,8 +162,8 @@ function QueryInspectorModal({ query, onClose }: QueryInspectorModalProps) {
         </div>
 
         {/* SQL Body */}
-        <div className="flex-1 overflow-auto p-5">
-          <pre className="rounded-xl bg-[#141226] border border-[#2D2955] p-4 text-xs leading-relaxed overflow-x-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto p-5">
+          <pre className="rounded-xl bg-[#141226] border border-[#2D2955] p-4 text-[13px] leading-relaxed overflow-x-auto min-h-[200px]">
             <code className="text-[#9B94C4]">
               {highlightSql(displaySql, !showResolved)}
             </code>
@@ -199,6 +207,8 @@ function QueryInspectorModal({ query, onClose }: QueryInspectorModalProps) {
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }
 
 /** Simple SQL syntax highlighter for dark theme */
