@@ -19,6 +19,7 @@ export const navigation: NavItem[] = [
       { label: "Risk", href: "/deep-dive/risk", icon: "ShieldAlert" },
       { label: "Activation", href: "/deep-dive/activation", icon: "Zap" },
       { label: "Collections", href: "/deep-dive/collections", icon: "Landmark" },
+      { label: "Customer Service", href: "/deep-dive/customer-service", icon: "Headphones" },
     ],
   },
   { label: "Vintage Analysis", href: "/vintage", icon: "Layers" },
