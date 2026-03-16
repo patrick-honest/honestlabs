@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { formatNumber, formatPercent } from "@/lib/utils";
 import { formatAmountCompact } from "@/lib/currency";
 import { useCurrency } from "@/hooks/use-currency";
+import { QueryInspectorButton, type QueryInfo } from "@/components/query-inspector/query-inspector";
 
 interface MetricCardProps {
   metricKey: string;
@@ -24,6 +25,7 @@ interface MetricCardProps {
   target?: number;
   higherIsBetter?: boolean;
   onRefresh?: () => Promise<void>;
+  query?: QueryInfo;
 }
 
 function formatValue(value: number, unit: MetricCardProps["unit"], currency: "IDR" | "USD"): string {
@@ -60,6 +62,7 @@ export function MetricCard({
   target,
   higherIsBetter = true,
   onRefresh,
+  query,
 }: MetricCardProps) {
   const { currency } = useCurrency();
   const [refreshing, setRefreshing] = useState(false);
@@ -75,10 +78,10 @@ export function MetricCard({
 
   const changeColor =
     isPositive === null
-      ? "text-slate-400"
+      ? "text-[#9B94C4]"
       : isPositive
-        ? "text-emerald-400"
-        : "text-red-400";
+        ? "text-[#06D6A0]"
+        : "text-[#FF6B6B]";
 
   const DirectionIcon =
     direction === "up" ? TrendingUp : direction === "down" ? TrendingDown : Minus;
@@ -98,14 +101,14 @@ export function MetricCard({
   }
 
   return (
-    <div className="relative flex flex-col justify-between rounded-xl border border-slate-800 bg-slate-900 p-4">
+    <div className="relative flex flex-col justify-between rounded-xl border border-[#2D2955] bg-[#141226] p-4">
       {/* Header row */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
+          <p className="text-xs font-medium uppercase tracking-wider text-[#9B94C4]">
             {label}
           </p>
-          <p className="mt-0.5 text-[10px] text-slate-500">
+          <p className="mt-0.5 text-[10px] text-[#6B6394]">
             {dataRange.start} &ndash; {dataRange.end}
           </p>
         </div>
@@ -118,7 +121,7 @@ export function MetricCard({
                   <Line
                     type="monotone"
                     dataKey="value"
-                    stroke={isPositive === false ? "#f87171" : "#3b82f6"}
+                    stroke={isPositive === false ? "#FF6B6B" : "#5B22FF"}
                     strokeWidth={1.5}
                     dot={false}
                   />
@@ -127,11 +130,13 @@ export function MetricCard({
             </div>
           )}
 
+          {query && <QueryInspectorButton query={query} />}
+
           {onRefresh && (
             <button
               onClick={handleRefresh}
               disabled={refreshing}
-              className="text-slate-500 hover:text-blue-400 transition-colors disabled:opacity-50"
+              className="text-[#6B6394] hover:text-[#7C4DFF] transition-colors disabled:opacity-50"
               aria-label={`Refresh ${label}`}
             >
               <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
@@ -156,15 +161,15 @@ export function MetricCard({
       {/* Target progress */}
       {targetPercent !== null && target != null && (
         <div className="mt-2">
-          <div className="flex items-center justify-between text-[10px] text-slate-500 mb-0.5">
+          <div className="flex items-center justify-between text-[10px] text-[#6B6394] mb-0.5">
             <span>Target: {formatValue(target, unit, currency)}</span>
             <span>{targetPercent.toFixed(0)}%</span>
           </div>
-          <div className="h-1 w-full rounded-full bg-slate-800">
+          <div className="h-1 w-full rounded-full bg-[#1E1B3A]">
             <div
               className={cn(
                 "h-1 rounded-full transition-all",
-                targetPercent >= 100 ? "bg-emerald-500" : targetPercent >= 75 ? "bg-blue-500" : "bg-amber-500"
+                targetPercent >= 100 ? "bg-[#06D6A0]" : targetPercent >= 75 ? "bg-[#5B22FF]" : "bg-[#FFD166]"
               )}
               style={{ width: `${targetPercent}%` }}
             />
@@ -173,7 +178,7 @@ export function MetricCard({
       )}
 
       {/* As of date */}
-      <p className="mt-2 text-[10px] text-slate-500 text-right">
+      <p className="mt-2 text-[10px] text-[#6B6394] text-right">
         As of: {asOf}
       </p>
     </div>

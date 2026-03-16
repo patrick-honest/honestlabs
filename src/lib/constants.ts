@@ -60,15 +60,24 @@ export const PRODUCT_TYPES = {
   standard: { label: "Standard Credit Card", filter: "(is_prepaid_card_applicable IS NULL OR is_prepaid_card_applicable = FALSE) AND (is_account_opening_fee_applicable IS NULL OR is_account_opening_fee_applicable = FALSE)" },
 } as const;
 
-// Chart colors
+// Chart colors — Honest brand palette
 export const CHART_COLORS = {
-  primary: "#2563eb",    // blue-600
-  secondary: "#7c3aed",  // violet-600
-  success: "#16a34a",    // green-600
-  warning: "#d97706",    // amber-600
-  danger: "#dc2626",     // red-600
-  muted: "#6b7280",      // gray-500
-  online: "#2563eb",
-  offline: "#7c3aed",
-  qris: "#16a34a",
+  primary: "#5B22FF",     // honest purple
+  secondary: "#7C4DFF",   // honest purple light
+  success: "#06D6A0",     // teal (split complementary)
+  warning: "#FFD166",     // amber
+  danger: "#FF6B6B",      // coral
+  muted: "#6B6394",       // muted purple
+  online: "#5B22FF",      // purple for online
+  offline: "#7C4DFF",     // lighter purple for offline
+  qris: "#06D6A0",        // teal for QRIS
+  // Extended palette for multi-series charts
+  chart1: "#5B22FF",
+  chart2: "#06D6A0",
+  chart3: "#FFD166",
+  chart4: "#FF6B6B",
+  chart5: "#7C4DFF",
+  chart6: "#4ECDC4",
+  chart7: "#FF8C42",
+  chart8: "#95E1D3",
 } as const;

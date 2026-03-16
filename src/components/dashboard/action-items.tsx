@@ -24,18 +24,18 @@ const priorityConfig: Record<
 > = {
   urgent: {
     icon: AlertCircle,
-    colorClass: "text-red-400",
-    bgClass: "bg-red-500/10",
+    colorClass: "text-[#FF6B6B]",
+    bgClass: "bg-[#FF6B6B]/10",
   },
   monitor: {
     icon: AlertTriangle,
-    colorClass: "text-amber-400",
-    bgClass: "bg-amber-500/10",
+    colorClass: "text-[#FFD166]",
+    bgClass: "bg-[#FFD166]/10",
   },
   positive: {
     icon: CheckCircle2,
-    colorClass: "text-emerald-400",
-    bgClass: "bg-emerald-500/10",
+    colorClass: "text-[#06D6A0]",
+    bgClass: "bg-[#06D6A0]/10",
   },
 };
 
@@ -43,7 +43,7 @@ export function ActionItems({ section, items, className }: ActionItemsProps) {
   if (items.length === 0) return null;
 
   return (
-    <div className={cn("rounded-xl border border-slate-800 bg-slate-900 p-4", className)}>
+    <div className={cn("rounded-xl border border-[#2D2955] bg-[#141226] p-4", className)}>
       <h3 className="text-sm font-semibold text-white mb-3">
         Action Items &mdash; {section}
       </h3>
@@ -60,7 +60,7 @@ export function ActionItems({ section, items, className }: ActionItemsProps) {
               )}
             >
               <Icon className={cn("h-4 w-4 mt-0.5 shrink-0", config.colorClass)} />
-              <p className="text-sm text-slate-300">
+              <p className="text-sm text-[#9B94C4]">
                 <span className="font-semibold text-white">{item.action}</span>{" "}
                 {item.detail}
               </p>

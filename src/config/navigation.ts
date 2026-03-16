@@ -24,6 +24,7 @@ export const navigation: NavItem[] = [
   },
   { label: "Vintage Analysis", href: "/vintage", icon: "Layers" },
   { label: "Orico Reports", href: "/orico", icon: "Building" },
+  { label: "QRIS Experiment", href: "/qris-experiment", icon: "QrCode" },
   { label: "User Search", href: "/search", icon: "Search" },
   { label: "Market News", href: "/news", icon: "Newspaper" },
 ];
