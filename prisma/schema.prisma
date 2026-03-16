@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Report {
+  id          String   @id @default(cuid())
+  cycle       String   // "weekly" | "monthly" | "quarterly" | "yearly"
+  periodStart DateTime
+  periodEnd   DateTime
+  section     String   // "executive" | "acquisition" | "spend" | "risk" | "portfolio" | "activation" | "collections" | "orico"
+  title       String   @default("")
+  data        String   // JSON blob of computed metrics + chart data points
+  trends      String   @default("[]") // JSON array of 3-5 trend bullet strings
+  generatedAt DateTime @default(now())
+  status      String   @default("complete") // "pending" | "complete" | "error"
+
+  @@index([cycle, periodStart])
+  @@index([section, cycle])
+  @@index([status])
+}
+
+model KpiSnapshot {
+  id          String   @id @default(cuid())
+  cycle       String
+  periodStart DateTime
+  metric      String
+  value       Float
+  prevValue   Float?
+  unit        String   // "count" | "percent" | "idr" | "usd"
+  updatedAt   DateTime @default(now())
+
+  @@unique([cycle, periodStart, metric])
+  @@index([cycle, metric])
+}
+
+model VintageCohort {
+  id              String   @id @default(cuid())
+  cohortMonth     DateTime
+  channel         String
+  monthsOnBook    Int
+  approvedCount   Int
+  activatedCount  Int
+  delinquentCount Int
+  writeOffCount   Int
+  totalExposure   Float
+  updatedAt       DateTime @default(now())
+
+  @@unique([cohortMonth, channel, monthsOnBook])
+  @@index([cohortMonth])
+}
+
+model NewsArticle {
+  id          String   @id @default(cuid())
+  title       String
+  source      String
+  url         String
+  summary     String
+  publishedAt DateTime
+  fetchedAt   DateTime @default(now())
+  relevance   String   @default("medium")
+
+  @@index([publishedAt])
+}
