@@ -72,9 +72,9 @@ export function DashboardLineChart({
               color: "#f1f5f9",
               fontSize: 12,
             }}
-            formatter={(value: number, name: string) => {
+            formatter={(value, name) => {
               const line = lines.find((l) => l.key === name);
-              return [formatValue(value), line?.label ?? name];
+              return [formatValue(Number(value)), line?.label ?? String(name)];
             }}
           />
           <Legend

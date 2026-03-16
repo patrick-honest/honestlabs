@@ -66,9 +66,9 @@ export function DashboardAreaChart({
               color: "#f1f5f9",
               fontSize: 12,
             }}
-            formatter={(value: number, name: string) => {
+            formatter={(value, name) => {
               const area = areas.find((a) => a.key === name);
-              return [formatValue(value), area?.label ?? name];
+              return [formatValue(Number(value)), area?.label ?? String(name)];
             }}
           />
           <Legend wrapperStyle={{ fontSize: 12, color: "#94a3b8" }} />

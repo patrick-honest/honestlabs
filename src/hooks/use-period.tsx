@@ -24,9 +24,9 @@ export function PeriodProvider({ children }: { children: ReactNode }) {
   const periodLabel = PERIOD_LABELS[period];
 
   return (
-    <PeriodContext value={{ period, setPeriod, periodLabel }}>
+    <PeriodContext.Provider value={{ period, setPeriod, periodLabel }}>
       {children}
-    </PeriodContext>
+    </PeriodContext.Provider>
   );
 }
 

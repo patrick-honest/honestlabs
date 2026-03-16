@@ -19,9 +19,9 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <CurrencyContext value={{ currency, setCurrency, toggleCurrency }}>
+    <CurrencyContext.Provider value={{ currency, setCurrency, toggleCurrency }}>
       {children}
-    </CurrencyContext>
+    </CurrencyContext.Provider>
   );
 }
 
