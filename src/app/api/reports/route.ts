@@ -8,6 +8,9 @@ import { prisma } from "@/lib/db";
 // ---------------------------------------------------------------------------
 
 export async function GET(request: NextRequest) {
+  if (!prisma) {
+    return NextResponse.json({ reports: [], total: 0, page: 1, limit: 20, asOf: new Date().toISOString() });
+  }
   try {
     const { searchParams } = new URL(request.url);
     const cycle = searchParams.get("cycle") || undefined;
@@ -46,7 +49,8 @@ export async function GET(request: NextRequest) {
     ]);
 
     // Format dates for JSON response
-    const formatted = reports.map((r) => ({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const formatted = reports.map((r: any) => ({
       id: r.id,
       cycle: r.cycle,
       periodStart: r.periodStart.toISOString().split("T")[0],

@@ -1,35 +1,43 @@
-import Database from "better-sqlite3";
-import path from "path";
-
 // ---------------------------------------------------------------------------
 // SQLite cache layer — uses better-sqlite3 directly for maximum read perf.
-// Schema: key-value store with TTL support.
+// In demo mode / Vercel serverless, the native module may not be available —
+// all functions gracefully no-op so the app still renders with sample data.
 // ---------------------------------------------------------------------------
 
-let _db: Database.Database | null = null;
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
-function getDb(): Database.Database {
-  if (!_db) {
+let _db: any = null;
+let _unavailable = false;
+
+function getDb(): any {
+  if (_unavailable) return null;
+  if (_db) return _db;
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Database = require("better-sqlite3");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const path = require("path");
+
     const dbPath =
       process.env.CACHE_DB_PATH ||
       path.join(process.cwd(), "prisma", "cache.db");
     _db = new Database(dbPath);
-    _db.pragma("journal_mode = WAL"); // faster concurrent reads
+    _db.pragma("journal_mode = WAL");
     _db.pragma("synchronous = NORMAL");
-    initCache(_db);
+    _db.exec(`
+      CREATE TABLE IF NOT EXISTS cache (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        expires_at TEXT
+      )
+    `);
+    return _db;
+  } catch {
+    _unavailable = true;
+    return null;
   }
-  return _db;
-}
-
-function initCache(db: Database.Database): void {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS cache (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      expires_at TEXT
-    )
-  `);
 }
 
 // ---------------------------------------------------------------------------
@@ -46,19 +54,17 @@ export interface CacheEntry<T> {
  */
 export function getCached<T>(key: string): CacheEntry<T> | null {
   const db = getDb();
+  if (!db) return null;
+
   const row = db
-    .prepare(
-      "SELECT value, updated_at, expires_at FROM cache WHERE key = ?",
-    )
+    .prepare("SELECT value, updated_at, expires_at FROM cache WHERE key = ?")
     .get(key) as
     | { value: string; updated_at: string; expires_at: string | null }
     | undefined;
 
   if (!row) return null;
 
-  // Check expiry
   if (row.expires_at && new Date(row.expires_at) < new Date()) {
-    // Expired — delete and return null
     db.prepare("DELETE FROM cache WHERE key = ?").run(key);
     return null;
   }
@@ -70,8 +76,7 @@ export function getCached<T>(key: string): CacheEntry<T> | null {
 }
 
 /**
- * Write a value to the cache. Optional TTL in hours (default: 25h — slightly
- * longer than one day so daily cron always has valid data).
+ * Write a value to the cache. Optional TTL in hours (default: 25h).
  */
 export function setCached(
   key: string,
@@ -79,6 +84,8 @@ export function setCached(
   ttlHours: number = 25,
 ): void {
   const db = getDb();
+  if (!db) return;
+
   const now = new Date();
   const updatedAt = now.toISOString();
   const expiresAt = new Date(
@@ -100,6 +107,7 @@ export function setCached(
  */
 export function invalidateCache(key: string): void {
   const db = getDb();
+  if (!db) return;
   db.prepare("DELETE FROM cache WHERE key = ?").run(key);
 }
 
@@ -110,6 +118,8 @@ export function getCacheAge(
   key: string,
 ): { updatedAt: string; ageMinutes: number } | null {
   const db = getDb();
+  if (!db) return null;
+
   const row = db
     .prepare("SELECT updated_at FROM cache WHERE key = ?")
     .get(key) as { updated_at: string } | undefined;

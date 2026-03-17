@@ -4,34 +4,45 @@ import CredentialsProvider from "next-auth/providers/credentials";
 
 const ALLOWED_DOMAINS = ["honest.co.id", "honestbank.com"];
 
-export const authOptions: NextAuthOptions = {
-  providers: [
+// Build provider list — only include Google when credentials are configured
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const providers: any[] = [];
+
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  providers.push(
     GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID || "",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-    }),
-    CredentialsProvider({
-      name: "Admin Login",
-      credentials: {
-        username: { label: "Username", type: "text" },
-        password: { label: "Password", type: "password" },
-      },
-      async authorize(credentials) {
-        // Admin credentials login
-        if (
-          credentials?.username === "Administrator" &&
-          credentials?.password === "Honest0123"
-        ) {
-          return {
-            id: "admin",
-            name: "Administrator",
-            email: "patrick@honestbank.com",
-          };
-        }
-        return null;
-      },
-    }),
-  ],
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    })
+  );
+}
+
+providers.push(
+  CredentialsProvider({
+    name: "Admin Login",
+    credentials: {
+      username: { label: "Username", type: "text" },
+      password: { label: "Password", type: "password" },
+    },
+    async authorize(credentials) {
+      if (
+        credentials?.username === "Administrator" &&
+        credentials?.password === "Honest0123"
+      ) {
+        return {
+          id: "admin",
+          name: "Administrator",
+          email: "patrick@honestbank.com",
+        };
+      }
+      return null;
+    },
+  })
+);
+
+export const authOptions: NextAuthOptions = {
+  secret: process.env.NEXTAUTH_SECRET || "demo-secret-not-for-production",
+  providers,
   callbacks: {
     async signIn({ account, profile }) {
       // Skip domain check for credentials provider

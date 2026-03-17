@@ -11,6 +11,9 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ reportId: string }> },
 ) {
+  if (!prisma) {
+    return NextResponse.json({ error: "Database not available in demo mode" }, { status: 503 });
+  }
   try {
     const { reportId } = await params;
 

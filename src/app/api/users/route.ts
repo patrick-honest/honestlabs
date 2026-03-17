@@ -15,6 +15,10 @@ function isAdmin(email: string | null | undefined): boolean {
  * GET /api/users — List all users
  */
 export async function GET() {
+  if (!prisma) {
+    return NextResponse.json({ error: "Database not available in demo mode", users: [] }, { status: 200 });
+  }
+
   const session = await getServerSession(authOptions);
   if (!isAdmin(session?.user?.email)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -32,6 +36,9 @@ export async function GET() {
  * Body: { email: string, name?: string, pages?: string[], sendEmail?: boolean }
  */
 export async function POST(req: NextRequest) {
+  if (!prisma) {
+    return NextResponse.json({ error: "Database not available in demo mode" }, { status: 503 });
+  }
   const session = await getServerSession(authOptions);
   if (!isAdmin(session?.user?.email)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -145,6 +152,9 @@ export async function POST(req: NextRequest) {
  * Body: { email: string }
  */
 export async function DELETE(req: NextRequest) {
+  if (!prisma) {
+    return NextResponse.json({ error: "Database not available in demo mode" }, { status: 503 });
+  }
   const session = await getServerSession(authOptions);
   if (!isAdmin(session?.user?.email)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -175,6 +185,9 @@ export async function DELETE(req: NextRequest) {
  * Body: { email: string, pages?: string[], status?: string }
  */
 export async function PATCH(req: NextRequest) {
+  if (!prisma) {
+    return NextResponse.json({ error: "Database not available in demo mode" }, { status: 503 });
+  }
   const session = await getServerSession(authOptions);
   if (!isAdmin(session?.user?.email)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

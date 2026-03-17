@@ -1,9 +1,15 @@
 /**
- * Detect if we're running in static export mode (GitHub Pages).
- * This is set at build time and baked into the client bundle.
+ * Detect if we're running without authentication.
+ *
+ * Two modes trigger this:
+ *  - NEXT_PUBLIC_STATIC_EXPORT=true  → GitHub Pages static export
+ *  - NEXT_PUBLIC_DEMO_MODE=true      → Vercel/hosted demo (no Google OAuth)
+ *
+ * When active, a mock session is injected and access control is bypassed.
  */
 export const IS_STATIC_EXPORT =
-  process.env.NEXT_PUBLIC_STATIC_EXPORT === "true";
+  process.env.NEXT_PUBLIC_STATIC_EXPORT === "true" ||
+  process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
 /**
  * Mock session data used in static export mode.
