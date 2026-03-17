@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Header } from "@/components/layout/header";
 import { APP_OWNER } from "@/lib/access-control";
+import { IS_STATIC_EXPORT } from "@/lib/static-mode";
 import { cn } from "@/lib/utils";
 import { Plus, Trash2, Mail, Shield, Eye, RefreshCw, Check, X, Lock } from "lucide-react";
 
@@ -30,6 +31,25 @@ const AVAILABLE_PAGES = [
 
 export default function AdminPage() {
   const { data: session } = useSession();
+
+  if (IS_STATIC_EXPORT) {
+    return (
+      <div className="flex flex-col">
+        <Header title="Admin" />
+        <div className="flex items-center justify-center min-h-[60vh] p-6">
+          <div className="max-w-md w-full text-center space-y-4">
+            <div className="mx-auto w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+              <Lock className="w-8 h-8 text-amber-500" />
+            </div>
+            <h2 className="text-xl font-bold text-[var(--text-primary)]">Read-Only Mode</h2>
+            <p className="text-sm text-[var(--text-muted)]">
+              User management is disabled in the public demo. This feature requires a live server.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
   const [users, setUsers] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [inviteEmail, setInviteEmail] = useState("");

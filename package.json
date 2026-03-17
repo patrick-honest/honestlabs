@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:pages": "rm -rf src/app/api && NEXT_PUBLIC_STATIC_EXPORT=true next build",
     "start": "next start",
     "lint": "eslint"
   },

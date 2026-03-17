@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { navigation, type NavItem } from "@/config/navigation";
 import { useTheme } from "@/hooks/use-theme";
 import { useSession, signOut } from "next-auth/react";
+import { IS_STATIC_EXPORT } from "@/lib/static-mode";
 
 const iconMap: Record<string, LucideIcon> = {
   Home, FileText, BarChart3, UserPlus, Briefcase, CreditCard,
@@ -474,7 +475,7 @@ export function Sidebar() {
                 </div>
               </div>
               <button
-                onClick={() => signOut({ callbackUrl: "/login" })}
+                onClick={() => { if (!IS_STATIC_EXPORT) signOut({ callbackUrl: "/login" }); }}
                 className="mt-2 flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]"
               >
                 <LogOut className="h-4 w-4" />

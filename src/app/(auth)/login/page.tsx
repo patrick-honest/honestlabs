@@ -1,9 +1,27 @@
 "use client";
 
 import { signIn } from "next-auth/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { IS_STATIC_EXPORT } from "@/lib/static-mode";
 
 export default function LoginPage() {
+  // In static export mode, skip login and go straight to dashboard
+  useEffect(() => {
+    if (IS_STATIC_EXPORT) {
+      window.location.replace(
+        (process.env.NEXT_PUBLIC_STATIC_EXPORT === "true" ? "/honestlabs" : "") +
+          "/dashboard/"
+      );
+    }
+  }, []);
+
+  if (IS_STATIC_EXPORT) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950">
+        <p className="text-slate-400 text-sm">Redirecting to dashboard...</p>
+      </div>
+    );
+  }
   const [showCredentials, setShowCredentials] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");

@@ -5,10 +5,29 @@ import { Header } from "@/components/layout/header";
 import { UserSearchForm } from "@/components/search/user-search-form";
 import { UserInfoCard } from "@/components/search/user-info-card";
 import { useTheme } from "@/hooks/use-theme";
+import { IS_STATIC_EXPORT } from "@/lib/static-mode";
 import { AlertCircle, SearchX, Database, Clock } from "lucide-react";
 import type { UserSearchResult, SearchField } from "@/types/search";
 
 export default function SearchPage() {
+  if (IS_STATIC_EXPORT) {
+    return (
+      <div className="flex flex-col">
+        <Header title="User Search" />
+        <div className="flex items-center justify-center min-h-[60vh] p-6">
+          <div className="max-w-md w-full text-center space-y-4">
+            <div className="mx-auto w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+              <Database className="w-8 h-8 text-amber-500" />
+            </div>
+            <h2 className="text-xl font-bold text-[var(--text-primary)]">Read-Only Mode</h2>
+            <p className="text-sm text-[var(--text-muted)]">
+              Live user search requires a BigQuery connection and is disabled in the public demo.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
   const [result, setResult] = useState<UserSearchResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);

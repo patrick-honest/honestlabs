@@ -3,15 +3,20 @@
 import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import { hasPageAccess, APP_OWNER } from "@/lib/access-control";
+import { IS_STATIC_EXPORT } from "@/lib/static-mode";
 import { Lock } from "lucide-react";
 
 /**
  * Wraps a page and checks if the current user is on the allowlist.
  * If not, shows a "Request Access" screen instead of the page content.
+ * In static export mode, all pages are accessible (read-only public demo).
  */
 export function PageGuard({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
   const pathname = usePathname();
+
+  // Static export mode — bypass access control
+  if (IS_STATIC_EXPORT) return <>{children}</>;
 
   // While loading session, show nothing (avoids flash)
   if (status === "loading") {
