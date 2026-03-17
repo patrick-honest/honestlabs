@@ -20,25 +20,7 @@ export const APP_OWNER = "patrick@honestbank.com";
  *
  * The APP_OWNER always has access regardless of allowlist.
  */
-export const PAGE_ALLOWLISTS: Record<string, string[]> = {
-  "/orico": [
-    "voita@honestbank.com",
-    "andrew@honestbank.com",
-    "peter@honestbank.com",
-    "will@honestbank.com",
-    "nimish@honestbank.com",
-    "ed@honestbank.com",
-    "darwin@honestbank.com",
-    "caitlyn@honestbank.com",
-    "meta@honestbank.com",
-    "love@honestbank.com",
-    "ray@honestbank.com",
-    "malik@honestbank.com",
-    "panji@honestbank.com",
-    "candy@honestbank.com",
-    "george@honestbank.com",
-  ],
-};
+export const PAGE_ALLOWLISTS: Record<string, string[]> = {};
 
 /**
  * Check if a user has access to a given path.
