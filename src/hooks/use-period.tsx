@@ -293,16 +293,45 @@ function computeRanges(
 
 const PeriodContext = createContext<PeriodContextValue | undefined>(undefined);
 
-export function PeriodProvider({ children }: { children: ReactNode }) {
-  const [period, setPeriodRaw] = useState<Cycle>("weekly");
-  const [timeRange, setTimeRange] = useState<TimeRangePreset>("xtd"); // default to xTD
-  const [comparisonMode, setComparisonMode] = useState<ComparisonMode>("prior_period");
+const PERIOD_STORAGE_KEY = "honest_period_prefs";
 
-  // When switching period, reset to xTD for that period
+function loadPeriodPrefs(): { period: Cycle; timeRange: TimeRangePreset; comparisonMode: ComparisonMode } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(PERIOD_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function savePeriodPrefs(period: Cycle, timeRange: TimeRangePreset, comparisonMode: ComparisonMode) {
+  if (typeof window === "undefined") return;
+  try { localStorage.setItem(PERIOD_STORAGE_KEY, JSON.stringify({ period, timeRange, comparisonMode })); }
+  catch { /* ignore */ }
+}
+
+export function PeriodProvider({ children }: { children: ReactNode }) {
+  const saved = loadPeriodPrefs();
+  const [period, setPeriodRaw] = useState<Cycle>(saved?.period ?? "weekly");
+  const [timeRange, setTimeRangeRaw] = useState<TimeRangePreset>(saved?.timeRange ?? "last_full");
+  const [comparisonMode, setComparisonModeRaw] = useState<ComparisonMode>(saved?.comparisonMode ?? "prior_period");
+
+  // Persist selections to localStorage
+  const setTimeRange = useCallback((tr: TimeRangePreset) => {
+    setTimeRangeRaw(tr);
+    savePeriodPrefs(period, tr, comparisonMode);
+  }, [period, comparisonMode]);
+
+  const setComparisonMode = useCallback((cm: ComparisonMode) => {
+    setComparisonModeRaw(cm);
+    savePeriodPrefs(period, timeRange, cm);
+  }, [period, timeRange]);
+
+  // When switching period, default to last_full for that period
   const setPeriod = useCallback((p: Cycle) => {
     setPeriodRaw(p);
-    setTimeRange("xtd");
-  }, []);
+    setTimeRangeRaw("last_full");
+    savePeriodPrefs(p, "last_full", comparisonMode);
+  }, [comparisonMode]);
 
   const { current, previous } = useMemo(
     () => computeRanges(period, timeRange, comparisonMode),

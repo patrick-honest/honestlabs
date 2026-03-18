@@ -239,8 +239,41 @@ function generateWeeklyCohorts(): { value: string; label: string }[] {
 
 export const COHORT_OPTIONS = generateWeeklyCohorts();
 
+const FILTERS_STORAGE_KEY = "honest_filter_prefs";
+
+function loadFilterPrefs(): FilterSelections | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(FILTERS_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    // Validate shape — must have all keys as arrays
+    for (const key of Object.keys(DEFAULT_FILTERS)) {
+      if (!Array.isArray(parsed[key])) return null;
+    }
+    return parsed;
+  } catch { return null; }
+}
+
+function saveFilterPrefs(filters: FilterSelections) {
+  if (typeof window === "undefined") return;
+  try { localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(filters)); }
+  catch { /* ignore */ }
+}
+
 export function FiltersProvider({ children }: { children: ReactNode }) {
-  const [filters, setFilters] = useState<FilterSelections>(DEFAULT_FILTERS);
+  const [filters, setFiltersRaw] = useState<FilterSelections>(
+    () => loadFilterPrefs() ?? DEFAULT_FILTERS,
+  );
+
+  // Wrap setFilters to persist
+  const setFilters = useCallback((updater: FilterSelections | ((prev: FilterSelections) => FilterSelections)) => {
+    setFiltersRaw((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      saveFilterPrefs(next);
+      return next;
+    });
+  }, []);
 
   const setFilter = useCallback(
     (key: keyof FilterSelections, values: string[]) => {
