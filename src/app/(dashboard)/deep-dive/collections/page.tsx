@@ -9,6 +9,9 @@ import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { usePeriod } from "@/hooks/use-period";
+import { useFilters } from "@/hooks/use-filters";
+import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
+import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange, getPeriodInsightLabels, scaleTrendData, scaleMetricValue } from "@/lib/period-data";
 
 const AS_OF = "Mar 15, 2026";
@@ -80,13 +83,14 @@ const writeOffTrend = [
 
 export default function CollectionsPage() {
   const { period, periodLabel } = usePeriod();
+  const { filters } = useFilters();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
-  const pContactRate = useMemo(() => scaleTrendData(contactRateTrend, period), [period]);
-  const pPtpRate = useMemo(() => scaleTrendData(ptpRateTrend, period), [period]);
-  const pCureRate = useMemo(() => scaleTrendData(cureRateTrend, period), [period]);
-  const pRecoveryAmounts = useMemo(() => scaleTrendData(recoveryAmounts, period), [period]);
+  const pContactRate = useMemo(() => applyFilterToData(scaleTrendData(contactRateTrend, period), filters), [period, filters]);
+  const pPtpRate = useMemo(() => applyFilterToData(scaleTrendData(ptpRateTrend, period), filters), [period, filters]);
+  const pCureRate = useMemo(() => applyFilterToData(scaleTrendData(cureRateTrend, period), filters), [period, filters]);
+  const pRecoveryAmounts = useMemo(() => applyFilterToData(scaleTrendData(recoveryAmounts, period), filters), [period, filters]);
 
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
 
@@ -172,13 +176,15 @@ export default function CollectionsPage() {
         <p className="text-sm text-[var(--text-secondary)] mt-1">{periodLabel}</p>
       </div>
 
+      <ActiveFiltersBanner />
+
       {/* KPI row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           metricKey="coll_contact_rate"
           label="Contact Rate"
-          value={scaleMetricValue(87.1, period, true)}
-          prevValue={scaleMetricValue(86.3, period, true)}
+          value={applyFilterToMetric(scaleMetricValue(87.1, period, true), filters, true)}
+          prevValue={applyFilterToMetric(scaleMetricValue(86.3, period, true), filters, true)}
           unit="percent"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -189,8 +195,8 @@ export default function CollectionsPage() {
         <MetricCard
           metricKey="coll_ptp_rate"
           label="Promise-to-Pay Rate"
-          value={scaleMetricValue(50.2, period, true)}
-          prevValue={scaleMetricValue(49.5, period, true)}
+          value={applyFilterToMetric(scaleMetricValue(50.2, period, true), filters, true)}
+          prevValue={applyFilterToMetric(scaleMetricValue(49.5, period, true), filters, true)}
           unit="percent"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -200,8 +206,8 @@ export default function CollectionsPage() {
         <MetricCard
           metricKey="coll_cure_rate"
           label="Cure Rate"
-          value={scaleMetricValue(62.9, period, true)}
-          prevValue={scaleMetricValue(58.7, period, true)}
+          value={applyFilterToMetric(scaleMetricValue(62.9, period, true), filters, true)}
+          prevValue={applyFilterToMetric(scaleMetricValue(58.7, period, true), filters, true)}
           unit="percent"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -212,8 +218,8 @@ export default function CollectionsPage() {
         <MetricCard
           metricKey="coll_recovery"
           label="Recovery Amount"
-          value={scaleMetricValue(3800000000, period, false)}
-          prevValue={scaleMetricValue(3500000000, period, false)}
+          value={applyFilterToMetric(scaleMetricValue(3800000000, period, false), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(3500000000, period, false), filters, false)}
           unit="idr"
           asOf={AS_OF}
           dataRange={DATA_RANGE}

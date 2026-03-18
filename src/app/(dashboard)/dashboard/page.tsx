@@ -10,7 +10,10 @@ import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-i
 import { Newspaper, RefreshCw } from "lucide-react";
 import { usePeriod } from "@/hooks/use-period";
 import { useTheme } from "@/hooks/use-theme";
+import { useFilters } from "@/hooks/use-filters";
 import { useKpis } from "@/hooks/use-cached-fetch";
+import { applyFilterToData, applyFilterToMetric, hasActiveFilters } from "@/lib/filter-utils";
+import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import type { KpiMetric } from "@/types/reports";
 import type { Cycle } from "@/types/reports";
 
@@ -194,17 +197,40 @@ const newsHeadlines = [
 export default function DashboardPage() {
   const { period, periodLabel, dateRange } = usePeriod();
   const { isDark } = useTheme();
+  const { filters } = useFilters();
 
   // SWR-based cached fetch — deduplicates requests, serves stale while revalidating
   const { data: apiData, isLoading: loading } = useKpis(period);
 
   // Use API data if available, otherwise period-aware mock data
-  const kpis = (apiData?.kpis as KpiMetric[]) ?? generateMockKpis(period);
+  // Apply active filters to scale data proportionally
+  const rawKpis = (apiData?.kpis as KpiMetric[]) ?? generateMockKpis(period);
+  const kpis = useMemo(() => {
+    if (!hasActiveFilters(filters)) return rawKpis;
+    return rawKpis.map((k) => ({
+      ...k,
+      value: applyFilterToMetric(k.value, filters, k.unit === "percent"),
+      prevValue: k.prevValue != null ? applyFilterToMetric(k.prevValue, filters, k.unit === "percent") : k.prevValue,
+    }));
+  }, [rawKpis, filters]);
   const sparklines = generateSparklines(period);
   const {
     spendActiveRateData, spendByCategoryData, decisionFunnelData, dpdDistributionData,
     prevSpendActiveRateData, prevSpendByCategoryData, prevDecisionFunnelData, prevDpdDistributionData,
-  } = useMemo(() => generateChartData(period), [period]);
+  } = useMemo(() => {
+    const raw = generateChartData(period);
+    if (!hasActiveFilters(filters)) return raw;
+    return {
+      spendActiveRateData: applyFilterToData(raw.spendActiveRateData, filters),
+      spendByCategoryData: applyFilterToData(raw.spendByCategoryData, filters),
+      decisionFunnelData: applyFilterToData(raw.decisionFunnelData, filters),
+      dpdDistributionData: applyFilterToData(raw.dpdDistributionData, filters),
+      prevSpendActiveRateData: applyFilterToData(raw.prevSpendActiveRateData, filters),
+      prevSpendByCategoryData: applyFilterToData(raw.prevSpendByCategoryData, filters),
+      prevDecisionFunnelData: applyFilterToData(raw.prevDecisionFunnelData, filters),
+      prevDpdDistributionData: applyFilterToData(raw.prevDpdDistributionData, filters),
+    };
+  }, [period, filters]);
   const trends = trendsByPeriod[period];
 
   // Data-driven insights per chart
@@ -267,6 +293,8 @@ export default function DashboardPage() {
             <RefreshCw className="h-4 w-4 animate-spin text-[var(--text-muted)]" />
           )}
         </div>
+
+        <ActiveFiltersBanner />
 
         {/* KPI Grid */}
         <KpiGrid kpis={kpis} sparklines={sparklines} />

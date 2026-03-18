@@ -9,6 +9,9 @@ import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { usePeriod } from "@/hooks/use-period";
+import { useFilters } from "@/hooks/use-filters";
+import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
+import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange, scaleTrendData, scaleMetricValue, getPeriodLabels, getPeriodInsightLabels } from "@/lib/period-data";
 import {
   ResponsiveContainer,
@@ -195,17 +198,18 @@ type ContextMenuState = {
 
 export default function AcquisitionPage() {
   const { period, periodLabel } = usePeriod();
+  const { filters } = useFilters();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
   const periodFunnel = useMemo(() => funnelStages.map(s => ({
     ...s,
-    count: scaleMetricValue(s.count, period, false),
-  })), [period]);
+    count: applyFilterToMetric(scaleMetricValue(s.count, period, false), filters, false),
+  })), [period, filters]);
 
-  const periodDecisionBreakdown = useMemo(() => scaleTrendData(decisionBreakdown, period), [period]);
-  const periodApprovalRateTrend = useMemo(() => scaleTrendData(approvalRateTrend, period), [period]);
-  const periodAvgCreditLineTrend = useMemo(() => scaleTrendData(avgCreditLineTrend, period), [period]);
-  const periodVintageCounts = useMemo(() => scaleTrendData(vintageCounts, period, "month"), [period]);
+  const periodDecisionBreakdown = useMemo(() => applyFilterToData(scaleTrendData(decisionBreakdown, period), filters), [period, filters]);
+  const periodApprovalRateTrend = useMemo(() => applyFilterToData(scaleTrendData(approvalRateTrend, period), filters), [period, filters]);
+  const periodAvgCreditLineTrend = useMemo(() => applyFilterToData(scaleTrendData(avgCreditLineTrend, period), filters), [period, filters]);
+  const periodVintageCounts = useMemo(() => applyFilterToData(scaleTrendData(vintageCounts, period, "month"), filters), [period, filters]);
 
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
 
@@ -313,13 +317,15 @@ export default function AcquisitionPage() {
         <p className="text-sm text-[var(--text-secondary)] mt-1">{periodLabel}</p>
       </div>
 
+      <ActiveFiltersBanner />
+
       {/* KPI row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           metricKey="acq_total_applications"
           label="Total Applications"
-          value={scaleMetricValue(8900, period, false)}
-          prevValue={scaleMetricValue(8200, period, false)}
+          value={applyFilterToMetric(scaleMetricValue(8900, period, false), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(8200, period, false), filters, false)}
           unit="count"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -328,8 +334,8 @@ export default function AcquisitionPage() {
         <MetricCard
           metricKey="acq_approval_rate"
           label="Approval Rate"
-          value={scaleMetricValue(73.1, period, true)}
-          prevValue={scaleMetricValue(72.4, period, true)}
+          value={applyFilterToMetric(scaleMetricValue(73.1, period, true), filters, true)}
+          prevValue={applyFilterToMetric(scaleMetricValue(72.4, period, true), filters, true)}
           unit="percent"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -339,8 +345,8 @@ export default function AcquisitionPage() {
         <MetricCard
           metricKey="acq_avg_credit_line"
           label="Avg Credit Line"
-          value={9500000}
-          prevValue={9300000}
+          value={applyFilterToMetric(9500000, filters, false)}
+          prevValue={applyFilterToMetric(9300000, filters, false)}
           unit="idr"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -349,8 +355,8 @@ export default function AcquisitionPage() {
         <MetricCard
           metricKey="acq_cards_activated"
           label="Cards Activated"
-          value={scaleMetricValue(3400, period, false)}
-          prevValue={scaleMetricValue(3100, period, false)}
+          value={applyFilterToMetric(scaleMetricValue(3400, period, false), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(3100, period, false), filters, false)}
           unit="count"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -618,8 +624,8 @@ export default function AcquisitionPage() {
             <MetricCard
               metricKey="sample_cac_approved"
               label="CAC (Approved)"
-              value={9.10}
-              prevValue={8.80}
+              value={applyFilterToMetric(9.10, filters, false)}
+              prevValue={applyFilterToMetric(8.80, filters, false)}
               unit="usd"
               asOf={AS_OF}
               dataRange={DATA_RANGE}
@@ -627,8 +633,8 @@ export default function AcquisitionPage() {
             <MetricCard
               metricKey="sample_cac_all"
               label="CAC (All Applicants)"
-              value={43.80}
-              prevValue={41.20}
+              value={applyFilterToMetric(43.80, filters, false)}
+              prevValue={applyFilterToMetric(41.20, filters, false)}
               unit="usd"
               asOf={AS_OF}
               dataRange={DATA_RANGE}
@@ -636,8 +642,8 @@ export default function AcquisitionPage() {
             <MetricCard
               metricKey="sample_mktg_google"
               label="Mktg/Customer - Google"
-              value={20.90}
-              prevValue={19.40}
+              value={applyFilterToMetric(20.90, filters, false)}
+              prevValue={applyFilterToMetric(19.40, filters, false)}
               unit="usd"
               asOf={AS_OF}
               dataRange={DATA_RANGE}
@@ -645,8 +651,8 @@ export default function AcquisitionPage() {
             <MetricCard
               metricKey="sample_mktg_meta"
               label="Mktg/Customer - Meta"
-              value={53.50}
-              prevValue={49.80}
+              value={applyFilterToMetric(53.50, filters, false)}
+              prevValue={applyFilterToMetric(49.80, filters, false)}
               unit="usd"
               asOf={AS_OF}
               dataRange={DATA_RANGE}
@@ -702,8 +708,8 @@ export default function AcquisitionPage() {
             <MetricCard
               metricKey="sample_organic_pct"
               label="Organic Traffic %"
-              value={34.8}
-              prevValue={33.4}
+              value={applyFilterToMetric(34.8, filters, true)}
+              prevValue={applyFilterToMetric(33.4, filters, true)}
               unit="percent"
               asOf={AS_OF}
               dataRange={DATA_RANGE}
@@ -711,8 +717,8 @@ export default function AcquisitionPage() {
             <MetricCard
               metricKey="sample_paid_pct"
               label="Paid Traffic %"
-              value={65.2}
-              prevValue={66.6}
+              value={applyFilterToMetric(65.2, filters, true)}
+              prevValue={applyFilterToMetric(66.6, filters, true)}
               unit="percent"
               asOf={AS_OF}
               dataRange={DATA_RANGE}
@@ -750,8 +756,8 @@ export default function AcquisitionPage() {
             <MetricCard
               metricKey="sample_first_cc_pct"
               label="1st/2nd Credit Card %"
-              value={56.2}
-              prevValue={57.1}
+              value={applyFilterToMetric(56.2, filters, true)}
+              prevValue={applyFilterToMetric(57.1, filters, true)}
               unit="percent"
               asOf={AS_OF}
               dataRange={DATA_RANGE}

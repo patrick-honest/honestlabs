@@ -9,6 +9,9 @@ import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { usePeriod } from "@/hooks/use-period";
+import { useFilters } from "@/hooks/use-filters";
+import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
+import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange, getPeriodInsightLabels, scaleTrendData, scaleMetricValue } from "@/lib/period-data";
 
 const AS_OF = "Mar 15, 2026";
@@ -98,14 +101,15 @@ const actionItems: ActionItem[] = [
 
 export default function ActivationPage() {
   const { period, periodLabel } = usePeriod();
+  const { filters } = useFilters();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
-  const periodActivationRate = useMemo(() => scaleTrendData(activationRateTrend, period), [period]);
-  const periodAvgDays = useMemo(() => scaleTrendData(avgDaysToFirstTxn, period), [period]);
-  const periodDormancy = useMemo(() => scaleTrendData(dormancy, period, "bucket"), [period]);
-  const periodActivationByProduct = useMemo(() => scaleTrendData(activationByProduct, period, "product"), [period]);
-  const periodDeliveryToActivation = useMemo(() => scaleTrendData(deliveryToActivation, period, "days"), [period]);
+  const periodActivationRate = useMemo(() => applyFilterToData(scaleTrendData(activationRateTrend, period), filters), [period, filters]);
+  const periodAvgDays = useMemo(() => applyFilterToData(scaleTrendData(avgDaysToFirstTxn, period), filters), [period, filters]);
+  const periodDormancy = useMemo(() => applyFilterToData(scaleTrendData(dormancy, period, "bucket"), filters), [period, filters]);
+  const periodActivationByProduct = useMemo(() => applyFilterToData(scaleTrendData(activationByProduct, period, "product"), filters), [period, filters]);
+  const periodDeliveryToActivation = useMemo(() => applyFilterToData(scaleTrendData(deliveryToActivation, period, "days"), filters), [period, filters]);
 
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
 
@@ -170,13 +174,15 @@ export default function ActivationPage() {
         <p className="text-sm text-[var(--text-secondary)] mt-1">{periodLabel}</p>
       </div>
 
+      <ActiveFiltersBanner />
+
       {/* KPI row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           metricKey="act_activation_rate"
           label="Activation (1st Txn ≤7d of Approval)"
-          value={scaleMetricValue(65.2, period, true)}
-          prevValue={scaleMetricValue(63.4, period, true)}
+          value={applyFilterToMetric(scaleMetricValue(65.2, period, true), filters, true)}
+          prevValue={applyFilterToMetric(scaleMetricValue(63.4, period, true), filters, true)}
           unit="percent"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -187,8 +193,8 @@ export default function ActivationPage() {
         <MetricCard
           metricKey="act_cards_activated"
           label="Cards Activated"
-          value={scaleMetricValue(3100, period, false)}
-          prevValue={scaleMetricValue(2850, period, false)}
+          value={applyFilterToMetric(scaleMetricValue(3100, period, false), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(2850, period, false), filters, false)}
           unit="count"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -197,8 +203,8 @@ export default function ActivationPage() {
         <MetricCard
           metricKey="act_avg_days"
           label="Avg Days to First Txn"
-          value={4.5}
-          prevValue={4.8}
+          value={applyFilterToMetric(4.5, filters, false)}
+          prevValue={applyFilterToMetric(4.8, filters, false)}
           unit="count"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -208,8 +214,8 @@ export default function ActivationPage() {
         <MetricCard
           metricKey="act_dormant_30d"
           label="Dormant 30d+"
-          value={scaleMetricValue(14.1, period, true)}
-          prevValue={scaleMetricValue(15.2, period, true)}
+          value={applyFilterToMetric(scaleMetricValue(14.1, period, true), filters, true)}
+          prevValue={applyFilterToMetric(scaleMetricValue(15.2, period, true), filters, true)}
           unit="percent"
           asOf={AS_OF}
           dataRange={DATA_RANGE}

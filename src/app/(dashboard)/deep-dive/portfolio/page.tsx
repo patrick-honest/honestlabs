@@ -9,6 +9,9 @@ import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { usePeriod } from "@/hooks/use-period";
+import { useFilters } from "@/hooks/use-filters";
+import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
+import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange, getPeriodInsightLabels, scaleTrendData, scaleMetricValue } from "@/lib/period-data";
 import {
   ResponsiveContainer,
@@ -206,14 +209,15 @@ const activeCustomerRatioTrend = [
 
 export default function PortfolioPage() {
   const { period, periodLabel } = usePeriod();
+  const { filters } = useFilters();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
 
-  const pActiveAccounts = useMemo(() => scaleTrendData(activeAccountsTrend, period), [period]);
-  const pNewAccounts = useMemo(() => scaleTrendData(newAccountsPerPeriod, period), [period]);
-  const pCreditUtilization = useMemo(() => scaleTrendData(creditUtilization, period), [period]);
-  const pRepaymentMetrics = useMemo(() => scaleTrendData(repaymentMetrics, period), [period]);
+  const pActiveAccounts = useMemo(() => applyFilterToData(scaleTrendData(activeAccountsTrend, period), filters), [period, filters]);
+  const pNewAccounts = useMemo(() => applyFilterToData(scaleTrendData(newAccountsPerPeriod, period), filters), [period, filters]);
+  const pCreditUtilization = useMemo(() => applyFilterToData(scaleTrendData(creditUtilization, period), filters), [period, filters]);
+  const pRepaymentMetrics = useMemo(() => applyFilterToData(scaleTrendData(repaymentMetrics, period), filters), [period, filters]);
 
   const activeAccountsInsights: ChartInsight[] = useMemo(() => [
     { text: `Portfolio grew 21.62% over ${p.span}, adding ~700 net accounts per ${p.unit}.`, type: "positive" },
@@ -290,13 +294,15 @@ export default function PortfolioPage() {
         <p className="text-sm text-[var(--text-secondary)] mt-1">{periodLabel}</p>
       </div>
 
+      <ActiveFiltersBanner />
+
       {/* KPI row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           metricKey="port_active_accounts"
           label="Active Accounts"
-          value={22500}
-          prevValue={21800}
+          value={applyFilterToMetric(22500, filters, false)}
+          prevValue={applyFilterToMetric(21800, filters, false)}
           unit="count"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -306,8 +312,8 @@ export default function PortfolioPage() {
         <MetricCard
           metricKey="port_new_accounts"
           label="New Accounts (Period)"
-          value={scaleMetricValue(4200, period, false)}
-          prevValue={scaleMetricValue(4100, period, false)}
+          value={applyFilterToMetric(scaleMetricValue(4200, period, false), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(4100, period, false), filters, false)}
           unit="count"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -316,8 +322,8 @@ export default function PortfolioPage() {
         <MetricCard
           metricKey="port_utilization"
           label="Avg Credit Utilization"
-          value={scaleMetricValue(37.4, period, true)}
-          prevValue={scaleMetricValue(36.1, period, true)}
+          value={applyFilterToMetric(scaleMetricValue(37.4, period, true), filters, true)}
+          prevValue={applyFilterToMetric(scaleMetricValue(36.1, period, true), filters, true)}
           unit="percent"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -326,8 +332,8 @@ export default function PortfolioPage() {
         <MetricCard
           metricKey="port_repayment_vol"
           label="Repayment Volume"
-          value={scaleMetricValue(18200000000, period, false)}
-          prevValue={scaleMetricValue(17800000000, period, false)}
+          value={applyFilterToMetric(scaleMetricValue(18200000000, period, false), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(17800000000, period, false), filters, false)}
           unit="idr"
           asOf={AS_OF}
           dataRange={DATA_RANGE}

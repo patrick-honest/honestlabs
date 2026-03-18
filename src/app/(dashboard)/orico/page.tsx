@@ -9,6 +9,9 @@ import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { Header } from "@/components/layout/header";
 import { usePeriod } from "@/hooks/use-period";
+import { useFilters } from "@/hooks/use-filters";
+import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
+import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange, scaleTrendData, scaleMetricValue } from "@/lib/period-data";
 import { cn } from "@/lib/utils";
 import { Printer, TrendingUp, TrendingDown, Minus, Lock } from "lucide-react";
@@ -790,15 +793,16 @@ export default function OricoPageWrapper() {
 
 function OricoPageContent() {
   const { period, periodLabel } = usePeriod();
+  const { filters } = useFilters();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
   const [activeTab, setActiveTab] = useState<TabId>("segment");
   const [printMode, setPrintMode] = useState(false);
 
-  const pApprovedBySegment = useMemo(() => scaleTrendData(approvedBySegment, period), [period]);
-  const pAcceptedCumulative = useMemo(() => scaleTrendData(acceptedCumulative, period), [period]);
-  const pActivePortfolio = useMemo(() => scaleTrendData(activePortfolio, period), [period]);
-  const pRp1Topup = useMemo(() => scaleTrendData(rp1Topup, period), [period]);
-  const pOnboardingFunnel = useMemo(() => scaleTrendData(onboardingFunnel, period), [period]);
+  const pApprovedBySegment = useMemo(() => applyFilterToData(scaleTrendData(approvedBySegment, period), filters), [period, filters]);
+  const pAcceptedCumulative = useMemo(() => applyFilterToData(scaleTrendData(acceptedCumulative, period), filters), [period, filters]);
+  const pActivePortfolio = useMemo(() => applyFilterToData(scaleTrendData(activePortfolio, period), filters), [period, filters]);
+  const pRp1Topup = useMemo(() => applyFilterToData(scaleTrendData(rp1Topup, period), filters), [period, filters]);
+  const pOnboardingFunnel = useMemo(() => applyFilterToData(scaleTrendData(onboardingFunnel, period), filters), [period, filters]);
 
   const handleRefresh = useCallback(async () => {
     await new Promise((r) => setTimeout(r, 800));
@@ -854,6 +858,7 @@ function OricoPageContent() {
       <Header title="Orico Reports" />
 
       <div className="flex-1 space-y-6 p-6">
+        <ActiveFiltersBanner />
         {/* Title row with PDF button */}
         <div className="flex items-start justify-between">
           <div>
@@ -901,8 +906,8 @@ function OricoPageContent() {
               <MetricCard
                 metricKey="orico_total_approved"
                 label="Total Approved (Month)"
-                value={scaleMetricValue(totalApprovedCurrent, period, false)}
-                prevValue={scaleMetricValue(totalApprovedPrev, period, false)}
+                value={applyFilterToMetric(scaleMetricValue(totalApprovedCurrent, period, false), filters, false)}
+                prevValue={applyFilterToMetric(scaleMetricValue(totalApprovedPrev, period, false), filters, false)}
                 unit="count"
                 asOf={AS_OF}
                 dataRange={DATA_RANGE}
@@ -911,8 +916,8 @@ function OricoPageContent() {
               <MetricCard
                 metricKey="orico_active_portfolio"
                 label="Active Portfolio"
-                value={totalActiveCurrent}
-                prevValue={totalActivePrev}
+                value={applyFilterToMetric(totalActiveCurrent, filters, false)}
+                prevValue={applyFilterToMetric(totalActivePrev, filters, false)}
                 unit="count"
                 asOf={AS_OF}
                 dataRange={DATA_RANGE}
@@ -921,7 +926,7 @@ function OricoPageContent() {
               <MetricCard
                 metricKey="orico_ecl_provision"
                 label="ECL Provision"
-                value={totalProvision}
+                value={applyFilterToMetric(totalProvision, filters, false)}
                 unit="idr"
                 asOf={AS_OF}
                 dataRange={DATA_RANGE}
@@ -930,8 +935,8 @@ function OricoPageContent() {
               <MetricCard
                 metricKey="orico_rp1_topup_rate"
                 label="RP1 Top-up Rate"
-                value={latestTopup.rate}
-                prevValue={rp1Topup[rp1Topup.length - 2].rate}
+                value={applyFilterToMetric(latestTopup.rate, filters, true)}
+                prevValue={applyFilterToMetric(rp1Topup[rp1Topup.length - 2].rate, filters, true)}
                 unit="percent"
                 asOf={AS_OF}
                 dataRange={DATA_RANGE}

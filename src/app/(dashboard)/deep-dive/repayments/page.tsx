@@ -8,6 +8,9 @@ import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { usePeriod } from "@/hooks/use-period";
+import { useFilters } from "@/hooks/use-filters";
+import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
+import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange, scaleTrendData, scaleMetricValue } from "@/lib/period-data";
 import { Header } from "@/components/layout/header";
 import type { QueryInfo } from "@/components/query-inspector/query-inspector";
@@ -336,18 +339,19 @@ const actionItems: ActionItem[] = [
 
 export default function RepaymentsPage() {
   const { period, periodLabel } = usePeriod();
+  const { filters } = useFilters();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
   // Scale trend data for selected period
-  const pRepaymentCount = useMemo(() => scaleTrendData(repaymentCountTrend, period), [period]);
-  const pTotalAmount = useMemo(() => scaleTrendData(totalAmountTrend, period), [period]);
-  const pLateRate = useMemo(() => scaleTrendData(latePaymentRateTrend, period), [period]);
-  const pPayBillRatio = useMemo(() => scaleTrendData(paymentToBillRatioTrend, period), [period]);
-  const pChannel = useMemo(() => scaleTrendData(channelBreakdown, period), [period]);
-  const pTimeliness = useMemo(() => scaleTrendData(timelinessTrend, period), [period]);
-  const pRatio = useMemo(() => scaleTrendData(ratioDistribution, period), [period]);
-  const pAmount = useMemo(() => scaleTrendData(amountTrend, period), [period]);
+  const pRepaymentCount = useMemo(() => applyFilterToData(scaleTrendData(repaymentCountTrend, period), filters), [period, filters]);
+  const pTotalAmount = useMemo(() => applyFilterToData(scaleTrendData(totalAmountTrend, period), filters), [period, filters]);
+  const pLateRate = useMemo(() => applyFilterToData(scaleTrendData(latePaymentRateTrend, period), filters), [period, filters]);
+  const pPayBillRatio = useMemo(() => applyFilterToData(scaleTrendData(paymentToBillRatioTrend, period), filters), [period, filters]);
+  const pChannel = useMemo(() => applyFilterToData(scaleTrendData(channelBreakdown, period), filters), [period, filters]);
+  const pTimeliness = useMemo(() => applyFilterToData(scaleTrendData(timelinessTrend, period), filters), [period, filters]);
+  const pRatio = useMemo(() => applyFilterToData(scaleTrendData(ratioDistribution, period), filters), [period, filters]);
+  const pAmount = useMemo(() => applyFilterToData(scaleTrendData(amountTrend, period), filters), [period, filters]);
 
   const handleRefresh = useCallback(async () => {
     await new Promise((r) => setTimeout(r, 800));
@@ -360,6 +364,8 @@ export default function RepaymentsPage() {
         <p className="text-sm text-[var(--text-secondary)] mt-1">{periodLabel}</p>
       </div>
 
+      <ActiveFiltersBanner />
+
       {/* ------------------------------------------------------------------ */}
       {/* Section 1: KPI Summary Row                                         */}
       {/* ------------------------------------------------------------------ */}
@@ -367,8 +373,8 @@ export default function RepaymentsPage() {
         <MetricCard
           metricKey="repay_count"
           label="Total Repayments"
-          value={scaleMetricValue(45300, period, false)}
-          prevValue={scaleMetricValue(44200, period, false)}
+          value={applyFilterToMetric(scaleMetricValue(45300, period, false), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(44200, period, false), filters, false)}
           unit="count"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -379,8 +385,8 @@ export default function RepaymentsPage() {
         <MetricCard
           metricKey="repay_amount"
           label="Total Amount Collected"
-          value={scaleMetricValue(28300000000, period, false)}
-          prevValue={scaleMetricValue(27100000000, period, false)}
+          value={applyFilterToMetric(scaleMetricValue(28300000000, period, false), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(27100000000, period, false), filters, false)}
           unit="idr"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -391,8 +397,8 @@ export default function RepaymentsPage() {
         <MetricCard
           metricKey="repay_late_rate"
           label="Late Payment Rate"
-          value={scaleMetricValue(22.4, period, true)}
-          prevValue={scaleMetricValue(23.2, period, true)}
+          value={applyFilterToMetric(scaleMetricValue(22.4, period, true), filters, true)}
+          prevValue={applyFilterToMetric(scaleMetricValue(23.2, period, true), filters, true)}
           unit="percent"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -404,8 +410,8 @@ export default function RepaymentsPage() {
         <MetricCard
           metricKey="repay_bill_ratio"
           label="Payment-to-Bill Ratio"
-          value={scaleMetricValue(78.4, period, true)}
-          prevValue={scaleMetricValue(77.0, period, true)}
+          value={applyFilterToMetric(scaleMetricValue(78.4, period, true), filters, true)}
+          prevValue={applyFilterToMetric(scaleMetricValue(77.0, period, true), filters, true)}
           unit="percent"
           asOf={AS_OF}
           dataRange={DATA_RANGE}

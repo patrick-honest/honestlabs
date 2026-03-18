@@ -9,6 +9,9 @@ import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-i
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { usePeriod } from "@/hooks/use-period";
+import { useFilters } from "@/hooks/use-filters";
+import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
+import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange, getPeriodInsightLabels, scaleTrendData, scaleMetricValue } from "@/lib/period-data";
 import {
   ResponsiveContainer,
@@ -128,6 +131,7 @@ const appRatingTrend = [
 
 export default function CustomerServicePage() {
   const { period, periodLabel } = usePeriod();
+  const { filters } = useFilters();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
 
@@ -135,18 +139,18 @@ export default function CustomerServicePage() {
     await new Promise((r) => setTimeout(r, 800));
   }, []);
 
-  const pTicketVolume = useMemo(() => scaleTrendData(ticketVolumeTrend, period), [period]);
-  const pFirstResponse = useMemo(() => scaleTrendData(avgFirstResponseTime, period), [period]);
-  const pResolutionTime = useMemo(() => scaleTrendData(avgResolutionTime, period), [period]);
-  const pTopReasons = useMemo(() => scaleTrendData(topContactReasons, period, "reason"), [period]);
-  const pBotVsHuman = useMemo(() => scaleTrendData(botVsHuman, period), [period]);
+  const pTicketVolume = useMemo(() => applyFilterToData(scaleTrendData(ticketVolumeTrend, period), filters), [period, filters]);
+  const pFirstResponse = useMemo(() => applyFilterToData(scaleTrendData(avgFirstResponseTime, period), filters), [period, filters]);
+  const pResolutionTime = useMemo(() => applyFilterToData(scaleTrendData(avgResolutionTime, period), filters), [period, filters]);
+  const pTopReasons = useMemo(() => applyFilterToData(scaleTrendData(topContactReasons, period, "reason"), filters), [period, filters]);
+  const pBotVsHuman = useMemo(() => applyFilterToData(scaleTrendData(botVsHuman, period), filters), [period, filters]);
 
   // Sample data (not yet connected)
-  const pCalls45s = useMemo(() => scaleTrendData(callsAnswered45sTrend, period), [period]);
-  const pCostToServe = useMemo(() => scaleTrendData(costToServeTrend, period), [period]);
-  const pCsCost = useMemo(() => scaleTrendData(csCostBreakdown, period), [period]);
-  const pChurn = useMemo(() => scaleTrendData(voluntaryChurnTrend, period), [period]);
-  const pAppRating = useMemo(() => scaleTrendData(appRatingTrend, period), [period]);
+  const pCalls45s = useMemo(() => applyFilterToData(scaleTrendData(callsAnswered45sTrend, period), filters), [period, filters]);
+  const pCostToServe = useMemo(() => applyFilterToData(scaleTrendData(costToServeTrend, period), filters), [period, filters]);
+  const pCsCost = useMemo(() => applyFilterToData(scaleTrendData(csCostBreakdown, period), filters), [period, filters]);
+  const pChurn = useMemo(() => applyFilterToData(scaleTrendData(voluntaryChurnTrend, period), filters), [period, filters]);
+  const pAppRating = useMemo(() => applyFilterToData(scaleTrendData(appRatingTrend, period), filters), [period, filters]);
 
   const ticketVolumeInsights: ChartInsight[] = useMemo(() => [
     { text: `Volume declined 23.61% from Dec peak (3,600) to ${p.lastLabel} (2,750), likely reflecting fewer new card activations post-holiday.`, type: "positive" },
@@ -226,13 +230,15 @@ export default function CustomerServicePage() {
         <p className="text-sm text-[var(--text-secondary)] mt-1">{periodLabel} &mdash; Freshworks Data</p>
       </div>
 
+      <ActiveFiltersBanner />
+
       {/* KPI row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           metricKey="cs_ticket_volume"
           label="Ticket Volume"
-          value={scaleMetricValue(2750, period, false)}
-          prevValue={scaleMetricValue(2900, period, false)}
+          value={applyFilterToMetric(scaleMetricValue(2750, period, false), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(2900, period, false), filters, false)}
           unit="count"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -243,8 +249,8 @@ export default function CustomerServicePage() {
         <MetricCard
           metricKey="cs_first_response"
           label="Avg First Response (min)"
-          value={8.5}
-          prevValue={9.8}
+          value={applyFilterToMetric(8.5, filters, false)}
+          prevValue={applyFilterToMetric(9.8, filters, false)}
           unit="count"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -254,8 +260,8 @@ export default function CustomerServicePage() {
         <MetricCard
           metricKey="cs_resolution_time"
           label="Avg Resolution (hrs)"
-          value={3.5}
-          prevValue={3.8}
+          value={applyFilterToMetric(3.5, filters, false)}
+          prevValue={applyFilterToMetric(3.8, filters, false)}
           unit="count"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -265,8 +271,8 @@ export default function CustomerServicePage() {
         <MetricCard
           metricKey="cs_bot_rate"
           label="Bot Resolution Rate"
-          value={scaleMetricValue(50.2, period, true)}
-          prevValue={scaleMetricValue(48.3, period, true)}
+          value={applyFilterToMetric(scaleMetricValue(50.2, period, true), filters, true)}
+          prevValue={applyFilterToMetric(scaleMetricValue(48.3, period, true), filters, true)}
           unit="percent"
           asOf={AS_OF}
           dataRange={DATA_RANGE}

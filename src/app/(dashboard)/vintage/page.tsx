@@ -7,8 +7,11 @@ import { ActionItems, type ActionItem } from "@/components/dashboard/action-item
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { usePeriod } from "@/hooks/use-period";
+import { useFilters } from "@/hooks/use-filters";
 import { cn } from "@/lib/utils";
 import { getPeriodRange } from "@/lib/period-data";
+import { getFilterMultiplier, hasActiveFilters } from "@/lib/filter-utils";
+import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 
 const AS_OF = "Mar 15, 2026";
 
@@ -279,9 +282,11 @@ const activationByVintageInsights: ChartInsight[] = [
 
 export default function VintagePage() {
   const { period, periodLabel } = usePeriod();
+  const { filters } = useFilters();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
   const [viewMode, setViewMode] = useState<ViewMode>("delinquency");
   const [timeFrame, setTimeFrame] = useState<TimeFrame>("monthly");
+  const filterMultiplier = useMemo(() => getFilterMultiplier(filters), [filters]);
 
   const handleRefresh = useCallback(async () => {
     await new Promise((r) => setTimeout(r, 800));
@@ -299,6 +304,8 @@ export default function VintagePage() {
         <h1 className="text-xl font-bold text-[var(--text-primary)]">Vintage Analysis</h1>
         <p className="text-sm text-[var(--text-secondary)] mt-1">{periodLabel}</p>
       </div>
+
+      <ActiveFiltersBanner />
 
       {/* View toggle + time frame toggle */}
       <div className="flex flex-wrap items-center gap-4">

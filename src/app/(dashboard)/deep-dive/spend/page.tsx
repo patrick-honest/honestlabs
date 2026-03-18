@@ -10,7 +10,10 @@ import { DashboardAreaChart } from "@/components/charts/area-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { usePeriod } from "@/hooks/use-period";
+import { useFilters } from "@/hooks/use-filters";
 import { getPeriodRange, scaleTrendData, scaleMetricValue, getPeriodInsightLabels } from "@/lib/period-data";
+import { applyFilterToData, applyFilterToMetric, hasActiveFilters } from "@/lib/filter-utils";
+import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 
 const AS_OF = "Mar 15, 2026";
 
@@ -202,15 +205,16 @@ const sampleBnplUsageInsights: ChartInsight[] = [
 
 export default function SpendPage() {
   const { period, periodLabel } = usePeriod();
+  const { filters } = useFilters();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
-  const pSpendActiveRate = useMemo(() => scaleTrendData(spendActiveRateTrend, period), [period]);
-  const pEligibleVsTransactors = useMemo(() => scaleTrendData(eligibleVsTransactors, period), [period]);
-  const pSpendByCategory = useMemo(() => scaleTrendData(spendByCategory, period), [period]);
-  const pAvgSpendPerTxn = useMemo(() => scaleTrendData(avgSpendPerTxn, period), [period]);
-  const pTotalSpendVolume = useMemo(() => scaleTrendData(totalSpendVolume, period), [period]);
-  const pTxnPerEligible = useMemo(() => scaleTrendData(txnPerEligible, period), [period]);
+  const pSpendActiveRate = useMemo(() => applyFilterToData(scaleTrendData(spendActiveRateTrend, period), filters), [period, filters]);
+  const pEligibleVsTransactors = useMemo(() => applyFilterToData(scaleTrendData(eligibleVsTransactors, period), filters), [period, filters]);
+  const pSpendByCategory = useMemo(() => applyFilterToData(scaleTrendData(spendByCategory, period), filters), [period, filters]);
+  const pAvgSpendPerTxn = useMemo(() => applyFilterToData(scaleTrendData(avgSpendPerTxn, period), filters), [period, filters]);
+  const pTotalSpendVolume = useMemo(() => applyFilterToData(scaleTrendData(totalSpendVolume, period), filters), [period, filters]);
+  const pTxnPerEligible = useMemo(() => applyFilterToData(scaleTrendData(txnPerEligible, period), filters), [period, filters]);
 
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
 
@@ -274,13 +278,15 @@ export default function SpendPage() {
         <p className="text-xs text-[var(--text-muted)] mt-0.5">All spend metrics are based on <span className="font-semibold">authorized transactions</span> unless otherwise noted</p>
       </div>
 
+      <ActiveFiltersBanner />
+
       {/* KPI row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           metricKey="spend_active_rate"
           label="Spend Active Rate"
-          value={scaleMetricValue(47.5, period, true)}
-          prevValue={scaleMetricValue(46.8, period, true)}
+          value={applyFilterToMetric(scaleMetricValue(47.5, period, true), filters, true)}
+          prevValue={applyFilterToMetric(scaleMetricValue(46.8, period, true), filters, true)}
           unit="percent"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -291,8 +297,8 @@ export default function SpendPage() {
         <MetricCard
           metricKey="spend_eligible"
           label="Eligible to Spend (Cum. EoP)"
-          value={22500}
-          prevValue={21800}
+          value={applyFilterToMetric(22500, filters, false)}
+          prevValue={applyFilterToMetric(21800, filters, false)}
           unit="count"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -301,8 +307,8 @@ export default function SpendPage() {
         <MetricCard
           metricKey="spend_total_volume"
           label="Total Spend Volume"
-          value={scaleMetricValue(31000000000, period, false)}
-          prevValue={scaleMetricValue(29000000000, period, false)}
+          value={applyFilterToMetric(scaleMetricValue(31000000000, period, false), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(29000000000, period, false), filters, false)}
           unit="idr"
           asOf={AS_OF}
           dataRange={DATA_RANGE}

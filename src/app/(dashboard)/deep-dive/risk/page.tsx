@@ -9,6 +9,9 @@ import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { usePeriod } from "@/hooks/use-period";
+import { useFilters } from "@/hooks/use-filters";
+import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
+import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange, getPeriodInsightLabels, scaleTrendData, scaleMetricValue } from "@/lib/period-data";
 
 const AS_OF = "Mar 15, 2026";
@@ -110,15 +113,16 @@ const actionItems: ActionItem[] = [
 
 export default function RiskPage() {
   const { period, periodLabel } = usePeriod();
+  const { filters } = useFilters();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
 
-  const pDpdDistribution = useMemo(() => scaleTrendData(dpdDistribution, period), [period]);
-  const pDelinquencyRate = useMemo(() => scaleTrendData(delinquencyRate, period), [period]);
-  const pCollectionsEffectiveness = useMemo(() => scaleTrendData(collectionsEffectiveness, period), [period]);
-  const pWriteOffTrend = useMemo(() => scaleTrendData(writeOffTrend, period), [period]);
-  const pRiskCostTrend = useMemo(() => scaleTrendData(riskCostTrend, period), [period]);
-  const pDpdBalanceTrend = useMemo(() => scaleTrendData(dpdBalanceTrend, period), [period]);
+  const pDpdDistribution = useMemo(() => applyFilterToData(scaleTrendData(dpdDistribution, period), filters), [period, filters]);
+  const pDelinquencyRate = useMemo(() => applyFilterToData(scaleTrendData(delinquencyRate, period), filters), [period, filters]);
+  const pCollectionsEffectiveness = useMemo(() => applyFilterToData(scaleTrendData(collectionsEffectiveness, period), filters), [period, filters]);
+  const pWriteOffTrend = useMemo(() => applyFilterToData(scaleTrendData(writeOffTrend, period), filters), [period, filters]);
+  const pRiskCostTrend = useMemo(() => applyFilterToData(scaleTrendData(riskCostTrend, period), filters), [period, filters]);
+  const pDpdBalanceTrend = useMemo(() => applyFilterToData(scaleTrendData(dpdBalanceTrend, period), filters), [period, filters]);
 
   const dpdDistributionInsights: ChartInsight[] = useMemo(() => [
     { text: `Current accounts grew 18.86% (17,500 to 20,800) over ${p.span}, outpacing delinquent bucket growth.`, type: "positive" },
@@ -186,13 +190,15 @@ export default function RiskPage() {
         <p className="text-sm text-[var(--text-secondary)] mt-1">{periodLabel}</p>
       </div>
 
+      <ActiveFiltersBanner />
+
       {/* KPI row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           metricKey="risk_dpd30plus_rate"
           label="30+ DPD Rate"
-          value={scaleMetricValue(4.7, period, true)}
-          prevValue={scaleMetricValue(4.9, period, true)}
+          value={applyFilterToMetric(scaleMetricValue(4.7, period, true), filters, true)}
+          prevValue={applyFilterToMetric(scaleMetricValue(4.9, period, true), filters, true)}
           unit="percent"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -204,8 +210,8 @@ export default function RiskPage() {
         <MetricCard
           metricKey="risk_dpd90plus_rate"
           label="90+ DPD Rate"
-          value={scaleMetricValue(0.7, period, true)}
-          prevValue={scaleMetricValue(0.7, period, true)}
+          value={applyFilterToMetric(scaleMetricValue(0.7, period, true), filters, true)}
+          prevValue={applyFilterToMetric(scaleMetricValue(0.7, period, true), filters, true)}
           unit="percent"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -215,8 +221,8 @@ export default function RiskPage() {
         <MetricCard
           metricKey="risk_exposure_at_risk"
           label="Exposure at Risk (30+ DPD)"
-          value={scaleMetricValue(28500000000, period, false)}
-          prevValue={scaleMetricValue(29200000000, period, false)}
+          value={applyFilterToMetric(scaleMetricValue(28500000000, period, false), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(29200000000, period, false), filters, false)}
           unit="idr"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -226,8 +232,8 @@ export default function RiskPage() {
         <MetricCard
           metricKey="risk_writeoff"
           label="Write-offs (Period)"
-          value={scaleMetricValue(990000000, period, false)}
-          prevValue={scaleMetricValue(1020000000, period, false)}
+          value={applyFilterToMetric(scaleMetricValue(990000000, period, false), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(1020000000, period, false), filters, false)}
           unit="idr"
           asOf={AS_OF}
           dataRange={DATA_RANGE}

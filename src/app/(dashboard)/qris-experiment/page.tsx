@@ -8,7 +8,10 @@ import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { DashboardAreaChart } from "@/components/charts/area-chart";
 import { usePeriod } from "@/hooks/use-period";
+import { useFilters } from "@/hooks/use-filters";
 import { getPeriodRange, scaleTrendData, scaleMetricValue } from "@/lib/period-data";
+import { applyFilterToData } from "@/lib/filter-utils";
+import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import {
   QrCode, TrendingUp, TrendingDown, Users, Zap, ArrowUpRight, ArrowDownRight,
   ShoppingCart, CreditCard, BarChart3, Target, CheckCircle2, AlertTriangle,
@@ -284,13 +287,14 @@ function HorizontalBar({
 
 export default function QrisExperimentPage() {
   const { period, periodLabel } = usePeriod();
+  const { filters } = useFilters();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
-  // Scale trend data arrays for the selected period
-  const pAdoptionData = useMemo(() => scaleTrendData(adoptionData, period, "week"), [period]);
-  const pProfitabilityData = useMemo(() => scaleTrendData(profitabilityData, period, "month"), [period]);
-  const pRevenuePerUserData = useMemo(() => scaleTrendData(revenuePerUserData, period, "month"), [period]);
+  // Scale trend data arrays for the selected period, then apply active filters
+  const pAdoptionData = useMemo(() => applyFilterToData(scaleTrendData(adoptionData, period, "week"), filters), [period, filters]);
+  const pProfitabilityData = useMemo(() => applyFilterToData(scaleTrendData(profitabilityData, period, "month"), filters), [period, filters]);
+  const pRevenuePerUserData = useMemo(() => applyFilterToData(scaleTrendData(revenuePerUserData, period, "month"), filters), [period, filters]);
 
   const handleRefresh = useCallback(async () => {
     await new Promise((r) => setTimeout(r, 800));
@@ -314,6 +318,8 @@ export default function QrisExperimentPage() {
       <Header title="QRIS Experiment" />
 
       <div className="flex-1 space-y-6 p-6">
+
+        <ActiveFiltersBanner />
 
         {/* ============================================================ */}
         {/* SECTION A: Hero Banner */}
