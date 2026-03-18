@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Header } from "@/components/layout/header";
-import { Search, Filter, ChevronDown, ChevronRight, TrendingUp, TrendingDown, Minus, Calendar, X } from "lucide-react";
+import { Search, Filter, ChevronDown, ChevronRight, TrendingUp, TrendingDown, Minus, Calendar, X, FileDown, Printer } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
 import type { Cycle } from "@/types/reports";
@@ -364,6 +364,28 @@ function ReportRow({ report, isDark }: { report: ReportEntry; isDark: boolean })
             report.status === "complete" ? "bg-emerald-500" : report.status === "pending" ? "bg-amber-500" : "bg-red-500"
           )} />
         </td>
+        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+          {report.status === "complete" && (
+            <button
+              onClick={() => {
+                // Generate PDF by navigating to the relevant deep-dive page and printing
+                const section = report.section.toLowerCase().replace(/\s+/g, "-");
+                const route = section === "executive-summary" ? "/dashboard" : `/deep-dive/${section}`;
+                window.open(`${route}?print=true`, "_blank");
+              }}
+              className={cn(
+                "flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium transition-colors",
+                isDark
+                  ? "text-[#7C4DFF] hover:bg-[#5B22FF]/15"
+                  : "text-[#D00083] hover:bg-[#D00083]/10"
+              )}
+              title={`Download ${report.title} PDF`}
+            >
+              <FileDown className="h-3 w-3" />
+              PDF
+            </button>
+          )}
+        </td>
       </tr>
 
       {/* Expanded detail row */}
@@ -372,7 +394,7 @@ function ReportRow({ report, isDark }: { report: ReportEntry; isDark: boolean })
           "border-b border-[var(--border)]",
           isDark ? "bg-[#5B22FF]/5" : "bg-[#D00083]/5"
         )}>
-          <td colSpan={7} className="px-4 py-4">
+          <td colSpan={8} className="px-4 py-4">
             <div className="pl-8 space-y-4">
               {/* KPI grid */}
               <div>
@@ -567,6 +589,7 @@ export default function ReportsPage() {
                   <th className="px-4 py-3 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Period</th>
                   <th className="px-4 py-3 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Generated</th>
                   <th className="px-4 py-3 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] w-8">Status</th>
+                  <th className="px-4 py-3 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] w-16"></th>
                 </tr>
               </thead>
               <tbody>
