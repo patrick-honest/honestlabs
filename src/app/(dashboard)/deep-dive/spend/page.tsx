@@ -346,6 +346,7 @@ export default function SpendPage() {
     { fallbackData: null, revalidateOnFocus: false },
   );
 
+  const spendIsLive = !!spendAnalysis?.channelBreakdown;
   const channelData = spendAnalysis?.channelBreakdown ?? mockChannelBreakdown;
   const declineData = spendAnalysis?.declineBreakdown ?? mockDeclineBreakdown;
   const qrisMerchantData = spendAnalysis?.qrisMerchantGrowth ?? mockQrisMerchantGrowth;
@@ -612,6 +613,7 @@ export default function SpendPage() {
             subtitle="Online / Offline / QRIS authorized transactions"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
+            liveData={spendIsLive}
           >
             <DashboardBarChart
               data={channelBarData}
@@ -626,6 +628,7 @@ export default function SpendPage() {
             subtitle="IDR spend by channel"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
+            liveData={spendIsLive}
           >
             <DashboardBarChart
               data={channelBarData}
@@ -647,6 +650,7 @@ export default function SpendPage() {
         subtitle="Non-approved transaction status codes with count and explanation"
         asOf={AS_OF}
         dataRange={DATA_RANGE}
+        liveData={spendIsLive}
       >
         <DashboardBarChart
           data={declineBarData}
@@ -680,6 +684,7 @@ export default function SpendPage() {
             unit="count"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
+            liveData={!!spendAnalysis?.qrisMerchantGrowth}
           />
           <MetricCard
             metricKey="mixed_merchants"
@@ -704,6 +709,7 @@ export default function SpendPage() {
           subtitle="Merchants that have only ever processed QRIS transactions (no card-present)"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
+          liveData={!!spendAnalysis?.qrisMerchantGrowth}
         >
           <DashboardLineChart
             data={qrisMerchantLineData}

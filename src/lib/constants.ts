@@ -64,7 +64,7 @@ export const DECISION_OUTCOMES = {
 
 // Product types based on decision flags
 export const PRODUCT_TYPES = {
-  prepaid: { label: "Prepaid Card", filter: "is_prepaid_card_applicable = TRUE" },
+  prepaid: { label: "RP1 Card", filter: "is_prepaid_card_applicable = TRUE" },
   opening_fee: { label: "Opening Fee Card", filter: "is_account_opening_fee_applicable = TRUE" },
   standard: { label: "Standard Credit Card", filter: "(is_prepaid_card_applicable IS NULL OR is_prepaid_card_applicable = FALSE) AND (is_account_opening_fee_applicable IS NULL OR is_account_opening_fee_applicable = FALSE)" },
 } as const;

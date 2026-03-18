@@ -328,7 +328,7 @@ const portfolioSummary: PortfolioSummaryMock[] = [
 
 const portfolioSummaryInsights: ChartInsight[] = [
   { text: "Segment A (lowest risk) accounts for 50.4% of new Regular accounts and 53.3% of new RP1 -- strong credit quality intake.", type: "positive" },
-  { text: "RP1 newly_limit is Rp 0 across all segments as expected (prepaid cards have no revolving credit limit).", type: "neutral" },
+  { text: "RP1 newly_limit is Rp 0 across all segments as expected (RP1 cards have no revolving credit limit).", type: "neutral" },
   { text: "Total newly booked in Mar: 3,320 accounts with Rp 25.5B in new limits (ex-RP1), avg Rp 10.9M per non-RP1 account.", type: "neutral" },
   { text: "Segment D (highest risk) represents only 7.6% of new accounts -- suggesting scorecard is effectively filtering.", type: "positive" },
   { text: "[Hypothesis] D-segment share may rise if marketing channels shift to broader reach audiences in upcoming campaigns.", type: "hypothesis" },
@@ -349,7 +349,7 @@ const provisionData: ProvisionMock[] = [
 
 const provisionInsights: ChartInsight[] = [
   { text: "Total ECL provision stands at Rp 3.58B -- Regular accounts for 79.6% (Rp 2.85B) as the dominant portfolio.", type: "neutral" },
-  { text: "RP1 undrawn limit is Rp 0 as expected -- prepaid accounts have no unused credit facility.", type: "neutral" },
+  { text: "RP1 undrawn limit is Rp 0 as expected -- RP1 accounts have no unused credit facility.", type: "neutral" },
   { text: "Provision-to-outstanding ratio for Regular segment is ~1.8% indicating healthy coverage levels.", type: "positive" },
   { text: "[Hypothesis] If DPD 0 accounts shift to DPD 1+ in coming months, provision could increase 3-5x for those accounts due to stage migration.", type: "hypothesis" },
 ];
@@ -369,7 +369,7 @@ const rp1Topup = [
 
 const rp1TopupInsights: ChartInsight[] = [
   { text: "RP1 top-up rate reached 21% in Mar 2026, a steady climb from 12% in Jul 2025 -- strong engagement signal.", type: "positive" },
-  { text: "955 out of 4,550 RP1 accounts have topped up, indicating growing usage beyond initial prepaid balance.", type: "positive" },
+  { text: "955 out of 4,550 RP1 accounts have topped up, indicating growing usage beyond initial RP1 balance.", type: "positive" },
   { text: "Top-up rate has improved ~1pp per month consistently for 9 months.", type: "neutral" },
   { text: "[Hypothesis] Top-up rate acceleration may correlate with Ramadan spending season -- users needing additional balance for holiday purchases.", type: "hypothesis" },
   { text: "[Hypothesis] If RP1 top-up rate exceeds 30%, it could signal readiness for upsell to Regular credit product.", type: "hypothesis" },
@@ -408,7 +408,7 @@ const actionItems: ActionItem[] = [
     id: "orico-2",
     priority: "positive",
     action: "RP1 top-up rate steadily climbing to 21%.",
-    detail: "Indicates growing engagement with prepaid product. Consider upsell paths for high-engagement RP1 users.",
+    detail: "Indicates growing engagement with RP1 product. Consider upsell paths for high-engagement RP1 users.",
   },
   {
     id: "orico-3",

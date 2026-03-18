@@ -49,7 +49,7 @@ const dormancy = [
 
 const activationByProduct = [
   { product: "Standard CC", activated: 2100, total: 2800 },
-  { product: "Prepaid", activated: 620, total: 900 },
+  { product: "RP1", activated: 620, total: 900 },
   { product: "Opening Fee", activated: 380, total: 500 },
 ];
 
@@ -97,8 +97,8 @@ const actionItems: ActionItem[] = [
   {
     id: "act-3",
     priority: "urgent",
-    action: "Prepaid activation rate is lowest at 68.9%.",
-    detail: "Prepaid card users may not understand value prop. Investigate UX and consider first-load bonus.",
+    action: "RP1 activation rate is lowest at 68.9%.",
+    detail: "RP1 card users may not understand value prop. Investigate UX and consider first-load bonus.",
   },
 ];
 
@@ -114,6 +114,8 @@ export default function ActivationPage() {
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 300_000 },
   );
+
+  const activationIsLive = !!apiData?.activationRateTrend;
 
   // ── API-backed data with mock fallbacks ──
   const apiActivationRate = useMemo((): { date: string; rate: number }[] => {
@@ -181,9 +183,9 @@ export default function ActivationPage() {
 
   const activationByProductInsights = useMemo<ChartInsight[]>(() => [
     { text: `Standard CC leads activation at 75% (2,100 of 2,800), benefiting from the most mature onboarding flow and highest credit limits.`, type: "positive" },
-    { text: `Prepaid activates at 68.89% (620 of 900), the lowest rate across products. Users may not perceive urgency to load and spend on a prepaid card.`, type: "negative" },
+    { text: `RP1 activates at 68.89% (620 of 900), the lowest rate across products. Users may not perceive urgency to load and spend on an RP1 card.`, type: "negative" },
     { text: `Opening Fee product activates at 76% (380 of 500), outperforming Standard CC despite a smaller base, suggesting high-intent applicants.`, type: "positive" },
-    { text: `The 7.11pp gap between Prepaid and Opening Fee indicates product-level UX and value-prop clarity matter more than volume for activation outcomes.`, type: "neutral" },
+    { text: `The 7.11pp gap between RP1 and Opening Fee indicates product-level UX and value-prop clarity matter more than volume for activation outcomes.`, type: "neutral" },
   ], [p]);
 
   const deliveryToActivationInsights = useMemo<ChartInsight[]>(() => [
@@ -270,6 +272,7 @@ export default function ActivationPage() {
         asOf={AS_OF}
         dataRange={DATA_RANGE}
         onRefresh={handleRefresh}
+        liveData={activationIsLive}
       >
         <DashboardLineChart
           data={periodActivationRate}
@@ -286,6 +289,7 @@ export default function ActivationPage() {
           asOf={AS_OF}
           dataRange={DATA_RANGE}
           onRefresh={handleRefresh}
+          liveData={!!apiData?.daysToFirstTransaction}
         >
           <DashboardLineChart
             data={periodAvgDays}
@@ -319,6 +323,7 @@ export default function ActivationPage() {
           asOf={AS_OF}
           dataRange={DATA_RANGE}
           onRefresh={handleRefresh}
+          liveData={!!apiData?.activationByProductType}
         >
           <DashboardBarChart
             data={periodActivationByProduct}
@@ -338,6 +343,7 @@ export default function ActivationPage() {
           asOf={AS_OF}
           dataRange={DATA_RANGE}
           onRefresh={handleRefresh}
+          liveData={!!apiData?.daysToFirstTransaction}
         >
           <DashboardBarChart
             data={periodDeliveryToActivation}

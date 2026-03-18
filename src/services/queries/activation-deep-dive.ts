@@ -149,7 +149,7 @@ export async function getDaysToFirstTransaction(
 }
 
 // ---------------------------------------------------------------------------
-// 3. Activation by Product Type — prepaid vs standard vs opening fee
+// 3. Activation by Product Type — RP1 vs standard vs opening fee
 // ---------------------------------------------------------------------------
 
 export async function getActivationByProductType(
@@ -162,7 +162,7 @@ export async function getActivationByProductType(
         user_id,
         MIN(DATE(timestamp, 'Asia/Jakarta')) AS approval_date,
         CASE
-          WHEN LOGICAL_OR(is_prepaid_card_applicable = true) THEN 'Prepaid'
+          WHEN LOGICAL_OR(is_prepaid_card_applicable = true) THEN 'RP1'
           WHEN LOGICAL_OR(is_account_opening_fee_applicable = true) THEN 'Opening Fee'
           ELSE 'Standard CC'
         END AS product_type

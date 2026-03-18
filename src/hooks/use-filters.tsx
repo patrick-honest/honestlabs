@@ -96,7 +96,7 @@ export const CARD_TYPE_OPTIONS = [
  * **Regular** — Standard credit card with full credit line. The core product.
  *   Identified by: is_prepaid_card_applicable = FALSE AND is_account_opening_fee_applicable = FALSE
  *
- * **RP1 (Prepaid)** — Prepaid card product where the user deposits funds upfront (credit_limit = 1).
+ * **RP1** — RP1 card product where the user deposits funds upfront (credit_limit = 1).
  *   Identified by: is_prepaid_card_applicable = TRUE (or F9_DW001_LOC_LMT = 1)
  *   These users have no revolving credit — spend is limited to deposited amount.
  *
@@ -109,7 +109,7 @@ export const CARD_TYPE_OPTIONS = [
  */
 export const PRODUCT_TYPE_OPTIONS = [
   { value: "regular", label: "Regular" },
-  { value: "rp1", label: "RP1 (Prepaid)" },
+  { value: "rp1", label: "RP1" },
   { value: "registration_fee", label: "Registration Fee" },
 ] as const;
 

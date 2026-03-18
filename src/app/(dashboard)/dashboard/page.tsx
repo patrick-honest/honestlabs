@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
 import { Header } from "@/components/layout/header";
 import { MetricCard } from "@/components/dashboard/metric-card";
@@ -269,6 +270,7 @@ export default function DashboardPage() {
   const { filters } = useFilters();
   const { currency } = useCurrency();
   const { data: apiData, isLoading: loading } = useKpis(period);
+  const kpisAreLive = !!apiData?.kpis;
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
@@ -409,10 +411,10 @@ export default function DashboardPage() {
 
         </div>
 
-        {/* Learn More modal overlay */}
-        {showHealthInfo && (
+        {/* Learn More modal overlay — portaled to body to escape sidebar stacking context */}
+        {showHealthInfo && typeof document !== "undefined" && createPortal(
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-6"
+            className="fixed inset-0 z-[200] flex items-center justify-center p-6"
             onClick={() => setShowHealthInfo(false)}
           >
             {/* Backdrop */}
@@ -484,7 +486,8 @@ export default function DashboardPage() {
                 ))}
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
 
         {/* ════════════════════════════════════════════════════════════════ */}
@@ -504,6 +507,7 @@ export default function DashboardPage() {
               sparklineData={sparklines[kpi.metric]}
               target={kpi.metric === "spend_active_rate" ? 50 : kpi.metric === "dpd_30_plus_rate" ? 3 : undefined}
               higherIsBetter={kpi.metric !== "dpd_30_plus_rate"}
+              liveData={kpisAreLive}
             />
           ))}
         </div>

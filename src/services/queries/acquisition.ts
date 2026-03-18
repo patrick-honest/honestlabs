@@ -156,7 +156,7 @@ export async function getApprovalsByProduct(
     SELECT
       FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(DATE(timestamp, 'Asia/Jakarta'), ISOWEEK)) AS week_start,
       CASE
-        WHEN is_prepaid_card_applicable = TRUE THEN 'Prepaid Card'
+        WHEN is_prepaid_card_applicable = TRUE THEN 'RP1 Card'
         WHEN is_account_opening_fee_applicable = TRUE THEN 'Opening Fee Card'
         ELSE 'Standard Credit Card'
       END AS product_type,

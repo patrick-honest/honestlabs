@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import { RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslations } from "next-intl";
+import { useTheme } from "@/hooks/use-theme";
 import { QueryInspectorButton, type QueryInfo } from "@/components/query-inspector/query-inspector";
 import { BreakdownFilter, type ActiveBreakdowns, type BreakdownDimension } from "@/components/filters/breakdown-filter";
 import { ChartDateRange, type DateRangeOverride } from "@/components/charts/chart-date-range";
@@ -27,6 +28,8 @@ interface ChartCardProps {
   onDateOverride?: (range: DateRangeOverride | null) => void;
   /** Set false to hide the date picker (default: true) */
   showDatePicker?: boolean;
+  /** Show star badge indicating data is from BigQuery (not mock) */
+  liveData?: boolean;
 }
 
 export function ChartCard({
@@ -44,8 +47,10 @@ export function ChartCard({
   dateOverride: controlledDateOverride,
   onDateOverride: controlledOnDateOverride,
   showDatePicker = true,
+  liveData,
 }: ChartCardProps) {
   const tMetrics = useTranslations("metrics");
+  const { isDark } = useTheme();
   const [refreshing, setRefreshing] = useState(false);
   // Self-managed date override when no external control is provided
   const [internalDateOverride, setInternalDateOverride] = useState<DateRangeOverride | null>(null);
@@ -71,7 +76,12 @@ export function ChartCard({
       <div className="flex items-start justify-between gap-2 bg-[var(--surface-elevated)]/50 px-4 py-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-[var(--text-primary)]">{title}</h3>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+              {title}
+              {liveData && (
+                <span className={cn("ml-1 text-[9px]", isDark ? "text-[#FFD166]" : "text-amber-500")} title="Live BigQuery data">&#9733;</span>
+              )}
+            </h3>
             {query && <QueryInspectorButton query={query} />}
           </div>
           {subtitle && (

@@ -83,7 +83,7 @@ const decisionBreakdown = [
 
 const productMix = [
   { name: "Standard CC", value: 2800, color: "#3b82f6" },
-  { name: "Prepaid", value: 900, color: "#8b5cf6" },
+  { name: "RP1", value: 900, color: "#8b5cf6" },
   { name: "Opening Fee", value: 500, color: "#06b6d4" },
 ];
 
@@ -221,6 +221,8 @@ export default function AcquisitionPage() {
     { revalidateOnFocus: false, dedupingInterval: 300_000 },
   );
 
+  const funnelIsLive = !!apiData?.funnel?.length;
+
   // Use real funnel data or fall back to mock
   const periodFunnel = useMemo(() => {
     if (apiData?.funnel?.length) {
@@ -262,7 +264,7 @@ export default function AcquisitionPage() {
 
   const productMixInsights = useMemo<ChartInsight[]>(() => [
     { text: "Standard Credit Cards dominate at 66.67% of approved accounts (2,800 of 4,200), reflecting strong core product demand.", type: "positive" },
-    { text: "Prepaid accounts represent 21.43% of the mix — a healthy entry-level segment that can be upsold to full credit over time.", type: "neutral" },
+    { text: "RP1 accounts represent 21.43% of the mix — a healthy entry-level segment that can be upsold to full credit over time.", type: "neutral" },
     { text: "Opening Fee products are the smallest segment at 11.9%. Low share may indicate limited marketing or niche appeal.", type: "neutral" },
     { text: "A heavily Standard CC-skewed mix concentrates credit risk. If macro conditions tighten, the portfolio has limited diversification buffer.", type: "hypothesis" },
   ], [p]);
@@ -398,6 +400,7 @@ export default function AcquisitionPage() {
         asOf={AS_OF}
         dataRange={DATA_RANGE}
         onRefresh={handleRefresh}
+        liveData={funnelIsLive}
       >
         <div className="space-y-0.5 relative">
           {(() => {

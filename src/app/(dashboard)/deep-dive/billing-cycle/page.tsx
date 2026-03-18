@@ -41,6 +41,8 @@ export default function BillingCyclePage() {
     { revalidateOnFocus: false, dedupingInterval: 300_000 },
   );
 
+  const billingIsLive = !!apiData?.overview?.length;
+
   // ── Overview KPIs ──────────────────────────────────────────────────
 
   const overview = useMemo(() => {
@@ -173,6 +175,7 @@ export default function BillingCyclePage() {
           unit="count"
           asOf={apiData?.asOf ?? ""}
           dataRange={apiData?.dataRange ?? { start: "", end: "" }}
+          liveData={billingIsLive}
         />
         <MetricCard
           metricKey="billing_revolve_rate"
@@ -181,6 +184,7 @@ export default function BillingCyclePage() {
           unit="percent"
           asOf={apiData?.asOf ?? ""}
           dataRange={apiData?.dataRange ?? { start: "", end: "" }}
+          liveData={billingIsLive}
         />
         <MetricCard
           metricKey="billing_avg_utilization"
@@ -189,6 +193,7 @@ export default function BillingCyclePage() {
           unit="percent"
           asOf={apiData?.asOf ?? ""}
           dataRange={apiData?.dataRange ?? { start: "", end: "" }}
+          liveData={billingIsLive}
         />
         <MetricCard
           metricKey="billing_avg_balance"
@@ -197,6 +202,7 @@ export default function BillingCyclePage() {
           unit="idr"
           asOf={apiData?.asOf ?? ""}
           dataRange={apiData?.dataRange ?? { start: "", end: "" }}
+          liveData={billingIsLive}
         />
       </div>
 

@@ -50,7 +50,7 @@ const topScreens = [
   { screen: "menu", views: 560000 },
   { screen: "unlock_biometrics", views: 1243000 },
   { screen: "savings_home", views: 95000 },
-  { screen: "prepaid_add_funds", views: 118000 },
+  { screen: "rp1_add_funds", views: 118000 },
   { screen: "authorize_txn", views: 125000 },
 ];
 
@@ -63,7 +63,7 @@ const featureAdoption = [
   { feature: "Tap to Pay", rate: 12.3 },
   { feature: "Biometric Login", rate: 72.1 },
   { feature: "Push Notifs", rate: 58.6 },
-  { feature: "Prepaid Top-up", rate: 15.2 },
+  { feature: "RP1 Top-up", rate: 15.2 },
 ];
 
 // Mock data — Error rate trend

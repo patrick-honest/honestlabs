@@ -28,6 +28,8 @@ interface MetricCardProps {
   higherIsBetter?: boolean;
   onRefresh?: () => Promise<void>;
   query?: QueryInfo;
+  /** Show star badge indicating data is from BigQuery (not mock) */
+  liveData?: boolean;
 }
 
 function formatValue(value: number, unit: MetricCardProps["unit"], currency: "IDR" | "USD"): string {
@@ -65,6 +67,7 @@ export function MetricCard({
   higherIsBetter = true,
   onRefresh,
   query,
+  liveData,
 }: MetricCardProps) {
   const { currency } = useCurrency();
   const { isDark } = useTheme();
@@ -117,8 +120,11 @@ export function MetricCard({
       {/* Header row */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wider text-[var(--text-secondary)]">
+          <p className="text-xs font-medium uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-1">
             {label}
+            {liveData && (
+              <span className={cn("text-[9px]", isDark ? "text-[#FFD166]" : "text-amber-500")} title="Live BigQuery data">&#9733;</span>
+            )}
           </p>
           <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">
             {dataRange.start} &ndash; {dataRange.end}
