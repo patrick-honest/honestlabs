@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
+import useSWR from "swr";
 import { Header } from "@/components/layout/header";
 import { useTranslations } from "next-intl";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
-import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
-import { QrCode, CheckCircle2 } from "lucide-react";
+import { QrCode, CheckCircle2, TrendingUp, Users, CreditCard, ArrowUpRight, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
 import { usePeriod } from "@/hooks/use-period";
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 // ── Print styles ─────────────────────────────────────────────────────────────
 const PRINT_STYLES = `
@@ -84,7 +86,7 @@ const PRINT_STYLES = `
 [data-print-only] { display: none; }
 `;
 
-const AS_OF = "2026-03-15";
+const AS_OF = "2026-03-19";
 
 // -- Action items --
 const actionItems: ActionItem[] = [
@@ -130,20 +132,34 @@ const actionItems: ActionItem[] = [
 // Sub-components
 // ==========================================================================
 
+function LiveBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-500">
+      <Star className="h-3 w-3 fill-amber-500" />
+      LIVE
+    </span>
+  );
+}
+
 function StatBox({
   label,
   value,
   subtext,
   large,
+  live,
 }: {
   label: string;
   value: string;
   subtext?: string;
   large?: boolean;
+  live?: boolean;
 }) {
   return (
     <div className="text-center">
-      <p className="text-[11px] font-medium uppercase tracking-wider text-[var(--text-secondary)]">{label}</p>
+      <div className="flex items-center justify-center gap-1">
+        <p className="text-[11px] font-medium uppercase tracking-wider text-[var(--text-secondary)]">{label}</p>
+        {live && <LiveBadge />}
+      </div>
       <p className={cn("font-bold text-[var(--text-primary)]", large ? "text-3xl mt-1" : "text-xl mt-0.5")}>{value}</p>
       {subtext && <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{subtext}</p>}
     </div>
@@ -152,31 +168,142 @@ function StatBox({
 
 function ComparisonRow({
   label,
-  qrisValue,
-  nonQrisValue,
+  testValue,
+  controlValue,
   format = "number",
   higherIsBetter = true,
-  currency = "IDR" as "IDR" | "USD",
+  live,
 }: {
   label: string;
-  qrisValue: number;
-  nonQrisValue: number;
-  format?: "number" | "idr" | "percent" | "decimal";
+  testValue: number;
+  controlValue: number;
+  format?: "number" | "usd" | "percent" | "decimal";
   higherIsBetter?: boolean;
-  currency?: "IDR" | "USD";
+  live?: boolean;
 }) {
-  // kept for future use when real data is connected
-  return null;
+  const diff = controlValue !== 0 ? ((testValue - controlValue) / Math.abs(controlValue)) * 100 : 0;
+  const isPositive = higherIsBetter ? diff > 0 : diff < 0;
+
+  function fmt(v: number): string {
+    switch (format) {
+      case "usd":
+        return `$${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      case "percent":
+        return `${v.toFixed(1)}%`;
+      case "decimal":
+        return v.toFixed(1);
+      default:
+        return v.toLocaleString("en-US");
+    }
+  }
+
+  return (
+    <div className="flex items-center justify-between py-3 border-b border-[var(--border)] last:border-b-0">
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-medium text-[var(--text-primary)]">{label}</span>
+        {live && <LiveBadge />}
+      </div>
+      <div className="flex items-center gap-6">
+        <div className="text-right min-w-[80px]">
+          <p className="text-xs text-[var(--text-muted)] mb-0.5">Control</p>
+          <p className="text-sm font-semibold text-[var(--text-secondary)]">{fmt(controlValue)}</p>
+        </div>
+        <div className="text-right min-w-[80px]">
+          <p className="text-xs text-[var(--text-muted)] mb-0.5">Test</p>
+          <p className="text-sm font-bold text-[var(--text-primary)]">{fmt(testValue)}</p>
+        </div>
+        <div className={cn(
+          "flex items-center gap-1 min-w-[70px] justify-end text-xs font-semibold rounded-full px-2 py-0.5",
+          isPositive ? "text-emerald-600 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-950/30" : "text-red-600 bg-red-50 dark:text-red-400 dark:bg-red-950/30",
+        )}>
+          <ArrowUpRight className={cn("h-3 w-3", !isPositive && "rotate-90")} />
+          {diff > 0 ? "+" : ""}{diff.toFixed(1)}%
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function KpiCard({
+  icon,
+  label,
+  value,
+  subtext,
+  live,
+  accent,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  subtext?: string;
+  live?: boolean;
+  accent?: string;
+}) {
+  return (
+    <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] p-4">
+      <div className="flex items-start justify-between mb-2">
+        <div className={cn("flex items-center justify-center h-8 w-8 rounded-lg", accent || "bg-emerald-100 dark:bg-emerald-900/30")}>
+          {icon}
+        </div>
+        {live && <LiveBadge />}
+      </div>
+      <p className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">{label}</p>
+      <p className="text-xl font-bold text-[var(--text-primary)] mt-1">{value}</p>
+      {subtext && <p className="text-[11px] text-[var(--text-muted)] mt-1">{subtext}</p>}
+    </div>
+  );
 }
 
 // ==========================================================================
 // Main Page
 // ==========================================================================
 
+interface CohortRow {
+  grp: string;
+  cohort_size: number;
+  transactors: number;
+  qris_users: number;
+  total_spend_usd: number;
+  qris_spend_usd: number;
+  total_txns: number;
+  qris_txns: number;
+  avg_spend_per_user: number;
+  txn_per_user: number;
+  sar: number;
+}
+
 export default function QrisExperimentPage() {
   const { periodLabel } = usePeriod();
   const { isDark } = useTheme();
   const tNav = useTranslations("nav");
+
+  const { data: apiData, isLoading } = useSWR<{ cohortComparison: CohortRow[] }>(
+    "/api/qris-experiment?startDate=2026-02-09",
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 300_000 },
+  );
+
+  const { test, control } = useMemo(() => {
+    const rows = apiData?.cohortComparison;
+    if (!rows || rows.length === 0) return { test: null, control: null };
+    return {
+      test: rows.find((r) => r.grp === "Test") || null,
+      control: rows.find((r) => r.grp === "Control") || null,
+    };
+  }, [apiData]);
+
+  const hasData = test !== null && control !== null;
+
+  // Derived metrics
+  const spendLift = hasData
+    ? ((test.total_spend_usd - control.total_spend_usd) / control.total_spend_usd * 100)
+    : 0;
+  const qrisAdoptionRate = hasData && test.transactors > 0
+    ? (test.qris_users / test.transactors * 100)
+    : 0;
+  const qrisSpendShare = hasData && test.total_spend_usd > 0
+    ? (test.qris_spend_usd / test.total_spend_usd * 100)
+    : 0;
 
   // Print styles injection
   useEffect(() => {
@@ -208,7 +335,7 @@ export default function QrisExperimentPage() {
 
         <ActiveFiltersBanner />
 
-        {/* Hero Banner (kept for layout) */}
+        {/* Hero Banner */}
         <div
           data-print-hero
           className="relative overflow-hidden rounded-2xl p-6"
@@ -229,15 +356,36 @@ export default function QrisExperimentPage() {
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-white">QRIS Experiment Report</h2>
-                  <p className="text-sm text-white/70">Quick Response Code Indonesian Standard &middot; {periodLabel}</p>
+                  <p className="text-sm text-white/70">Quick Response Code Indonesian Standard &middot; A/B Test — 10K User Rollout</p>
                 </div>
               </div>
 
               <p className="text-sm text-white/80 max-w-2xl leading-relaxed mt-2">
-                QRIS has been running as an experiment since November 2025. This report analyzes whether
-                enabling QR payments on Honest credit cards increases overall engagement and spend enough
-                to justify the lower interchange revenue per transaction.
+                Controlled A/B test comparing Treatment (QRIS enabled) vs Control groups.
+                {hasData && (
+                  <> Test cohort of <strong>{test.cohort_size.toLocaleString()}</strong> users
+                  vs Control of <strong>{control.cohort_size.toLocaleString()}</strong> users,
+                  measured from Feb 9, 2026.</>
+                )}
               </p>
+
+              {/* Hero KPIs */}
+              {hasData && (
+                <div className="flex flex-wrap gap-6 mt-4 pt-4 border-t border-white/20">
+                  <div>
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-white/50">Spend Lift</p>
+                    <p className="text-2xl font-bold text-white">+{spendLift.toFixed(1)}%</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-white/50">QRIS Adoption</p>
+                    <p className="text-2xl font-bold text-white">{qrisAdoptionRate.toFixed(1)}%</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-white/50">SAR Lift</p>
+                    <p className="text-2xl font-bold text-white">+{(test.sar - control.sar).toFixed(1)}pp</p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Verdict Badge */}
@@ -254,10 +402,102 @@ export default function QrisExperimentPage() {
           </div>
         </div>
 
-        <SampleDataBanner
-          dataset="mart_finexus"
-          reason="QRIS experiment data requires authorized_transaction (DW007) with QRIS filters (txn_typ='RA', rte_dest='L')"
-        />
+        {/* Loading state */}
+        {isLoading && (
+          <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] p-8 text-center">
+            <div className="animate-spin h-6 w-6 border-2 border-emerald-500 border-t-transparent rounded-full mx-auto mb-3" />
+            <p className="text-sm text-[var(--text-muted)]">Loading A/B test cohort data from BigQuery...</p>
+          </div>
+        )}
+
+        {/* KPI Cards */}
+        {hasData && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <KpiCard
+              icon={<Users className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />}
+              label="Test Cohort"
+              value={test.cohort_size.toLocaleString()}
+              subtext={`${test.transactors.toLocaleString()} transactors`}
+              live
+            />
+            <KpiCard
+              icon={<Users className="h-4 w-4 text-slate-600 dark:text-slate-400" />}
+              label="Control Cohort"
+              value={control.cohort_size.toLocaleString()}
+              subtext={`${control.transactors.toLocaleString()} transactors`}
+              accent="bg-slate-100 dark:bg-slate-800/30"
+              live
+            />
+            <KpiCard
+              icon={<QrCode className="h-4 w-4 text-violet-600 dark:text-violet-400" />}
+              label="QRIS Transactors"
+              value={test.qris_users.toLocaleString()}
+              subtext={`${qrisAdoptionRate.toFixed(1)}% of test transactors`}
+              accent="bg-violet-100 dark:bg-violet-900/30"
+              live
+            />
+            <KpiCard
+              icon={<TrendingUp className="h-4 w-4 text-amber-600 dark:text-amber-400" />}
+              label="Total Spend Lift"
+              value={`+$${Math.round(test.total_spend_usd - control.total_spend_usd).toLocaleString()}`}
+              subtext={`+${spendLift.toFixed(1)}% vs Control`}
+              accent="bg-amber-100 dark:bg-amber-900/30"
+              live
+            />
+          </div>
+        )}
+
+        {/* Comparison Table */}
+        {hasData && (
+          <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-semibold text-[var(--text-primary)]">Test vs Control Comparison</h3>
+              <LiveBadge />
+            </div>
+            <ComparisonRow
+              label="Spend Active Rate"
+              testValue={test.sar}
+              controlValue={control.sar}
+              format="percent"
+              live
+            />
+            <ComparisonRow
+              label="Avg Spend per User (USD)"
+              testValue={test.avg_spend_per_user}
+              controlValue={control.avg_spend_per_user}
+              format="usd"
+              live
+            />
+            <ComparisonRow
+              label="Transactions per User"
+              testValue={test.txn_per_user}
+              controlValue={control.txn_per_user}
+              format="decimal"
+              live
+            />
+            <ComparisonRow
+              label="Total Transactions"
+              testValue={test.total_txns}
+              controlValue={control.total_txns}
+              format="number"
+              live
+            />
+            <ComparisonRow
+              label="QRIS Adoption (% of transactors)"
+              testValue={test.transactors > 0 ? test.qris_users / test.transactors * 100 : 0}
+              controlValue={0}
+              format="percent"
+              live
+            />
+            <ComparisonRow
+              label="QRIS Share of Spend"
+              testValue={test.total_spend_usd > 0 ? test.qris_spend_usd / test.total_spend_usd * 100 : 0}
+              controlValue={0}
+              format="percent"
+              live
+            />
+          </div>
+        )}
 
         <ActionItems section="QRIS Experiment" items={actionItems} />
 
@@ -265,12 +505,13 @@ export default function QrisExperimentPage() {
         <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] px-6 py-4">
           <p className="text-xs text-[var(--text-muted)] leading-relaxed">
             <span className="font-semibold text-[var(--text-secondary)]">Methodology:</span>{" "}
+            A/B test with {hasData ? `${(test.cohort_size + control.cohort_size).toLocaleString()}` : "~10,000"} users from <code className={cn("px-1 rounded", isDark ? "text-[#7C4DFF] bg-[#5B22FF]/10" : "text-[#D00083] bg-[#D00083]/10")}>sandbox_risk.sample_qris_rollout_test_10k_202601</code>.
+            Contaminated Control users (with QRIS transactions) are excluded dynamically.
             QRIS transactions are identified by <code className={cn("px-1 rounded", isDark ? "text-[#7C4DFF] bg-[#5B22FF]/10" : "text-[#D00083] bg-[#D00083]/10")}>fx_dw007_txn_typ = &apos;RA&apos;</code> and{" "}
             <code className={cn("px-1 rounded", isDark ? "text-[#7C4DFF] bg-[#5B22FF]/10" : "text-[#D00083] bg-[#D00083]/10")}>fx_dw007_rte_dest = &apos;L&apos;</code>.
-            Spend data is based on <strong>authorized transactions</strong>. Interchange estimates use 0.7% MDR for QRIS and ~1.5% weighted average for card transactions.
-            &quot;QRIS Users&quot; are customers who have made at least one QRIS transaction during the experiment period.
-            All spend figures include both QRIS and non-QRIS transactions for each user segment.
-            Mar* data is partial (through {AS_OF}).
+            Currency conversion: cents / 100 / 16,000 = USD.
+            Spend data is based on <strong>authorized transactions</strong> (DW007). Interchange estimates use 0.7% MDR for QRIS and ~1.5% weighted average for card transactions.
+            Data as of {AS_OF}.
           </p>
         </div>
       </div>

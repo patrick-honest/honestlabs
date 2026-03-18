@@ -1,8 +1,22 @@
-import { runQuery } from "@/lib/bigquery";
+import { runQuery, TABLES } from "@/lib/bigquery";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+export interface QrisCohortRow {
+  grp: string;
+  cohort_size: number;
+  transactors: number;
+  qris_users: number;
+  total_spend_usd: number;
+  qris_spend_usd: number;
+  total_txns: number;
+  qris_txns: number;
+  avg_spend_per_user: number;
+  txn_per_user: number;
+  sar: number;
+}
 
 export interface QrisAdoptionMetrics {
   week_start: string;
@@ -217,4 +231,95 @@ export async function getQrisMerchantCategories(startDate: string, endDate: stri
     LIMIT @limit
   `;
   return runQuery<QrisMerchantCategory>(sql, { startDate, endDate, limit });
+}
+
+// ---------------------------------------------------------------------------
+// 5. A/B Test Cohort Comparison — Treatment (QRIS enabled) vs Control
+//    Source: sandbox_risk.sample_qris_rollout_test_10k_202601
+//    Contaminated Control users (those who somehow had QRIS txns) are excluded
+//    dynamically.
+//    Currency: f9_dw007_amt_req / 100 / 16000 = cents → IDR → USD
+// ---------------------------------------------------------------------------
+
+export async function getQrisCohortComparison(
+  startDate: string = "2026-02-09",
+): Promise<QrisCohortRow[]> {
+  const sql = `
+    -- CTE 1: Raw experiment cohort
+    WITH credit_qris_exp AS (
+      SELECT user_id, loc_acct, qris_test_rollout_group AS grp
+      FROM ${TABLES.qris_rollout}
+    ),
+
+    -- CTE 2: Card number lookup (DW005)
+    cards AS (
+      SELECT DISTINCT f9_dw005_loc_acct, f9_dw005_crn
+      FROM ${TABLES.principal_card_updates}
+      WHERE f9_dw005_loc_acct IS NOT NULL
+        AND f9_dw005_crn IS NOT NULL
+    ),
+
+    -- CTE 3: Contaminated Control users (had QRIS txns despite being Control)
+    contaminated AS (
+      SELECT DISTINCT c.user_id
+      FROM credit_qris_exp c
+      JOIN cards k ON c.loc_acct = k.f9_dw005_loc_acct
+      JOIN ${TABLES.authorized_transaction} t
+        ON k.f9_dw005_crn = t.f9_dw007_prin_crn
+      WHERE c.grp = 'Control'
+        AND t.fx_dw007_txn_typ = 'RA'
+        AND t.fx_dw007_rte_dest = 'L'
+        AND t.f9_dw007_dt >= @startDate
+        AND (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '' OR t.fx_dw007_stat = ' ')
+    ),
+
+    -- CTE 4: Clean cohort (contaminated users removed from both groups)
+    clean_cohort AS (
+      SELECT c.user_id, c.loc_acct, c.grp
+      FROM credit_qris_exp c
+      WHERE NOT EXISTS (
+        SELECT 1 FROM contaminated x WHERE x.user_id = c.user_id
+      )
+    ),
+
+    -- CTE 5: Authorized transactions joined back to cohort via DW005
+    auth_trx AS (
+      SELECT
+        co.user_id,
+        co.grp,
+        t.f9_dw007_amt_req / 100.0 / 16000.0 AS spend_usd,
+        CASE
+          WHEN t.fx_dw007_txn_typ = 'RA' AND t.fx_dw007_rte_dest = 'L' THEN 1
+          ELSE 0
+        END AS is_qris
+      FROM clean_cohort co
+      JOIN cards k ON co.loc_acct = k.f9_dw005_loc_acct
+      JOIN ${TABLES.authorized_transaction} t
+        ON k.f9_dw005_crn = t.f9_dw007_prin_crn
+      WHERE t.f9_dw007_dt >= @startDate
+        AND (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '' OR t.fx_dw007_stat = ' ')
+        AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+        AND t.f9_dw007_ori_amt > 0
+    )
+
+    -- CTE 6: Final aggregation
+    SELECT
+      co.grp,
+      COUNT(DISTINCT co.user_id) AS cohort_size,
+      COUNT(DISTINCT a.user_id) AS transactors,
+      COUNT(DISTINCT CASE WHEN a.is_qris = 1 THEN a.user_id END) AS qris_users,
+      ROUND(COALESCE(SUM(a.spend_usd), 0), 2) AS total_spend_usd,
+      ROUND(COALESCE(SUM(CASE WHEN a.is_qris = 1 THEN a.spend_usd ELSE 0 END), 0), 2) AS qris_spend_usd,
+      COUNT(a.user_id) AS total_txns,
+      COALESCE(SUM(a.is_qris), 0) AS qris_txns,
+      ROUND(COALESCE(SUM(a.spend_usd), 0) / NULLIF(COUNT(DISTINCT a.user_id), 0), 2) AS avg_spend_per_user,
+      ROUND(CAST(COUNT(a.user_id) AS FLOAT64) / NULLIF(COUNT(DISTINCT a.user_id), 0), 1) AS txn_per_user,
+      ROUND(100.0 * COUNT(DISTINCT a.user_id) / COUNT(DISTINCT co.user_id), 1) AS sar
+    FROM clean_cohort co
+    LEFT JOIN auth_trx a ON co.user_id = a.user_id
+    GROUP BY co.grp
+    ORDER BY co.grp
+  `;
+
+  return runQuery<QrisCohortRow>(sql, { startDate });
 }
