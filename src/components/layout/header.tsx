@@ -357,6 +357,88 @@ function UnifiedTimeSelector({
   );
 }
 
+// ── Filter Group Popup ──────────────────────────────────────────────────────
+
+function FilterGroupPopup({
+  label,
+  filters,
+  filterValues,
+  onToggle,
+  onClear,
+  activeCount,
+  isDark,
+}: {
+  label: string;
+  filters: { key: keyof FilterSelections; label: string; options: readonly { readonly value: string; readonly label: string; readonly group?: string }[] }[];
+  filterValues: FilterSelections;
+  onToggle: (key: keyof FilterSelections, value: string) => void;
+  onClear: (key: keyof FilterSelections) => void;
+  activeCount: number;
+  isDark: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className={cn(
+          "flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors",
+          activeCount > 0
+            ? isDark
+              ? "bg-[#5B22FF]/15 text-[#7C4DFF] border border-[#5B22FF]/30"
+              : "bg-[#D00083]/10 text-[#D00083] border border-[#D00083]/30"
+            : isDark
+              ? "text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
+              : "text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
+        )}
+      >
+        {label}
+        {activeCount > 0 && (
+          <span className={cn(
+            "flex h-3.5 min-w-[14px] items-center justify-center rounded-full px-0.5 text-[8px] font-bold text-white",
+            isDark ? "bg-[#5B22FF]" : "bg-[#D00083]"
+          )}>
+            {activeCount}
+          </span>
+        )}
+        <ChevronDown className={cn("h-2.5 w-2.5 transition-transform", open && "rotate-180")} />
+      </button>
+
+      {open && (
+        <div className={cn(
+          "absolute left-0 top-full z-[80] mt-1 rounded-xl border shadow-2xl p-2 min-w-[200px]",
+          isDark
+            ? "border-[var(--border)] bg-[#141226] shadow-black/40"
+            : "border-[var(--border)] bg-white shadow-black/10"
+        )}>
+          <div className="flex flex-wrap gap-1">
+            {filters.map((f) => (
+              <HeaderFilterDropdown
+                key={String(f.key)}
+                label={f.label}
+                options={f.options}
+                selected={filterValues[f.key] ?? []}
+                onToggle={(val) => onToggle(f.key, val)}
+                onClear={() => onClear(f.key)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Header ──────────────────────────────────────────────────────────────────
 
 interface HeaderProps {
@@ -433,33 +515,8 @@ export function Header({ title }: HeaderProps) {
           : "border-[var(--border)] bg-[var(--background)]/95"
       )}
     >
-      {/* Row 1: Filter groups (Acct) + Time dropdown + Comparison */}
-      <div className="flex items-center gap-2 px-4 pt-1.5 pb-0.5 flex-wrap">
-        {/* First filter group (Account) inline */}
-        {visibleGroups.length > 0 && (
-          <div className="flex items-center gap-1">
-            <span className={cn(
-              "text-[9px] font-bold uppercase tracking-widest shrink-0",
-              isDark ? "text-[#7C4DFF]/60" : "text-[#D00083]/60"
-            )}>
-              {visibleGroups[0].label}
-            </span>
-            {visibleGroups[0].filters.map((f) => (
-              <HeaderFilterDropdown
-                key={String(f.key)}
-                label={f.label}
-                options={f.options}
-                selected={filters[f.key] ?? []}
-                onToggle={(val) => toggleFilterValue(f.key, val)}
-                onClear={() => clearFilter(f.key)}
-              />
-            ))}
-          </div>
-        )}
-
-        <div className="h-4 w-px bg-[var(--border)] shrink-0" />
-
-        {/* Time dropdown */}
+      {/* Row 1: Time controls */}
+      <div className="flex items-center gap-2 px-4 pt-1.5 pb-0.5">
         <UnifiedTimeSelector
           period={period}
           timeRange={timeRange}
@@ -471,8 +528,6 @@ export function Header({ title }: HeaderProps) {
           onCustomRange={setCustomRange}
           isDark={isDark}
         />
-
-        {/* Date range + comparison */}
         <span className={cn("text-[10px] font-semibold", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>
           {dateRange.label}
         </span>
@@ -494,11 +549,10 @@ export function Header({ title }: HeaderProps) {
           </select>
           <ChevronDown className="pointer-events-none absolute right-0.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-[var(--text-muted)]" />
         </div>
-
         {totalFilters > 0 && (
           <button
             onClick={() => clearFilters()}
-            className="text-[var(--text-muted)] hover:text-[var(--danger)] shrink-0 ml-1"
+            className="text-[var(--text-muted)] hover:text-[var(--danger)] shrink-0"
             aria-label="Reset filters"
           >
             <X className="h-3.5 w-3.5" />
@@ -506,29 +560,27 @@ export function Header({ title }: HeaderProps) {
         )}
       </div>
 
-      {/* Row 2: Remaining filter groups (Txn, Risk) — always visible */}
-      {visibleGroups.length > 1 && (
-        <div className="flex items-center gap-3 px-4 pb-1.5 flex-wrap">
-          {visibleGroups.slice(1).map((group) => (
-            <div key={group.label} className="flex items-center gap-1">
-              <span className={cn(
-                "text-[9px] font-bold uppercase tracking-widest shrink-0",
-                isDark ? "text-[#7C4DFF]/60" : "text-[#D00083]/60"
-              )}>
-                {group.label}
-              </span>
-              {group.filters.map((f) => (
-                <HeaderFilterDropdown
-                  key={String(f.key)}
-                  label={f.label}
-                  options={f.options}
-                  selected={filters[f.key] ?? []}
-                  onToggle={(val) => toggleFilterValue(f.key, val)}
-                  onClear={() => clearFilter(f.key)}
-                />
-              ))}
-            </div>
-          ))}
+      {/* Row 2: Filter group buttons (ACCT / TXN / RISK) — each is a popup with subcategory dropdowns */}
+      {hasAnyFilters && (
+        <div className="flex items-center gap-1.5 px-4 pb-1.5">
+          <SlidersHorizontal className="h-3 w-3 text-[var(--text-muted)] shrink-0" />
+          {visibleGroups.map((group) => {
+            const groupFilterCount = group.filters.reduce(
+              (sum, f) => sum + (filters[f.key]?.length ?? 0), 0
+            );
+            return (
+              <FilterGroupPopup
+                key={group.label}
+                label={group.label}
+                filters={group.filters}
+                filterValues={filters}
+                onToggle={toggleFilterValue}
+                onClear={clearFilter}
+                activeCount={groupFilterCount}
+                isDark={isDark}
+              />
+            );
+          })}
         </div>
       )}
 
