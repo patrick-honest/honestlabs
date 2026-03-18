@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useMemo, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useMemo, useCallback, useEffect, type ReactNode } from "react";
 import type { Cycle } from "@/types/reports";
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -331,16 +331,24 @@ function savePeriodPrefs(period: Cycle, timeRange: TimeRangePreset, comparisonMo
 }
 
 export function PeriodProvider({ children }: { children: ReactNode }) {
-  const saved = loadPeriodPrefs();
-  const [period, setPeriodRaw] = useState<Cycle>(saved?.period ?? "weekly");
-  const [timeRange, setTimeRangeRaw] = useState<TimeRangePreset>(saved?.timeRange ?? "last_full");
-  const [comparisonMode, setComparisonModeRaw] = useState<ComparisonMode>(saved?.comparisonMode ?? "prior_period");
-  const [customStart, setCustomStart] = useState<Date | null>(
-    saved?.customStart ? new Date(saved.customStart + "T00:00:00") : null,
-  );
-  const [customEnd, setCustomEnd] = useState<Date | null>(
-    saved?.customEnd ? new Date(saved.customEnd + "T00:00:00") : null,
-  );
+  // Initialize with defaults — hydrate from localStorage after mount to avoid SSR mismatch
+  const [period, setPeriodRaw] = useState<Cycle>("weekly");
+  const [timeRange, setTimeRangeRaw] = useState<TimeRangePreset>("last_full");
+  const [comparisonMode, setComparisonModeRaw] = useState<ComparisonMode>("prior_period");
+  const [customStart, setCustomStart] = useState<Date | null>(null);
+  const [customEnd, setCustomEnd] = useState<Date | null>(null);
+
+  // Hydrate from localStorage after mount (avoids hydration mismatch)
+  useEffect(() => {
+    const saved = loadPeriodPrefs();
+    if (saved) {
+      setPeriodRaw(saved.period);
+      setTimeRangeRaw(saved.timeRange);
+      setComparisonModeRaw(saved.comparisonMode);
+      if (saved.customStart) setCustomStart(new Date(saved.customStart + "T00:00:00"));
+      if (saved.customEnd) setCustomEnd(new Date(saved.customEnd + "T00:00:00"));
+    }
+  }, []);
 
   // Persist selections to localStorage
   const setTimeRange = useCallback((tr: TimeRangePreset) => {

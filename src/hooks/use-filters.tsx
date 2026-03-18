@@ -5,6 +5,7 @@ import {
   useContext,
   useState,
   useCallback,
+  useEffect,
   type ReactNode,
 } from "react";
 
@@ -306,12 +307,17 @@ function generatePresetName(filters: FilterSelections): string {
 }
 
 export function FiltersProvider({ children }: { children: ReactNode }) {
-  const [filters, setFiltersRaw] = useState<FilterSelections>(
-    () => loadFilterPrefs() ?? DEFAULT_FILTERS,
-  );
-  const [savedPresets, setSavedPresetsRaw] = useState<SavedFilterPreset[]>(
-    () => loadPresets(),
-  );
+  // Initialize with defaults — hydrate from localStorage after mount to avoid SSR mismatch
+  const [filters, setFiltersRaw] = useState<FilterSelections>(DEFAULT_FILTERS);
+  const [savedPresets, setSavedPresetsRaw] = useState<SavedFilterPreset[]>([]);
+
+  // Hydrate from localStorage after mount (avoids hydration mismatch)
+  useEffect(() => {
+    const savedFilters = loadFilterPrefs();
+    if (savedFilters) setFiltersRaw(savedFilters);
+    const savedP = loadPresets();
+    if (savedP.length > 0) setSavedPresetsRaw(savedP);
+  }, []);
 
   // Wrap setFilters to persist
   const setFilters = useCallback((updater: FilterSelections | ((prev: FilterSelections) => FilterSelections)) => {
