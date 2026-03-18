@@ -232,9 +232,9 @@ export function UserInfoCard({ user }: UserInfoCardProps) {
               rel="noopener noreferrer"
               className="group inline-flex items-center gap-1 text-xs font-mono text-[var(--accent-light)] hover:underline"
             >
-              <span>Open Dashboard</span>
-              <ExternalLink className="h-3 w-3" />
-              <CopyButton value={`https://dashboard-01.moengage.com/v4/users/${user.user_id}`} />
+              <span className="truncate max-w-[140px]">{user.user_id}</span>
+              <ExternalLink className="h-3 w-3 shrink-0" />
+              <CopyButton value={user.user_id} />
             </a>
           </div>
           <Field label="LOC Account" value={user.loc_acct} mono />
