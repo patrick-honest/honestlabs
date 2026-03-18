@@ -464,19 +464,6 @@ export function Sidebar() {
           "flex items-center gap-1 px-3 py-2",
           collapsed && "flex-col px-2"
         )}>
-          {/* Collapse */}
-          <button
-            onClick={toggleCollapse}
-            className={cn(
-              "flex h-7 items-center justify-center rounded-md transition-colors shrink-0",
-              "text-[var(--text-muted)] hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]",
-              collapsed ? "w-7" : "w-7"
-            )}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {collapsed ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
-          </button>
-
           {/* Currency */}
           <button
             onClick={toggleCurrency}
@@ -540,6 +527,19 @@ export function Sidebar() {
               {localeLabels[locale]}
             </button>
           )}
+
+          {/* Collapse — right-justified */}
+          <button
+            onClick={toggleCollapse}
+            className={cn(
+              "flex h-7 w-7 items-center justify-center rounded-md transition-colors shrink-0",
+              "text-[var(--text-muted)] hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]",
+              !collapsed && "ml-auto"
+            )}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {collapsed ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
+          </button>
         </div>
 
         {/* User section */}
