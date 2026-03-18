@@ -39,6 +39,15 @@ const PRINT_STYLES = `
   nav, header, [data-print-hide], button, .no-print,
   .tab-navigation { display: none !important; }
 
+  /* ── Fix layout for print — remove scroll containers ────────────── */
+  html, body { height: auto !important; overflow: visible !important; }
+  body > div, main, [class*="overflow"] {
+    height: auto !important;
+    overflow: visible !important;
+    position: static !important;
+  }
+  .flex.h-screen { height: auto !important; display: block !important; }
+
   /* ── Base typography ────────────────────────────────────────────── */
   body {
     background: white !important;

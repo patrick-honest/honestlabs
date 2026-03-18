@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
+import { Header } from "@/components/layout/header";
 
 const tabs = [
   { label: "Acquisition", href: "/deep-dive/acquisition" },
@@ -29,11 +30,18 @@ export default function DeepDiveLayout({
   const pathname = usePathname();
   const { isDark } = useTheme();
 
+  // Derive title from active tab
+  const activeTab = tabs.find((t) => pathname === t.href);
+  const title = activeTab ? `${activeTab.label} Deep Dive` : "Deep Dive";
+
   return (
     <div className="flex flex-col h-full">
+      {/* Header with filters, period, time range */}
+      <Header title={title} />
+
       {/* Tab navigation */}
       <nav className={cn(
-        "sticky top-0 z-20 border-b backdrop-blur-sm px-6",
+        "sticky top-[41px] z-20 border-b backdrop-blur-sm px-6",
         isDark
           ? "border-[var(--border)] bg-[var(--background)]/80"
           : "border-[var(--border)] bg-[var(--background)]/90"
@@ -46,7 +54,7 @@ export default function DeepDiveLayout({
                 key={tab.href}
                 href={tab.href}
                 className={cn(
-                  "shrink-0 px-4 py-3 text-sm font-medium border-b-2 transition-colors",
+                  "shrink-0 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors",
                   isActive
                     ? isDark
                       ? "border-[#5B22FF] text-[var(--text-primary)]"
