@@ -4,10 +4,12 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Home, FileText, BarChart3, UserPlus, Briefcase, CreditCard,
-  ShieldAlert, Zap, Landmark, Layers, Building, Search, Newspaper,
-  ChevronDown, ChevronRight, LogOut, QrCode, Headphones,
-  PanelLeftClose, PanelLeftOpen, GitCompareArrows, ArrowDownCircle, Settings,
+  LayoutDashboard, FileBarChart, BarChart3, UserPlus, PieChart, Wallet,
+  ShieldAlert, Zap, Scale, Layers, Building2, Search, Newspaper,
+  ChevronDown, ChevronRight, LogOut, QrCode, MessageCircle,
+  PanelLeftClose, PanelLeftOpen, ArrowLeftRight, ArrowDownCircle, Settings,
+  ShieldCheck, Activity, Users, TrendingUp, Star, Target, BookOpen,
+  Fingerprint,
   type LucideIcon,
 } from "lucide-react";
 import Image from "next/image";
@@ -18,9 +20,13 @@ import { useSession, signOut } from "next-auth/react";
 import { IS_STATIC_EXPORT } from "@/lib/static-mode";
 
 const iconMap: Record<string, LucideIcon> = {
-  Home, FileText, BarChart3, UserPlus, Briefcase, CreditCard,
-  ShieldAlert, Zap, Landmark, Layers, Building, Search, Newspaper,
-  QrCode, Headphones, GitCompareArrows, ArrowDownCircle, Settings,
+  // Top-level
+  LayoutDashboard, FileBarChart, BarChart3, Search, Newspaper, Settings,
+  Layers, Building2, Target, ArrowLeftRight, QrCode, BookOpen,
+  // Deep dive children
+  UserPlus, PieChart, Wallet, ShieldAlert, Zap, Scale, ArrowDownCircle,
+  MessageCircle, ShieldCheck, Activity, Users, TrendingUp, Star,
+  Fingerprint,
 };
 
 const MIN_WIDTH = 56;   // collapsed
@@ -42,7 +48,7 @@ function NavLinkExpanded({
   const [expanded, setExpanded] = useState(
     item.children?.some((c) => pathname.startsWith(c.href)) ?? false
   );
-  const Icon = iconMap[item.icon] ?? Home;
+  const Icon = iconMap[item.icon] ?? BarChart3;
   const isActive = pathname === item.href;
   const hasChildren = !!item.children?.length;
 
@@ -72,7 +78,7 @@ function NavLinkExpanded({
             )}
           >
             {item.children!.map((child) => {
-              const ChildIcon = iconMap[child.icon] ?? Home;
+              const ChildIcon = iconMap[child.icon] ?? BarChart3;
               const childActive = pathname === child.href;
               return (
                 <Link
@@ -129,7 +135,7 @@ function NavLinkCollapsed({
 }) {
   const [hovered, setHovered] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const Icon = iconMap[item.icon] ?? Home;
+  const Icon = iconMap[item.icon] ?? BarChart3;
   const isActive =
     pathname === item.href ||
     item.children?.some((c) => pathname.startsWith(c.href));
@@ -255,7 +261,7 @@ function FlyoutPortal({
               {item.label}
             </div>
             {item.children!.map((child) => {
-              const ChildIcon = iconMap[child.icon] ?? Home;
+              const ChildIcon = iconMap[child.icon] ?? BarChart3;
               const childActive = pathname === child.href;
               return (
                 <Link
