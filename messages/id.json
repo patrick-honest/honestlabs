@@ -33,15 +33,42 @@
     "amount": "Jumlah",
     "balance": "Saldo",
     "sampleData": "Data sampel — hubungkan BigQuery untuk metrik langsung",
-    "currency": { "idr": "IDR", "usd": "USD" },
-    "theme": { "light": "Beralih ke mode terang", "dark": "Beralih ke mode gelap" },
-    "language": { "en": "English", "id": "Bahasa Indonesia", "ja": "日本語" },
-    "months": {
-      "jan": "Jan", "feb": "Feb", "mar": "Mar", "apr": "Apr",
-      "may": "Mei", "jun": "Jun", "jul": "Jul", "aug": "Agu",
-      "sep": "Sep", "oct": "Okt", "nov": "Nov", "dec": "Des"
+    "currency": {
+      "idr": "IDR",
+      "usd": "USD"
     },
-    "dow": { "mo": "Sn", "tu": "Sl", "we": "Rb", "th": "Km", "fr": "Jm", "sa": "Sb", "su": "Mg" }
+    "theme": {
+      "light": "Beralih ke mode terang",
+      "dark": "Beralih ke mode gelap"
+    },
+    "language": {
+      "en": "English",
+      "id": "Bahasa Indonesia",
+      "ja": "日本語"
+    },
+    "months": {
+      "jan": "Jan",
+      "feb": "Feb",
+      "mar": "Mar",
+      "apr": "Apr",
+      "may": "Mei",
+      "jun": "Jun",
+      "jul": "Jul",
+      "aug": "Agu",
+      "sep": "Sep",
+      "oct": "Okt",
+      "nov": "Nov",
+      "dec": "Des"
+    },
+    "dow": {
+      "mo": "Sn",
+      "tu": "Sl",
+      "we": "Rb",
+      "th": "Km",
+      "fr": "Jm",
+      "sa": "Sb",
+      "su": "Mg"
+    }
   },
   "nav": {
     "userSearch": "Pencarian Pengguna",
@@ -181,7 +208,49 @@
     "investorHighlight": "Sorotan Investor",
     "growthStory": "Cerita Pertumbuhan",
     "riskStory": "Cerita Risiko",
-    "investorSnapshot": "Ringkasan Investor"
+    "investorSnapshot": "Ringkasan Investor",
+    "healthy": "Sehat",
+    "monitor": "Pantau",
+    "atRisk": "Berisiko",
+    "actionsAlerts": "Tindakan & Peringatan",
+    "viewDetails": "Lihat detail",
+    "deepDive": "Detail",
+    "portfolioGrowing": "Portofolio berkembang",
+    "engagementImproving": "engagement meningkat",
+    "creditQualityStrengthening": "kualitas kredit menguat",
+    "spendUp": "belanja +{pct}%",
+    "spendBelowThreshold": "engagement belanja di bawah 40%",
+    "dpdAboveThreshold": "DPD 30+ di atas batas 5%",
+    "noAlerts": "Tidak ada peringatan kritis",
+    "insufficientData": "Data tidak cukup untuk penilaian.",
+    "sarDescription": "Spend Active Rate — % akun yang bertransaksi",
+    "dpdDescription": "Distribusi DPD — periode saat ini vs sebelumnya",
+    "spendActiveRatePct": "Spend Active Rate %",
+    "targetPct": "Target ({pct}%)",
+    "current": "Saat ini",
+    "prior": "Sebelumnya",
+    "spendGrew": "Total belanja tumbuh {pct}% vs periode sebelumnya",
+    "strongMomentum": "Momentum pendapatan kuat. Layak untuk laporan investor.",
+    "includeInvestorUpdate": "Masukkan dalam update investor berikutnya.",
+    "qrisAdoption": "Adopsi QRIS mencapai {pct}%",
+    "qrisGrowth": "Naik dari 3% enam bulan lalu. Fitur untuk investor.",
+    "prepareQrisCase": "Siapkan studi kasus QRIS untuk rapat dewan.",
+    "sarDeclining": "Spend active rate menurun — sekarang {val}%",
+    "engagementRisk": "Engagement menurun. Tinjau kampanye aktivasi dan QRIS.",
+    "reviewActivation": "Jadwalkan review aktivasi dengan tim produk minggu ini.",
+    "sarStagnant": "SAR stagnan di {val}% — hanya {pct}% perubahan",
+    "monitorSar": "Hanya {pct}% perubahan. Pantau periode berikutnya.",
+    "dpdRising": "DPD 30+ meningkat — sekarang {val}%",
+    "collectionsPressure": "Tekanan penagihan naik. Tinjau segmentasi risiko.",
+    "reviewCollections": "Tinjau alur penagihan dan pemicu peringatan dini.",
+    "investorYoyGrowth": "Pertumbuhan transactor YoY",
+    "investorYoyDetail": "19.2K → 25.4K pengguna aktif",
+    "investorAnnualSpend": "Total belanja tahunan (+28% YoY)",
+    "investorAnnualDetail": "Didorong QRIS & e-commerce",
+    "investorQris": "Adopsi QRIS dalam 6 bulan",
+    "investorQrisDetail": "Kanal pembayaran tercepat berkembang",
+    "investorDpd": "DPD 30+ rate (membaik)",
+    "investorDpdDetail": "Turun dari 5.8% — penagihan lebih ketat"
   },
   "orico": {
     "title": "Laporan Orico",

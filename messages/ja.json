@@ -33,15 +33,42 @@
     "amount": "金額",
     "balance": "残高",
     "sampleData": "サンプルデータ — BigQuery接続でライブ指標を表示",
-    "currency": { "idr": "IDR", "usd": "USD" },
-    "theme": { "light": "ライトモードに切替", "dark": "ダークモードに切替" },
-    "language": { "en": "English", "id": "Bahasa Indonesia", "ja": "日本語" },
-    "months": {
-      "jan": "1月", "feb": "2月", "mar": "3月", "apr": "4月",
-      "may": "5月", "jun": "6月", "jul": "7月", "aug": "8月",
-      "sep": "9月", "oct": "10月", "nov": "11月", "dec": "12月"
+    "currency": {
+      "idr": "IDR",
+      "usd": "USD"
     },
-    "dow": { "mo": "月", "tu": "火", "we": "水", "th": "木", "fr": "金", "sa": "土", "su": "日" }
+    "theme": {
+      "light": "ライトモードに切替",
+      "dark": "ダークモードに切替"
+    },
+    "language": {
+      "en": "English",
+      "id": "Bahasa Indonesia",
+      "ja": "日本語"
+    },
+    "months": {
+      "jan": "1月",
+      "feb": "2月",
+      "mar": "3月",
+      "apr": "4月",
+      "may": "5月",
+      "jun": "6月",
+      "jul": "7月",
+      "aug": "8月",
+      "sep": "9月",
+      "oct": "10月",
+      "nov": "11月",
+      "dec": "12月"
+    },
+    "dow": {
+      "mo": "月",
+      "tu": "火",
+      "we": "水",
+      "th": "木",
+      "fr": "金",
+      "sa": "土",
+      "su": "日"
+    }
   },
   "nav": {
     "userSearch": "ユーザー検索",
@@ -181,7 +208,49 @@
     "investorHighlight": "投資家向けハイライト",
     "growthStory": "成長ストーリー",
     "riskStory": "リスクストーリー",
-    "investorSnapshot": "投資家向けスナップショット"
+    "investorSnapshot": "投資家向けスナップショット",
+    "healthy": "良好",
+    "monitor": "要注意",
+    "atRisk": "リスクあり",
+    "actionsAlerts": "アクション & アラート",
+    "viewDetails": "詳細を見る",
+    "deepDive": "詳細分析",
+    "portfolioGrowing": "ポートフォリオ成長中",
+    "engagementImproving": "エンゲージメント改善中",
+    "creditQualityStrengthening": "信用品質強化中",
+    "spendUp": "支出 +{pct}%",
+    "spendBelowThreshold": "支出エンゲージメント40%未満",
+    "dpdAboveThreshold": "DPD 30+が5%閾値超過",
+    "noAlerts": "重要なアラートなし",
+    "insufficientData": "評価に十分なデータがありません。",
+    "sarDescription": "Spend Active Rate — 取引を行った対象口座の割合",
+    "dpdDescription": "DPD分布 — 当期 vs 前期",
+    "spendActiveRatePct": "Spend Active Rate %",
+    "targetPct": "目標 ({pct}%)",
+    "current": "当期",
+    "prior": "前期",
+    "spendGrew": "総支出が前期比{pct}%増加",
+    "strongMomentum": "力強いトップライン成長。投資家向けのヘッドライン。",
+    "includeInvestorUpdate": "次回の投資家アップデートに主要成長指標として含める。",
+    "qrisAdoption": "QRIS導入率が{pct}%に到達",
+    "qrisGrowth": "6ヶ月前の3%から上昇。投資家向けの特集記事。",
+    "prepareQrisCase": "次回取締役会に向けてQRISケーススタディを準備。",
+    "sarDeclining": "Spend active rateが低下中 — 現在{val}%",
+    "engagementRisk": "エンゲージメントが低下中。アクティベーションキャンペーンとQRISプッシュを見直す。",
+    "reviewActivation": "今週中にプロダクトチームとアクティベーションレビューを実施。",
+    "sarStagnant": "SARが{val}%で横ばい — 変動{pct}%のみ",
+    "monitorSar": "{pct}%の変動のみ。次期間まで監視継続。",
+    "dpdRising": "DPD 30+が上昇中 — 現在{val}%",
+    "collectionsPressure": "回収圧力上昇中。リスクセグメンテーションを見直す。",
+    "reviewCollections": "回収ワークフローと早期警告トリガーを見直す。",
+    "investorYoyGrowth": "前年比トランザクター成長",
+    "investorYoyDetail": "19.2K → 25.4K アクティブスペンダー",
+    "investorAnnualSpend": "年間総支出 (+28% YoY)",
+    "investorAnnualDetail": "QRIS & eコマースが牽引",
+    "investorQris": "6ヶ月でQRIS導入",
+    "investorQrisDetail": "最も急成長する決済チャネル",
+    "investorDpd": "DPD 30+ rate (改善)",
+    "investorDpdDetail": "5.8%から低下 — より厳格な回収"
   },
   "orico": {
     "title": "オリコレポート",

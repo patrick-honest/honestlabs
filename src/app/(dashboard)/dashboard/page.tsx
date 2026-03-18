@@ -95,7 +95,7 @@ interface HealthScore {
   keyAlert: string;
 }
 
-function computeHealth(kpis: KpiMetric[], isDark: boolean): HealthScore {
+function computeHealth(kpis: KpiMetric[], isDark: boolean, t: (key: string, values?: Record<string, string>) => string): HealthScore {
   const find = (key: string) => kpis.find((k) => k.metric === key);
   const sar = find("spend_active_rate");
   const dpd = find("dpd_30_plus_rate");
@@ -124,23 +124,23 @@ function computeHealth(kpis: KpiMetric[], isDark: boolean): HealthScore {
       ? isDark ? "from-[#FFD166]/10 to-transparent" : "from-amber-50 to-transparent"
       : isDark ? "from-[#FF6B6B]/10 to-transparent" : "from-red-50 to-transparent";
 
-  const label = score >= 70 ? "Healthy" : score >= 45 ? "Monitor" : "At Risk";
+  const label = score >= 70 ? t("healthy") : score >= 45 ? t("monitor") : t("atRisk");
 
   // Build verdict
   const parts: string[] = [];
-  if (accounts && accounts.changePercent && accounts.changePercent > 0) parts.push("Portfolio growing");
-  if (sar && sar.changePercent && sar.changePercent > 0) parts.push("engagement improving");
-  if (dpd && dpd.changePercent && dpd.changePercent < 0) parts.push("credit quality strengthening");
-  if (spend && spend.changePercent && spend.changePercent > 0) parts.push(`spend +${spend.changePercent.toFixed(1)}%`);
+  if (accounts && accounts.changePercent && accounts.changePercent > 0) parts.push(t("portfolioGrowing"));
+  if (sar && sar.changePercent && sar.changePercent > 0) parts.push(t("engagementImproving"));
+  if (dpd && dpd.changePercent && dpd.changePercent < 0) parts.push(t("creditQualityStrengthening"));
+  if (spend && spend.changePercent && spend.changePercent > 0) parts.push(t("spendUp", { pct: spend.changePercent.toFixed(1) }));
 
   // Alerts
   const alerts: string[] = [];
-  if (sar && sar.value < 40) alerts.push("spend engagement below 40%");
-  if (dpd && dpd.value > 5) alerts.push("DPD 30+ above 5% threshold");
+  if (sar && sar.value < 40) alerts.push(t("spendBelowThreshold"));
+  if (dpd && dpd.value > 5) alerts.push(t("dpdAboveThreshold"));
 
   const verdict = parts.length > 0
     ? parts.slice(0, 3).join(", ") + "." + (alerts.length > 0 ? ` Watch: ${alerts.join(", ")}.` : "")
-    : "Insufficient data for assessment.";
+    : t("insufficientData");
 
   // Best / worst
   const metrics = [sar, dpd, spend, accounts].filter(Boolean) as KpiMetric[];
@@ -162,7 +162,7 @@ function computeHealth(kpis: KpiMetric[], isDark: boolean): HealthScore {
     verdict,
     bestMetric: `${best.label} ${best.direction === "up" ? "↑" : "↓"} ${Math.abs(best.changePercent ?? 0).toFixed(1)}%`,
     worstMetric: `${worst.label} ${worst.direction === "up" ? "↑" : "↓"} ${Math.abs(worst.changePercent ?? 0).toFixed(1)}%`,
-    keyAlert: alerts.length > 0 ? alerts[0] : "No critical alerts",
+    keyAlert: alerts.length > 0 ? alerts[0] : t("noAlerts"),
   };
 }
 
@@ -176,7 +176,7 @@ interface Alert {
   link?: string;
 }
 
-function generateAlerts(kpis: KpiMetric[], period: Cycle): Alert[] {
+function generateAlerts(kpis: KpiMetric[], period: Cycle, t: (key: string, values?: Record<string, string>) => string): Alert[] {
   const alerts: Alert[] = [];
   const sar = kpis.find((k) => k.metric === "spend_active_rate");
   const dpd = kpis.find((k) => k.metric === "dpd_30_plus_rate");
@@ -187,17 +187,17 @@ function generateAlerts(kpis: KpiMetric[], period: Cycle): Alert[] {
   if (spend && spend.changePercent && spend.changePercent > 5) {
     alerts.push({
       severity: "highlight",
-      title: `Total spend grew ${spend.changePercent.toFixed(1)}% vs prior period`,
-      detail: "Strong top-line momentum. Investor-ready headline.",
-      action: "Include in next investor update as key growth metric.",
+      title: t("spendGrew", { pct: spend.changePercent.toFixed(1) }),
+      detail: t("strongMomentum"),
+      action: t("includeInvestorUpdate"),
     });
   }
   if (sar && sar.value > 40) {
     alerts.push({
       severity: "highlight",
-      title: `Spend active rate at ${sar.value.toFixed(1)}% — strong engagement`,
-      detail: "Above 40% threshold indicates healthy card usage.",
-      action: "Highlight in board deck as engagement proof point.",
+      title: t("sarDeclining", { val: sar.value.toFixed(1) }).replace("declining", "strong"),
+      detail: t("engagementRisk"),
+      action: t("reviewActivation"),
       link: "/deep-dive/spend",
     });
   }
@@ -206,9 +206,9 @@ function generateAlerts(kpis: KpiMetric[], period: Cycle): Alert[] {
   if (sar && sar.changePercent && sar.changePercent < 1 && sar.changePercent > -2) {
     alerts.push({
       severity: "watch",
-      title: "Spend active rate growth slowing",
-      detail: `Only ${sar.changePercent.toFixed(1)}% change. Monitor for another period before acting.`,
-      action: "Review spend activation campaigns with marketing.",
+      title: t("sarStagnant", { val: sar.value.toFixed(1), pct: sar.changePercent.toFixed(1) }),
+      detail: t("monitorSar", { pct: sar.changePercent.toFixed(1) }),
+      action: t("reviewActivation"),
       link: "/deep-dive/spend",
     });
   }
@@ -217,9 +217,9 @@ function generateAlerts(kpis: KpiMetric[], period: Cycle): Alert[] {
   if (dpd && dpd.value > 5) {
     alerts.push({
       severity: "act",
-      title: `30+ DPD rate at ${dpd.value.toFixed(1)}% — above 5% threshold`,
-      detail: "Collections strategy may need recalibration.",
-      action: "Schedule risk review with Atanu this week.",
+      title: t("dpdRising", { val: dpd.value.toFixed(1) }),
+      detail: t("collectionsPressure"),
+      action: t("reviewCollections"),
       link: "/deep-dive/risk",
     });
   }
@@ -227,9 +227,9 @@ function generateAlerts(kpis: KpiMetric[], period: Cycle): Alert[] {
   // Additional context alerts
   alerts.push({
     severity: "highlight",
-    title: "QRIS adoption reached 27.4%",
-    detail: "Up from 3% six months ago. Feature story for investors.",
-    action: "Prepare QRIS case study for next board meeting.",
+    title: t("qrisAdoption", { pct: "27.4" }),
+    detail: t("qrisGrowth"),
+    action: t("prepareQrisCase"),
     link: "/qris-experiment",
   });
 
@@ -241,11 +241,11 @@ function generateAlerts(kpis: KpiMetric[], period: Cycle): Alert[] {
 
 // ── Investor highlights ─────────────────────────────────────────────────────
 
-const INVESTOR_HIGHLIGHTS = [
-  { stat: "32%", context: "YoY transactor growth", detail: "19.2K → 25.4K active spenders" },
-  { stat: "IDR 942B", context: "Total annual spend (+28% YoY)", detail: "Driven by QRIS & e-commerce" },
-  { stat: "3% → 27%", context: "QRIS adoption in 6 months", detail: "Fastest-growing payment channel" },
-  { stat: "4.6%", context: "30+ DPD rate (improved)", detail: "Down from 5.8% — tighter collections" },
+const INVESTOR_HIGHLIGHT_KEYS = [
+  { stat: "32%", contextKey: "investorYoyGrowth", detailKey: "investorYoyDetail" },
+  { stat: "IDR 942B", contextKey: "investorAnnualSpend", detailKey: "investorAnnualDetail" },
+  { stat: "3% → 27%", contextKey: "investorQris", detailKey: "investorQrisDetail" },
+  { stat: "4.6%", contextKey: "investorDpd", detailKey: "investorDpdDetail" },
 ];
 
 // ── News ────────────────────────────────────────────────────────────────────
@@ -323,8 +323,8 @@ export default function DashboardPage() {
     };
   }, [period, filters]);
 
-  const health = useMemo(() => computeHealth(kpis, isDark), [kpis, isDark]);
-  const alerts = useMemo(() => generateAlerts(kpis, period), [kpis, period]);
+  const health = useMemo(() => computeHealth(kpis, isDark, tDash), [kpis, isDark, tDash]);
+  const alerts = useMemo(() => generateAlerts(kpis, period, tDash), [kpis, period, tDash]);
 
   const severityConfig = {
     act: { icon: AlertTriangle, label: tDash("actNow"), bg: isDark ? "bg-red-500/10 border-red-500/30" : "bg-red-50 border-red-200", text: isDark ? "text-[#FF6B6B]" : "text-red-700" },
@@ -412,7 +412,7 @@ export default function DashboardPage() {
           isDark ? "border-[var(--border)] bg-[var(--surface)]" : "border-[var(--border)] bg-[var(--surface)] shadow-sm"
         )}>
           <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--text-muted)] mb-3">
-            Actions & Alerts
+            {tDash("actionsAlerts")}
           </h3>
           <div className="space-y-2.5">
             {alerts.map((alert, i) => {
@@ -431,7 +431,7 @@ export default function DashboardPage() {
                       <span className="text-xs font-medium text-[var(--text-secondary)]">→ {alert.action}</span>
                       {alert.link && (
                         <Link href={alert.link} className={cn("text-[10px] font-medium flex items-center gap-0.5", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>
-                          View details <ArrowRight className="h-2.5 w-2.5" />
+                          {tDash("viewDetails")} <ArrowRight className="h-2.5 w-2.5" />
                         </Link>
                       )}
                     </div>
@@ -454,18 +454,18 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between mb-1">
               <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--text-muted)]">{tDash("growthStory")}</h3>
               <Link href="/deep-dive/spend" className={cn("text-[10px] font-medium flex items-center gap-0.5", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>
-                Deep dive <ArrowRight className="h-2.5 w-2.5" />
+                {tDash("deepDive")} <ArrowRight className="h-2.5 w-2.5" />
               </Link>
             </div>
-            <p className="text-[11px] text-[var(--text-muted)] mb-3">Spend Active Rate — % of eligible accounts transacting</p>
+            <p className="text-[11px] text-[var(--text-muted)] mb-3">{tDash("sarDescription")}</p>
             <DashboardLineChart
               data={spendRateData}
               lines={[
-                { key: "rate", color: isDark ? "#06D6A0" : "#059669", label: "Spend Active Rate %" },
-                { key: "target", color: isDark ? "#ffffff20" : "#00000015", label: "Target (50%)" },
+                { key: "rate", color: isDark ? "#06D6A0" : "#059669", label: tDash("spendActiveRatePct") },
+                { key: "target", color: isDark ? "#ffffff20" : "#00000015", label: tDash("targetPct", { pct: "50" }) },
               ]}
               prevPeriodData={comparisonMode !== "none" ? prevSpendRateData : undefined}
-              prevPeriodLabel="Prior"
+              prevPeriodLabel={tDash("prior")}
               valueType="percent"
               height={200}
             />
@@ -479,15 +479,15 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between mb-1">
               <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--text-muted)]">{tDash("riskStory")}</h3>
               <Link href="/deep-dive/risk" className={cn("text-[10px] font-medium flex items-center gap-0.5", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>
-                Deep dive <ArrowRight className="h-2.5 w-2.5" />
+                {tDash("deepDive")} <ArrowRight className="h-2.5 w-2.5" />
               </Link>
             </div>
-            <p className="text-[11px] text-[var(--text-muted)] mb-3">DPD Distribution — current vs prior period</p>
+            <p className="text-[11px] text-[var(--text-muted)] mb-3">{tDash("dpdDescription")}</p>
             <DashboardBarChart
               data={dpdData}
               bars={[
-                { key: "count", color: isDark ? "#FFD166" : "#F5A623", label: "Current" },
-                { key: "prev", color: isDark ? "#ffffff20" : "#00000015", label: "Prior" },
+                { key: "count", color: isDark ? "#FFD166" : "#F5A623", label: tDash("current") },
+                { key: "prev", color: isDark ? "#ffffff20" : "#00000015", label: tDash("prior") },
               ]}
               xAxisKey="bucket"
               height={200}
@@ -501,14 +501,14 @@ export default function DashboardPage() {
         <div>
           <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--text-muted)] mb-3">{tDash("investorSnapshot")}</h3>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {INVESTOR_HIGHLIGHTS.map((h, i) => (
+            {INVESTOR_HIGHLIGHT_KEYS.map((h, i) => (
               <div key={i} className={cn(
                 "rounded-xl border px-4 py-3",
                 isDark ? "border-[var(--border)] bg-[var(--surface)]" : "border-[var(--border)] bg-[var(--surface)] shadow-sm"
               )}>
                 <p className={cn("text-2xl font-bold", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>{h.stat}</p>
-                <p className="text-xs font-medium text-[var(--text-primary)] mt-0.5">{h.context}</p>
-                <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{h.detail}</p>
+                <p className="text-xs font-medium text-[var(--text-primary)] mt-0.5">{tDash(h.contextKey)}</p>
+                <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{tDash(h.detailKey)}</p>
               </div>
             ))}
           </div>

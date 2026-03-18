@@ -33,15 +33,42 @@
     "amount": "Amount",
     "balance": "Balance",
     "sampleData": "Sample data — connect to BigQuery for live metrics",
-    "currency": { "idr": "IDR", "usd": "USD" },
-    "theme": { "light": "Switch to light mode", "dark": "Switch to dark mode" },
-    "language": { "en": "English", "id": "Bahasa Indonesia", "ja": "日本語" },
-    "months": {
-      "jan": "Jan", "feb": "Feb", "mar": "Mar", "apr": "Apr",
-      "may": "May", "jun": "Jun", "jul": "Jul", "aug": "Aug",
-      "sep": "Sep", "oct": "Oct", "nov": "Nov", "dec": "Dec"
+    "currency": {
+      "idr": "IDR",
+      "usd": "USD"
     },
-    "dow": { "mo": "Mo", "tu": "Tu", "we": "We", "th": "Th", "fr": "Fr", "sa": "Sa", "su": "Su" }
+    "theme": {
+      "light": "Switch to light mode",
+      "dark": "Switch to dark mode"
+    },
+    "language": {
+      "en": "English",
+      "id": "Bahasa Indonesia",
+      "ja": "日本語"
+    },
+    "months": {
+      "jan": "Jan",
+      "feb": "Feb",
+      "mar": "Mar",
+      "apr": "Apr",
+      "may": "May",
+      "jun": "Jun",
+      "jul": "Jul",
+      "aug": "Aug",
+      "sep": "Sep",
+      "oct": "Oct",
+      "nov": "Nov",
+      "dec": "Dec"
+    },
+    "dow": {
+      "mo": "Mo",
+      "tu": "Tu",
+      "we": "We",
+      "th": "Th",
+      "fr": "Fr",
+      "sa": "Sa",
+      "su": "Su"
+    }
   },
   "nav": {
     "userSearch": "User Search",
@@ -181,7 +208,49 @@
     "investorHighlight": "Investor Highlight",
     "growthStory": "Growth Story",
     "riskStory": "Risk Story",
-    "investorSnapshot": "Investor Snapshot"
+    "investorSnapshot": "Investor Snapshot",
+    "healthy": "Healthy",
+    "monitor": "Monitor",
+    "atRisk": "At Risk",
+    "actionsAlerts": "Actions & Alerts",
+    "viewDetails": "View details",
+    "deepDive": "Deep dive",
+    "portfolioGrowing": "Portfolio growing",
+    "engagementImproving": "engagement improving",
+    "creditQualityStrengthening": "credit quality strengthening",
+    "spendUp": "spend +{pct}%",
+    "spendBelowThreshold": "spend engagement below 40%",
+    "dpdAboveThreshold": "DPD 30+ above 5% threshold",
+    "noAlerts": "No critical alerts",
+    "insufficientData": "Insufficient data for assessment.",
+    "sarDescription": "Spend Active Rate — % of eligible accounts transacting",
+    "dpdDescription": "DPD Distribution — current vs prior period",
+    "spendActiveRatePct": "Spend Active Rate %",
+    "targetPct": "Target ({pct}%)",
+    "current": "Current",
+    "prior": "Prior",
+    "spendGrew": "Total spend grew {pct}% vs prior period",
+    "strongMomentum": "Strong top-line momentum. Investor-ready headline.",
+    "includeInvestorUpdate": "Include in next investor update as key growth metric.",
+    "qrisAdoption": "QRIS adoption reached {pct}%",
+    "qrisGrowth": "Up from 3% six months ago. Feature story for investors.",
+    "prepareQrisCase": "Prepare QRIS case study for next board meeting.",
+    "sarDeclining": "Spend active rate declining — now {val}%",
+    "engagementRisk": "Engagement slipping. Review activation campaigns and QRIS push.",
+    "reviewActivation": "Schedule activation review with product team this week.",
+    "sarStagnant": "SAR flat at {val}% — only {pct}% change",
+    "monitorSar": "Only {pct}% change. Monitor for another period before acting.",
+    "dpdRising": "30+ DPD rate increasing — now at {val}%",
+    "collectionsPressure": "Collections pressure rising. Review risk segmentation.",
+    "reviewCollections": "Review collections workflow and early-warning triggers.",
+    "investorYoyGrowth": "YoY transactor growth",
+    "investorYoyDetail": "19.2K → 25.4K active spenders",
+    "investorAnnualSpend": "Total annual spend (+28% YoY)",
+    "investorAnnualDetail": "Driven by QRIS & e-commerce",
+    "investorQris": "QRIS adoption in 6 months",
+    "investorQrisDetail": "Fastest-growing payment channel",
+    "investorDpd": "30+ DPD rate (improved)",
+    "investorDpdDetail": "Down from 5.8% — tighter collections"
   },
   "orico": {
     "title": "Orico Reports",
