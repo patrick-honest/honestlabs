@@ -9,6 +9,7 @@ import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { DashboardAreaChart } from "@/components/charts/area-chart";
 import { usePeriod } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
+import { useTheme } from "@/hooks/use-theme";
 import { getPeriodRange, scaleTrendData, scaleMetricValue } from "@/lib/period-data";
 import { applyFilterToData } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
@@ -172,9 +173,9 @@ function StatBox({
 }) {
   return (
     <div className="text-center">
-      <p className="text-[11px] font-medium uppercase tracking-wider text-[#9B94C4]">{label}</p>
-      <p className={cn("font-bold text-[#F0EEFF]", large ? "text-3xl mt-1" : "text-xl mt-0.5")}>{value}</p>
-      {subtext && <p className="text-[11px] text-[#6B6394] mt-0.5">{subtext}</p>}
+      <p className="text-[11px] font-medium uppercase tracking-wider text-[var(--text-secondary)]">{label}</p>
+      <p className={cn("font-bold text-[var(--text-primary)]", large ? "text-3xl mt-1" : "text-xl mt-0.5")}>{value}</p>
+      {subtext && <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{subtext}</p>}
     </div>
   );
 }
@@ -205,12 +206,12 @@ function ComparisonRow({
   }
 
   return (
-    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 py-3 border-b border-[#2D2955]/50 last:border-0">
+    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 py-3 border-b border-[var(--border)]/50 last:border-0">
       {/* QRIS side */}
       <div className="text-right">
         <span className={cn(
           "text-lg font-bold",
-          qrisWins ? "text-[#06D6A0]" : "text-[#F0EEFF]"
+          qrisWins ? "text-[#06D6A0]" : "text-[var(--text-primary)]"
         )}>
           {fmt(qrisValue)}
         </span>
@@ -218,7 +219,7 @@ function ComparisonRow({
 
       {/* Label center */}
       <div className="flex flex-col items-center min-w-[140px]">
-        <span className="text-[11px] font-medium text-[#9B94C4] text-center">{label}</span>
+        <span className="text-[11px] font-medium text-[var(--text-secondary)] text-center">{label}</span>
         {diff !== 0 && (
           <span className={cn(
             "text-[10px] font-semibold mt-0.5 flex items-center gap-0.5",
@@ -234,7 +235,7 @@ function ComparisonRow({
       <div className="text-left">
         <span className={cn(
           "text-lg font-bold",
-          !qrisWins ? "text-[#06D6A0]" : "text-[#F0EEFF]"
+          !qrisWins ? "text-[#06D6A0]" : "text-[var(--text-primary)]"
         )}>
           {fmt(nonQrisValue)}
         </span>
@@ -258,14 +259,14 @@ function HorizontalBar({
   return (
     <div className="flex items-center gap-3 py-1.5">
       <div className="w-[160px] shrink-0 text-right">
-        <span className="text-xs text-[#F0EEFF] font-medium">{label}</span>
+        <span className="text-xs text-[var(--text-primary)] font-medium">{label}</span>
       </div>
-      <div className="flex-1 relative h-7 rounded-md bg-[#1E1B3A] overflow-hidden">
+      <div className="flex-1 relative h-7 rounded-md bg-[var(--surface-elevated)] overflow-hidden">
         <div
           className="absolute inset-y-0 left-0 rounded-md"
           style={{
             width: `${pct}%`,
-            background: "linear-gradient(90deg, #5B22FF 0%, #7C4DFF 100%)",
+            background: "linear-gradient(90deg, var(--accent) 0%, var(--accent-light) 100%)",
           }}
         />
         <div className="absolute inset-0 flex items-center px-2">
@@ -275,7 +276,7 @@ function HorizontalBar({
         </div>
       </div>
       <div className="w-[100px] shrink-0">
-        <span className="text-[11px] text-[#6B6394]">{subLabel}</span>
+        <span className="text-[11px] text-[var(--text-muted)]">{subLabel}</span>
       </div>
     </div>
   );
@@ -288,6 +289,7 @@ function HorizontalBar({
 export default function QrisExperimentPage() {
   const { period, periodLabel } = usePeriod();
   const { filters } = useFilters();
+  const { isDark } = useTheme();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
@@ -327,7 +329,9 @@ export default function QrisExperimentPage() {
         <div
           className="relative overflow-hidden rounded-2xl p-6"
           style={{
-            background: "linear-gradient(135deg, #5B22FF 0%, #7C4DFF 40%, #3D1299 100%)",
+            background: isDark
+              ? "linear-gradient(135deg, #5B22FF 0%, #7C4DFF 40%, #3D1299 100%)"
+              : "linear-gradient(135deg, #D00083 0%, #FF1493 40%, #A00066 100%)",
           }}
         >
           {/* Background decorative elements */}
@@ -382,77 +386,77 @@ export default function QrisExperimentPage() {
         {/* ============================================================ */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Card 1: Adoption Rate */}
-          <div className="rounded-xl border border-[#2D2955] bg-[#141226] p-5">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
             <div className="flex items-center gap-2 mb-3">
-              <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-[#5B22FF]/20">
-                <Users className="h-4 w-4 text-[#7C4DFF]" />
+              <div className={cn("flex items-center justify-center h-8 w-8 rounded-lg", isDark ? "bg-[#5B22FF]/20" : "bg-[#D00083]/20")}>
+                <Users className={cn("h-4 w-4", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")} />
               </div>
-              <span className="text-[11px] font-medium uppercase tracking-wider text-[#9B94C4]">Adoption Rate</span>
+              <span className="text-[11px] font-medium uppercase tracking-wider text-[var(--text-secondary)]">Adoption Rate</span>
             </div>
-            <p className="text-3xl font-bold text-[#F0EEFF]">{scaleMetricValue(currentAdoptionRate, period, true)}%</p>
+            <p className="text-3xl font-bold text-[var(--text-primary)]">{scaleMetricValue(currentAdoptionRate, period, true)}%</p>
             <div className="flex items-center gap-1 mt-1 text-[#06D6A0]">
               <TrendingUp className="h-3 w-3" />
               <span className="text-xs font-medium">+19.2pp since launch</span>
             </div>
-            <p className="text-[10px] text-[#6B6394] mt-2">{fmtNum(scaleMetricValue(totalQrisUsers, period, false))} of {fmtNum(scaleMetricValue(totalUsers, period, false))} users</p>
+            <p className="text-[10px] text-[var(--text-muted)] mt-2">{fmtNum(scaleMetricValue(totalQrisUsers, period, false))} of {fmtNum(scaleMetricValue(totalUsers, period, false))} users</p>
           </div>
 
           {/* Card 2: New QRIS Users */}
-          <div className="rounded-xl border border-[#2D2955] bg-[#141226] p-5">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
             <div className="flex items-center gap-2 mb-3">
               <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-[#06D6A0]/20">
                 <Zap className="h-4 w-4 text-[#06D6A0]" />
               </div>
-              <span className="text-[11px] font-medium uppercase tracking-wider text-[#9B94C4]">New QRIS Users</span>
+              <span className="text-[11px] font-medium uppercase tracking-wider text-[var(--text-secondary)]">New QRIS Users</span>
             </div>
-            <p className="text-3xl font-bold text-[#F0EEFF]">{fmtNum(scaleMetricValue(totalNewUsers, period, false))}</p>
+            <p className="text-3xl font-bold text-[var(--text-primary)]">{fmtNum(scaleMetricValue(totalNewUsers, period, false))}</p>
             <div className="flex items-center gap-1 mt-1 text-[#06D6A0]">
               <TrendingUp className="h-3 w-3" />
               <span className="text-xs font-medium">870 this week</span>
             </div>
-            <p className="text-[10px] text-[#6B6394] mt-2">Cumulative over experiment period</p>
+            <p className="text-[10px] text-[var(--text-muted)] mt-2">Cumulative over experiment period</p>
           </div>
 
           {/* Card 3: Total QRIS Transactions */}
-          <div className="rounded-xl border border-[#2D2955] bg-[#141226] p-5">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
             <div className="flex items-center gap-2 mb-3">
               <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-[#FFD166]/20">
                 <ShoppingCart className="h-4 w-4 text-[#FFD166]" />
               </div>
-              <span className="text-[11px] font-medium uppercase tracking-wider text-[#9B94C4]">QRIS Transactions</span>
+              <span className="text-[11px] font-medium uppercase tracking-wider text-[var(--text-secondary)]">QRIS Transactions</span>
             </div>
-            <p className="text-3xl font-bold text-[#F0EEFF]">{fmtNum(scaleMetricValue(totalQrisTxns, period, false))}</p>
+            <p className="text-3xl font-bold text-[var(--text-primary)]">{fmtNum(scaleMetricValue(totalQrisTxns, period, false))}</p>
             <div className="flex items-center gap-1 mt-1 text-[#06D6A0]">
               <TrendingUp className="h-3 w-3" />
               <span className="text-xs font-medium">+18% MoM</span>
             </div>
-            <p className="text-[10px] text-[#6B6394] mt-2">Avg {fmtIDR(130_000)} per transaction</p>
+            <p className="text-[10px] text-[var(--text-muted)] mt-2">Avg {fmtIDR(130_000)} per transaction</p>
           </div>
 
           {/* Card 4: QRIS Share of Volume */}
-          <div className="rounded-xl border border-[#2D2955] bg-[#141226] p-5">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
             <div className="flex items-center gap-2 mb-3">
-              <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-[#7C4DFF]/20">
-                <BarChart3 className="h-4 w-4 text-[#7C4DFF]" />
+              <div className={cn("flex items-center justify-center h-8 w-8 rounded-lg", isDark ? "bg-[#7C4DFF]/20" : "bg-[#D00083]/20")}>
+                <BarChart3 className={cn("h-4 w-4", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")} />
               </div>
-              <span className="text-[11px] font-medium uppercase tracking-wider text-[#9B94C4]">QRIS % of Volume</span>
+              <span className="text-[11px] font-medium uppercase tracking-wider text-[var(--text-secondary)]">QRIS % of Volume</span>
             </div>
-            <p className="text-3xl font-bold text-[#F0EEFF]">{scaleMetricValue(parseFloat(qrisShareOfVolume), period, true)}%</p>
+            <p className="text-3xl font-bold text-[var(--text-primary)]">{scaleMetricValue(parseFloat(qrisShareOfVolume), period, true)}%</p>
             <div className="flex items-center gap-1 mt-1 text-[#06D6A0]">
               <TrendingUp className="h-3 w-3" />
               <span className="text-xs font-medium">+12.4pp since launch</span>
             </div>
-            <p className="text-[10px] text-[#6B6394] mt-2">{fmtIDR(latestProfit.qris_volume)} in Feb 2026</p>
+            <p className="text-[10px] text-[var(--text-muted)] mt-2">{fmtIDR(latestProfit.qris_volume)} in Feb 2026</p>
           </div>
         </div>
 
         {/* ============================================================ */}
         {/* SECTION C: QRIS vs Non-QRIS Comparison */}
         {/* ============================================================ */}
-        <div className="rounded-2xl border border-[#2D2955] bg-[#141226] overflow-hidden">
-          <div className="bg-[#1E1B3A] px-6 py-4 border-b border-[#2D2955]">
-            <h3 className="text-base font-semibold text-[#F0EEFF]">User Behavior Comparison</h3>
-            <p className="text-xs text-[#6B6394] mt-0.5">
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
+          <div className="bg-[var(--surface-elevated)] px-6 py-4 border-b border-[var(--border)]">
+            <h3 className="text-base font-semibold text-[var(--text-primary)]">User Behavior Comparison</h3>
+            <p className="text-xs text-[var(--text-muted)] mt-0.5">
               QRIS adopters vs non-adopters across key engagement metrics (last 6 months)
             </p>
           </div>
@@ -461,18 +465,18 @@ export default function QrisExperimentPage() {
             {/* Column headers */}
             <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 mb-4">
               <div className="text-right">
-                <div className="inline-flex items-center gap-2 rounded-full bg-[#5B22FF]/20 px-4 py-1.5">
-                  <QrCode className="h-3.5 w-3.5 text-[#7C4DFF]" />
-                  <span className="text-sm font-semibold text-[#7C4DFF]">QRIS Users</span>
-                  <span className="text-[10px] text-[#6B6394]">({fmtNum(q.user_count)})</span>
+                <div className={cn("inline-flex items-center gap-2 rounded-full px-4 py-1.5", isDark ? "bg-[#5B22FF]/20" : "bg-[#D00083]/20")}>
+                  <QrCode className={cn("h-3.5 w-3.5", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")} />
+                  <span className={cn("text-sm font-semibold", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>QRIS Users</span>
+                  <span className="text-[10px] text-[var(--text-muted)]">({fmtNum(q.user_count)})</span>
                 </div>
               </div>
               <div className="min-w-[140px]" />
               <div className="text-left">
-                <div className="inline-flex items-center gap-2 rounded-full bg-[#9B94C4]/10 px-4 py-1.5">
-                  <CreditCard className="h-3.5 w-3.5 text-[#9B94C4]" />
-                  <span className="text-sm font-semibold text-[#9B94C4]">Non-QRIS Users</span>
-                  <span className="text-[10px] text-[#6B6394]">({fmtNum(nq.user_count)})</span>
+                <div className="inline-flex items-center gap-2 rounded-full bg-[var(--text-secondary)]/10 px-4 py-1.5">
+                  <CreditCard className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
+                  <span className="text-sm font-semibold text-[var(--text-secondary)]">Non-QRIS Users</span>
+                  <span className="text-[10px] text-[var(--text-muted)]">({fmtNum(nq.user_count)})</span>
                 </div>
               </div>
             </div>
@@ -490,7 +494,7 @@ export default function QrisExperimentPage() {
                 <Target className="h-5 w-5 text-[#06D6A0] shrink-0 mt-0.5" />
                 <div>
                   <p className="text-sm font-semibold text-[#06D6A0]">Key Finding</p>
-                  <p className="text-sm text-[#F0EEFF]/80 mt-1 leading-relaxed">
+                  <p className="text-sm text-[var(--text-primary)]/80 mt-1 leading-relaxed">
                     While QRIS transactions have a lower average ticket size (IDR 253K vs IDR 369K),
                     QRIS users transact <span className="font-bold text-[#06D6A0]">2.1x more frequently</span> and
                     spend <span className="font-bold text-[#06D6A0]">45% more in total</span> across all channels.
@@ -517,7 +521,7 @@ export default function QrisExperimentPage() {
             <DashboardLineChart
               data={pAdoptionData}
               lines={[
-                { key: "adoption_rate", color: "#7C4DFF", label: "Adoption Rate %" },
+                { key: "adoption_rate", color: isDark ? "#7C4DFF" : "#D00083", label: "Adoption Rate %" },
               ]}
               xAxisKey="week"
               height={280}
@@ -546,15 +550,15 @@ export default function QrisExperimentPage() {
         {/* ============================================================ */}
         {/* SECTION E: Profitability Analysis */}
         {/* ============================================================ */}
-        <div className="rounded-2xl border border-[#2D2955] bg-[#141226] overflow-hidden">
-          <div className="bg-[#1E1B3A] px-6 py-4 border-b border-[#2D2955]">
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
+          <div className="bg-[var(--surface-elevated)] px-6 py-4 border-b border-[var(--border)]">
             <div className="flex items-center gap-2">
               <div className="flex items-center justify-center h-6 w-6 rounded-md bg-[#FFD166]/20">
                 <CreditCard className="h-3.5 w-3.5 text-[#FFD166]" />
               </div>
               <div>
-                <h3 className="text-base font-semibold text-[#F0EEFF]">Profitability Analysis</h3>
-                <p className="text-xs text-[#6B6394]">
+                <h3 className="text-base font-semibold text-[var(--text-primary)]">Profitability Analysis</h3>
+                <p className="text-xs text-[var(--text-muted)]">
                   QRIS MDR 0.7% vs Card Interchange ~1.5% &mdash; does higher engagement offset lower per-txn revenue?
                 </p>
               </div>
@@ -564,16 +568,16 @@ export default function QrisExperimentPage() {
           <div className="p-6 space-y-6">
             {/* Summary stat boxes */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="rounded-xl bg-[#1E1B3A] border border-[#2D2955] p-4">
+              <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] p-4">
                 <StatBox label="QRIS Interchange (Feb)" value={fmtIDR(122_000_000)} subtext="0.7% MDR" />
               </div>
-              <div className="rounded-xl bg-[#1E1B3A] border border-[#2D2955] p-4">
+              <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] p-4">
                 <StatBox label="Card Interchange (Feb)" value={fmtIDR(1_020_000_000)} subtext="~1.5% rate" />
               </div>
-              <div className="rounded-xl bg-[#1E1B3A] border border-[#2D2955] p-4">
+              <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] p-4">
                 <StatBox label="QRIS User Total Spend" value={fmtIDR(52_300_000_000)} subtext="All channels" />
               </div>
-              <div className="rounded-xl bg-[#1E1B3A] border border-[#2D2955] p-4">
+              <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] p-4">
                 <StatBox label="Non-QRIS User Spend" value={fmtIDR(51_400_000_000)} subtext="All channels" />
               </div>
             </div>
@@ -581,11 +585,11 @@ export default function QrisExperimentPage() {
             {/* Revenue comparison chart */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div>
-                <h4 className="text-sm font-semibold text-[#F0EEFF] mb-3">Interchange Revenue (Monthly)</h4>
+                <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Interchange Revenue (Monthly)</h4>
                 <DashboardBarChart
                   data={pProfitabilityData}
                   bars={[
-                    { key: "qris_interchange", color: "#7C4DFF", label: "QRIS Interchange" },
+                    { key: "qris_interchange", color: isDark ? "#7C4DFF" : "#D00083", label: "QRIS Interchange" },
                     { key: "card_interchange", color: "#06D6A0", label: "Card Interchange" },
                   ]}
                   xAxisKey="month"
@@ -594,12 +598,12 @@ export default function QrisExperimentPage() {
               </div>
 
               <div>
-                <h4 className="text-sm font-semibold text-[#F0EEFF] mb-3">Revenue per User (Monthly)</h4>
+                <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Revenue per User (Monthly)</h4>
                 <DashboardLineChart
                   data={pRevenuePerUserData}
                   lines={[
-                    { key: "qris_rev_per_user", color: "#7C4DFF", label: "QRIS Users" },
-                    { key: "non_qris_rev_per_user", color: "#9B94C4", label: "Non-QRIS Users" },
+                    { key: "qris_rev_per_user", color: isDark ? "#7C4DFF" : "#D00083", label: "QRIS Users" },
+                    { key: "non_qris_rev_per_user", color: isDark ? "#9B94C4" : "#888888", label: "Non-QRIS Users" },
                   ]}
                   xAxisKey="month"
                   height={260}
@@ -610,12 +614,12 @@ export default function QrisExperimentPage() {
 
             {/* Total spend by user segment */}
             <div>
-              <h4 className="text-sm font-semibold text-[#F0EEFF] mb-3">Total Spend by User Segment (Monthly)</h4>
+              <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Total Spend by User Segment (Monthly)</h4>
               <DashboardAreaChart
                 data={pProfitabilityData}
                 areas={[
-                  { key: "qris_user_spend", color: "#7C4DFF", label: "QRIS User Spend (all channels)" },
-                  { key: "non_qris_user_spend", color: "#2D2955", label: "Non-QRIS User Spend" },
+                  { key: "qris_user_spend", color: isDark ? "#7C4DFF" : "#D00083", label: "QRIS User Spend (all channels)" },
+                  { key: "non_qris_user_spend", color: isDark ? "#2D2955" : "#E0D6F2", label: "Non-QRIS User Spend" },
                 ]}
                 xAxisKey="month"
                 height={280}
@@ -624,14 +628,14 @@ export default function QrisExperimentPage() {
             </div>
 
             {/* Profitability insight callout */}
-            <div className="rounded-xl bg-[#5B22FF]/10 border border-[#5B22FF]/20 p-4">
+            <div className={cn("rounded-xl border p-4", isDark ? "bg-[#5B22FF]/10 border-[#5B22FF]/20" : "bg-[#D00083]/10 border-[#D00083]/20")}>
               <div className="flex items-start gap-3">
-                <TrendingUp className="h-5 w-5 text-[#7C4DFF] shrink-0 mt-0.5" />
+                <TrendingUp className={cn("h-5 w-5 shrink-0 mt-0.5", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")} />
                 <div>
-                  <p className="text-sm font-semibold text-[#7C4DFF]">Profitability Verdict</p>
-                  <p className="text-sm text-[#F0EEFF]/80 mt-1 leading-relaxed">
+                  <p className={cn("text-sm font-semibold", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>Profitability Verdict</p>
+                  <p className="text-sm text-[var(--text-primary)]/80 mt-1 leading-relaxed">
                     Although QRIS interchange per transaction is less than half the card rate (0.7% vs 1.5%),
-                    the <span className="font-bold text-[#7C4DFF]">total revenue generated per QRIS user is 2.5x higher</span> (IDR 24.8K vs IDR 10.2K per month).
+                    the <span className={cn("font-bold", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>total revenue generated per QRIS user is 2.5x higher</span> (IDR 24.8K vs IDR 10.2K per month).
                     This is because QRIS users are significantly more active across all channels.
                     By February 2026, QRIS user total spend has surpassed non-QRIS user spend despite representing only 27% of users,
                     demonstrating that QRIS adoption is a strong predictor of high-value customer behavior.
@@ -645,10 +649,10 @@ export default function QrisExperimentPage() {
         {/* ============================================================ */}
         {/* SECTION F: QRIS Merchant Categories */}
         {/* ============================================================ */}
-        <div className="rounded-2xl border border-[#2D2955] bg-[#141226] overflow-hidden">
-          <div className="bg-[#1E1B3A] px-6 py-4 border-b border-[#2D2955]">
-            <h3 className="text-base font-semibold text-[#F0EEFF]">QRIS Merchant Categories</h3>
-            <p className="text-xs text-[#6B6394] mt-0.5">Top categories by transaction count where QRIS is used</p>
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
+          <div className="bg-[var(--surface-elevated)] px-6 py-4 border-b border-[var(--border)]">
+            <h3 className="text-base font-semibold text-[var(--text-primary)]">QRIS Merchant Categories</h3>
+            <p className="text-xs text-[var(--text-muted)] mt-0.5">Top categories by transaction count where QRIS is used</p>
           </div>
 
           <div className="p-6">
@@ -664,7 +668,7 @@ export default function QrisExperimentPage() {
               ))}
             </div>
 
-            <div className="mt-4 flex items-center gap-6 text-[11px] text-[#6B6394]">
+            <div className="mt-4 flex items-center gap-6 text-[11px] text-[var(--text-muted)]">
               <span>Bar width = transaction count</span>
               <span>Right column = total spend</span>
             </div>
@@ -677,11 +681,11 @@ export default function QrisExperimentPage() {
         <ActionItems section="QRIS Experiment" items={actionItems} />
 
         {/* Footer note */}
-        <div className="rounded-xl bg-[#1E1B3A] border border-[#2D2955] px-6 py-4">
-          <p className="text-xs text-[#6B6394] leading-relaxed">
-            <span className="font-semibold text-[#9B94C4]">Methodology:</span>{" "}
-            QRIS transactions are identified by <code className="text-[#7C4DFF] bg-[#5B22FF]/10 px-1 rounded">fx_dw007_txn_typ = &apos;RA&apos;</code> and{" "}
-            <code className="text-[#7C4DFF] bg-[#5B22FF]/10 px-1 rounded">fx_dw007_rte_dest = &apos;L&apos;</code>.
+        <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] px-6 py-4">
+          <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+            <span className="font-semibold text-[var(--text-secondary)]">Methodology:</span>{" "}
+            QRIS transactions are identified by <code className={cn("px-1 rounded", isDark ? "text-[#7C4DFF] bg-[#5B22FF]/10" : "text-[#D00083] bg-[#D00083]/10")}>fx_dw007_txn_typ = &apos;RA&apos;</code> and{" "}
+            <code className={cn("px-1 rounded", isDark ? "text-[#7C4DFF] bg-[#5B22FF]/10" : "text-[#D00083] bg-[#D00083]/10")}>fx_dw007_rte_dest = &apos;L&apos;</code>.
             Spend data is based on <strong>authorized transactions</strong>. Interchange estimates use 0.7% MDR for QRIS and ~1.5% weighted average for card transactions.
             &quot;QRIS Users&quot; are customers who have made at least one QRIS transaction during the experiment period.
             All spend figures include both QRIS and non-QRIS transactions for each user segment.

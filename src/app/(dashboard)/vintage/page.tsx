@@ -9,6 +9,7 @@ import { DashboardLineChart } from "@/components/charts/line-chart";
 import { usePeriod } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/hooks/use-theme";
 import { getPeriodRange } from "@/lib/period-data";
 import { getFilterMultiplier, hasActiveFilters } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
@@ -149,39 +150,39 @@ const weeklyHeatmapData: Record<ViewMode, (number | null)[][]> = {
   spend: weeklySpendHeatmap,
 };
 
-function getDelinquencyColor(value: number): string {
-  if (value <= 1.0) return "bg-emerald-900/60 text-emerald-300";
-  if (value <= 2.0) return "bg-emerald-800/40 text-emerald-300";
-  if (value <= 3.0) return "bg-yellow-900/50 text-yellow-300";
-  if (value <= 4.0) return "bg-orange-900/50 text-orange-300";
-  return "bg-red-900/60 text-red-300";
+function getDelinquencyColor(value: number, isDark: boolean): string {
+  if (value <= 1.0) return isDark ? "bg-emerald-900/60 text-emerald-300" : "bg-emerald-100 text-emerald-800";
+  if (value <= 2.0) return isDark ? "bg-emerald-800/40 text-emerald-300" : "bg-emerald-50 text-emerald-700";
+  if (value <= 3.0) return isDark ? "bg-yellow-900/50 text-yellow-300" : "bg-yellow-100 text-yellow-800";
+  if (value <= 4.0) return isDark ? "bg-orange-900/50 text-orange-300" : "bg-orange-100 text-orange-800";
+  return isDark ? "bg-red-900/60 text-red-300" : "bg-red-100 text-red-800";
 }
 
-function getActivationColor(value: number): string {
-  if (value >= 80) return "bg-emerald-900/60 text-emerald-300";
-  if (value >= 70) return "bg-emerald-800/40 text-emerald-300";
-  if (value >= 60) return "bg-yellow-900/50 text-yellow-300";
-  if (value >= 50) return "bg-orange-900/50 text-orange-300";
-  return "bg-red-900/60 text-red-300";
+function getActivationColor(value: number, isDark: boolean): string {
+  if (value >= 80) return isDark ? "bg-emerald-900/60 text-emerald-300" : "bg-emerald-100 text-emerald-800";
+  if (value >= 70) return isDark ? "bg-emerald-800/40 text-emerald-300" : "bg-emerald-50 text-emerald-700";
+  if (value >= 60) return isDark ? "bg-yellow-900/50 text-yellow-300" : "bg-yellow-100 text-yellow-800";
+  if (value >= 50) return isDark ? "bg-orange-900/50 text-orange-300" : "bg-orange-100 text-orange-800";
+  return isDark ? "bg-red-900/60 text-red-300" : "bg-red-100 text-red-800";
 }
 
-function getLossColor(value: number): string {
-  if (value <= 0.2) return "bg-emerald-900/60 text-emerald-300";
-  if (value <= 0.5) return "bg-emerald-800/40 text-emerald-300";
-  if (value <= 0.8) return "bg-yellow-900/50 text-yellow-300";
-  if (value <= 1.0) return "bg-orange-900/50 text-orange-300";
-  return "bg-red-900/60 text-red-300";
+function getLossColor(value: number, isDark: boolean): string {
+  if (value <= 0.2) return isDark ? "bg-emerald-900/60 text-emerald-300" : "bg-emerald-100 text-emerald-800";
+  if (value <= 0.5) return isDark ? "bg-emerald-800/40 text-emerald-300" : "bg-emerald-50 text-emerald-700";
+  if (value <= 0.8) return isDark ? "bg-yellow-900/50 text-yellow-300" : "bg-yellow-100 text-yellow-800";
+  if (value <= 1.0) return isDark ? "bg-orange-900/50 text-orange-300" : "bg-orange-100 text-orange-800";
+  return isDark ? "bg-red-900/60 text-red-300" : "bg-red-100 text-red-800";
 }
 
-function getSpendColor(value: number): string {
-  if (value >= 2.0) return "bg-emerald-900/60 text-emerald-300";
-  if (value >= 1.5) return "bg-emerald-800/40 text-emerald-300";
-  if (value >= 1.0) return "bg-yellow-900/50 text-yellow-300";
-  if (value >= 0.5) return "bg-orange-900/50 text-orange-300";
-  return "bg-red-900/60 text-red-300";
+function getSpendColor(value: number, isDark: boolean): string {
+  if (value >= 2.0) return isDark ? "bg-emerald-900/60 text-emerald-300" : "bg-emerald-100 text-emerald-800";
+  if (value >= 1.5) return isDark ? "bg-emerald-800/40 text-emerald-300" : "bg-emerald-50 text-emerald-700";
+  if (value >= 1.0) return isDark ? "bg-yellow-900/50 text-yellow-300" : "bg-yellow-100 text-yellow-800";
+  if (value >= 0.5) return isDark ? "bg-orange-900/50 text-orange-300" : "bg-orange-100 text-orange-800";
+  return isDark ? "bg-red-900/60 text-red-300" : "bg-red-100 text-red-800";
 }
 
-const colorFns: Record<ViewMode, (v: number) => string> = {
+const colorFns: Record<ViewMode, (v: number, isDark: boolean) => string> = {
   delinquency: getDelinquencyColor,
   activation: getActivationColor,
   loss: getLossColor,
@@ -283,6 +284,7 @@ const activationByVintageInsights: ChartInsight[] = [
 export default function VintagePage() {
   const { period, periodLabel } = usePeriod();
   const { filters } = useFilters();
+  const { isDark } = useTheme();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
   const [viewMode, setViewMode] = useState<ViewMode>("delinquency");
   const [timeFrame, setTimeFrame] = useState<TimeFrame>("monthly");
@@ -381,7 +383,7 @@ export default function VintagePage() {
                         <span
                           className={cn(
                             "inline-block w-full rounded px-2 py-1 text-xs font-medium",
-                            getColor(val)
+                            getColor(val, isDark)
                           )}
                         >
                           {val.toFixed(1)}{viewMode === "spend" ? "M" : "%"}
