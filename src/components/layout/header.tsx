@@ -24,6 +24,7 @@ import {
 import { HeaderFilterDropdown } from "@/components/filters/header-filter-dropdown";
 import { getVisibleFilters, isFilterVisible, type FilterKey } from "@/lib/page-filter-config";
 import { Sun, Moon, Calendar, SlidersHorizontal, ChevronDown, X } from "lucide-react";
+import { DateRangePicker } from "@/components/layout/date-range-picker";
 import type { Cycle } from "@/types/reports";
 
 const CYCLES: { value: Cycle; label: string }[] = [
@@ -183,8 +184,16 @@ export function Header({ title }: HeaderProps) {
 
           <div className="h-3.5 w-px bg-[var(--border)] shrink-0" />
 
-          {/* Date range chip */}
-          <div className="flex items-center gap-1">
+          {/* Date range chip — clickable for calendar picker */}
+          <DateRangePicker
+            startDate={dateRange.start}
+            endDate={dateRange.end}
+            onApply={(start, end) => {
+              // For now, clicking apply doesn't override the period system
+              // but the calendar provides visual date context
+              console.log("Date range selected:", start, end);
+            }}
+          >
             <Calendar className={cn("h-3 w-3", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")} />
             <span className={cn("text-[10px] font-semibold", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>
               {dateRange.label}
@@ -192,7 +201,7 @@ export function Header({ title }: HeaderProps) {
             {comparisonMode !== "none" && (
               <span className="text-[9px] text-[var(--text-muted)]">vs {prevDateRange.label}</span>
             )}
-          </div>
+          </DateRangePicker>
 
           <div className="h-3.5 w-px bg-[var(--border)] shrink-0" />
 
