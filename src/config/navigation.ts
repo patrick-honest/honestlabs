@@ -10,7 +10,18 @@ export interface NavItem {
 export const navigation: NavItem[] = [
   { label: "User Search", href: "/search", icon: "Fingerprint" },
   { label: "Dashboard", href: "/dashboard", icon: "LayoutDashboard" },
-  { label: "Reports", href: "/reports", icon: "FileBarChart" },
+
+  // ── Reports ──
+  {
+    label: "Reports",
+    href: "#",
+    icon: "FileBarChart",
+    children: [
+      { label: "Orico Reports", href: "/orico", icon: "Building2" },
+      { label: "QRIS Experiment", href: "/qris-experiment", icon: "QrCode" },
+      { label: "Report Archive", href: "/reports", icon: "Archive" },
+    ],
+  },
 
   // ── Deep Dive: Growth ──
   {
@@ -66,11 +77,9 @@ export const navigation: NavItem[] = [
     ],
   },
 
-  // ── Other sections ──
+  // ── Analytics ──
   { label: "Vintage Analysis", href: "/vintage", icon: "Layers", divider: "Analytics" },
-  { label: "Orico Reports", href: "/orico", icon: "Building2" },
   { label: "Quick Analysis", href: "/quick-analysis", icon: "ArrowLeftRight" },
-  { label: "QRIS Experiment", href: "/qris-experiment", icon: "QrCode" },
   { label: "Market News", href: "/news", icon: "Newspaper" },
   { label: "Definitions", href: "/metrics", icon: "BookOpen", divider: "Reference" },
   { label: "Admin", href: "/admin", icon: "Settings" },
