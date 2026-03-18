@@ -30,8 +30,7 @@ export async function getVintageCohorts(
         FORMAT_DATE('%Y-%m', DATE(MIN(timestamp), 'Asia/Jakarta')) AS cohort_month
       FROM ${TABLES.decision_completed}
       WHERE decision = 'APPROVED'
-        AND (is_prepaid_card_applicable IS NULL OR is_prepaid_card_applicable = FALSE)
-        AND (is_account_opening_fee_applicable IS NULL OR is_account_opening_fee_applicable = FALSE)
+        -- All product types included (prepaid + opening fee no longer excluded)
       GROUP BY user_id
       HAVING DATE(MIN(timestamp), 'Asia/Jakarta') BETWEEN @startMonth AND @endMonth
     ),
