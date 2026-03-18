@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
+import useSWR from "swr";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
@@ -9,11 +10,13 @@ import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { DashboardAreaChart } from "@/components/charts/area-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
-import { usePeriod } from "@/hooks/use-period";
+import { usePeriod, useDateParams } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
 import { getPeriodRange, scaleTrendData, scaleMetricValue, getPeriodInsightLabels } from "@/lib/period-data";
 import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 const AS_OF = "Mar 15, 2026";
 
@@ -103,12 +106,55 @@ const actionItems: ActionItem[] = [
 export default function AppHealthPage() {
   const { period, periodLabel, timeRangeMultiplier } = usePeriod();
   const { filters } = useFilters();
+  const { dateParams } = useDateParams();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
-  const pActiveUsers = useMemo(() => applyFilterToData(scaleTrendData(activeUsersTrend, period), filters), [period, filters]);
-  const pSessionMetrics = useMemo(() => applyFilterToData(scaleTrendData(sessionMetrics, period), filters), [period, filters]);
-  const pErrorRate = useMemo(() => applyFilterToData(scaleTrendData(errorRateTrend, period), filters), [period, filters]);
+  const { data: apiData } = useSWR(
+    `/api/app-health?${dateParams}`,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 300_000 },
+  );
+
+  // ── API-backed data with mock fallbacks ──
+  const apiActiveUsers = useMemo(() => {
+    if (!apiData?.activeUsers?.length) return activeUsersTrend;
+    return apiData.activeUsers.map((r: { week_start: string; dau: number; wau: number; mau: number }) => ({
+      date: r.week_start,
+      dau: r.dau,
+      wau: r.wau,
+      mau: r.mau,
+    }));
+  }, [apiData]);
+
+  const apiSessionMetrics = useMemo(() => {
+    if (!apiData?.sessionMetrics?.length) return sessionMetrics;
+    return apiData.sessionMetrics.map((r: { week_start: string; avg_screens_per_session: number; avg_session_duration_sec: number; error_rate: number }) => ({
+      date: r.week_start,
+      avgScreens: r.avg_screens_per_session,
+      avgDuration: r.avg_session_duration_sec,
+    }));
+  }, [apiData]);
+
+  const apiErrorRate = useMemo(() => {
+    if (!apiData?.sessionMetrics?.length) return errorRateTrend;
+    return apiData.sessionMetrics.map((r: { week_start: string; error_rate: number }) => ({
+      date: r.week_start,
+      rate: r.error_rate,
+    }));
+  }, [apiData]);
+
+  const apiTopScreens = useMemo(() => {
+    if (!apiData?.topScreens?.length) return topScreens;
+    return apiData.topScreens.map((r: { screen_name: string; view_count: number }) => ({
+      screen: r.screen_name,
+      views: r.view_count,
+    }));
+  }, [apiData]);
+
+  const pActiveUsers = useMemo(() => applyFilterToData(scaleTrendData(apiActiveUsers, period), filters), [apiActiveUsers, period, filters]);
+  const pSessionMetrics = useMemo(() => applyFilterToData(scaleTrendData(apiSessionMetrics, period), filters), [apiSessionMetrics, period, filters]);
+  const pErrorRate = useMemo(() => applyFilterToData(scaleTrendData(apiErrorRate, period), filters), [apiErrorRate, period, filters]);
 
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
 
@@ -201,7 +247,7 @@ export default function AppHealthPage() {
         onRefresh={handleRefresh}
       >
         <DashboardLineChart
-          data={pActiveUsers}
+          data={pActiveUsers as Record<string, string | number>[]}
           lines={[
             { key: "dau", color: "#3b82f6", label: "DAU" },
             { key: "wau", color: "#8b5cf6", label: "WAU" },
@@ -222,7 +268,7 @@ export default function AppHealthPage() {
           onRefresh={handleRefresh}
         >
           <DashboardAreaChart
-            data={pSessionMetrics}
+            data={pSessionMetrics as Record<string, string | number>[]}
             areas={[{ key: "avgScreens", color: "#8b5cf6", label: "Avg Screens/Session" }]}
             height={260}
           />
@@ -237,7 +283,7 @@ export default function AppHealthPage() {
           onRefresh={handleRefresh}
         >
           <DashboardLineChart
-            data={pErrorRate}
+            data={pErrorRate as Record<string, string | number>[]}
             lines={[{ key: "rate", color: "#ef4444", label: "Error Rate %" }]}
             valueType="percent"
             height={260}
@@ -272,7 +318,7 @@ export default function AppHealthPage() {
         onRefresh={handleRefresh}
       >
         <DashboardBarChart
-          data={topScreens}
+          data={apiTopScreens}
           bars={[{ key: "views", color: "#06b6d4", label: "Views" }]}
           xAxisKey="screen"
           height={360}

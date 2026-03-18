@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
+import useSWR from "swr";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
@@ -8,13 +9,15 @@ import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
-import { usePeriod } from "@/hooks/use-period";
+import { usePeriod, useDateParams } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
 import { getPeriodRange, scaleTrendData, scaleMetricValue, getPeriodInsightLabels } from "@/lib/period-data";
 import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 
 const AS_OF = "Mar 15, 2026";
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 // Mock data — Referral funnel trend (monthly)
 const referralFunnelTrend = [
@@ -75,12 +78,46 @@ const actionItems: ActionItem[] = [
 export default function ReferralPage() {
   const { period, periodLabel, timeRangeMultiplier } = usePeriod();
   const { filters } = useFilters();
+  const { dateParams } = useDateParams();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
-  const periodFunnelTrend = useMemo(() => applyFilterToData(scaleTrendData(referralFunnelTrend, period), filters), [period, filters]);
-  const periodChannelAttribution = useMemo(() => applyFilterToData(scaleTrendData(channelAttribution, period, "channel"), filters), [period, filters]);
-  const periodConversionRate = useMemo(() => applyFilterToData(scaleTrendData(conversionRateTrend, period), filters), [period, filters]);
+  const { data: apiData } = useSWR(
+    `/api/referral?${dateParams}`,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 300_000 },
+  );
+
+  // ── API-backed data with mock fallbacks ──
+  const apiFunnelTrend = useMemo((): { date: string; started: number; approved: number }[] => {
+    if (!apiData?.referralFunnelTrend) return referralFunnelTrend;
+    return apiData.referralFunnelTrend.map((r: { month: string; shared: number; started: number; approved: number }) => ({
+      date: r.month,
+      started: r.started,
+      approved: r.approved,
+    }));
+  }, [apiData]);
+
+  const apiChannelAttribution = useMemo((): { channel: string; started: number; approved: number }[] => {
+    if (!apiData?.referralByChannel) return channelAttribution;
+    return apiData.referralByChannel.map((r: { referring_source: string; referring_medium: string; started_count: number; approved_count: number; conversion_rate: number }) => ({
+      channel: r.referring_source,
+      started: r.started_count,
+      approved: r.approved_count,
+    }));
+  }, [apiData]);
+
+  const apiConversionRate = useMemo((): { date: string; rate: number }[] => {
+    if (!apiData?.referralApprovalRate) return conversionRateTrend;
+    return apiData.referralApprovalRate.map((r: { month: string; started: number; approved: number; rate: number }) => ({
+      date: r.month,
+      rate: r.rate,
+    }));
+  }, [apiData]);
+
+  const periodFunnelTrend = useMemo(() => applyFilterToData(scaleTrendData(apiFunnelTrend, period), filters), [period, filters, apiFunnelTrend]);
+  const periodChannelAttribution = useMemo(() => applyFilterToData(scaleTrendData(apiChannelAttribution, period, "channel"), filters), [period, filters, apiChannelAttribution]);
+  const periodConversionRate = useMemo(() => applyFilterToData(scaleTrendData(apiConversionRate, period), filters), [period, filters, apiConversionRate]);
 
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
 

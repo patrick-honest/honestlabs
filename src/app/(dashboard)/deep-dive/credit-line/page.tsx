@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
+import useSWR from "swr";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
@@ -9,13 +10,15 @@ import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { DashboardAreaChart } from "@/components/charts/area-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
-import { usePeriod } from "@/hooks/use-period";
+import { usePeriod, useDateParams } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
 import { getPeriodRange, scaleTrendData, scaleMetricValue, getPeriodInsightLabels } from "@/lib/period-data";
 import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 
 const AS_OF = "Mar 15, 2026";
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 // Mock data — CLI volume trend (monthly)
 const cliVolumeTrend = [
@@ -83,13 +86,47 @@ const actionItems: ActionItem[] = [
 export default function CreditLinePage() {
   const { period, periodLabel, timeRangeMultiplier } = usePeriod();
   const { filters } = useFilters();
+  const { dateParams } = useDateParams();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
-  const periodVolumeTrend = useMemo(() => applyFilterToData(scaleTrendData(cliVolumeTrend, period), filters), [period, filters]);
+  const { data: apiData } = useSWR(
+    `/api/credit-line?${dateParams}`,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 300_000 },
+  );
+
+  // ── API-backed data with mock fallbacks ──
+  const apiVolumeTrend = useMemo((): { date: string; count: number; uniqueUsers: number }[] => {
+    if (!apiData?.cliVolumeTrend) return cliVolumeTrend;
+    return apiData.cliVolumeTrend.map((r: { month: string; cli_count: number; total_increase_idr: number }) => ({
+      date: r.month,
+      count: r.cli_count,
+      uniqueUsers: 0,
+    }));
+  }, [apiData]);
+
+  const apiUpdateType = useMemo((): { type: string; count: number; avgIncrease: number }[] => {
+    if (!apiData?.cliByType) return updateTypeBreakdown;
+    return apiData.cliByType.map((r: { credit_line_update_type: string; cli_count: number; avg_credit_line_change: number; unique_users: number }) => ({
+      type: r.credit_line_update_type,
+      count: r.cli_count,
+      avgIncrease: r.avg_credit_line_change,
+    }));
+  }, [apiData]);
+
+  const apiByRiskCategory = useMemo((): { bucket: string; count: number }[] | null => {
+    if (!apiData?.cliByRiskCategory) return null;
+    return apiData.cliByRiskCategory.map((r: { risk_category: string; count: number; avg_increase: number }) => ({
+      bucket: r.risk_category,
+      count: r.count,
+    }));
+  }, [apiData]);
+
+  const periodVolumeTrend = useMemo(() => applyFilterToData(scaleTrendData(apiVolumeTrend, period), filters), [period, filters, apiVolumeTrend]);
   const periodAvgIncrease = useMemo(() => applyFilterToData(scaleTrendData(avgIncreaseTrend, period), filters), [period, filters]);
-  const periodUpdateType = useMemo(() => applyFilterToData(scaleTrendData(updateTypeBreakdown, period, "type"), filters), [period, filters]);
-  const periodDistribution = useMemo(() => applyFilterToData(scaleTrendData(cliDistribution, period, "bucket"), filters), [period, filters]);
+  const periodUpdateType = useMemo(() => applyFilterToData(scaleTrendData(apiUpdateType, period, "type"), filters), [period, filters, apiUpdateType]);
+  const periodDistribution = useMemo(() => applyFilterToData(scaleTrendData(apiByRiskCategory ?? cliDistribution, period, "bucket"), filters), [period, filters, apiByRiskCategory]);
 
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
 

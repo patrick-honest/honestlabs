@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useCallback } from "react";
+import useSWR from "swr";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
@@ -9,13 +10,15 @@ import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { DashboardAreaChart } from "@/components/charts/area-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
-import { usePeriod } from "@/hooks/use-period";
+import { usePeriod, useDateParams } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
 import { getPeriodRange, scaleTrendData, scaleMetricValue, getPeriodInsightLabels } from "@/lib/period-data";
 import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 
 const AS_OF = "Mar 15, 2026";
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 // Mock data — Points awarded vs redeemed trend (monthly)
 const pointsFlowTrend = [
@@ -91,20 +94,54 @@ const actionItems: ActionItem[] = [
 export default function PointsProgramPage() {
   const { period, periodLabel, timeRangeMultiplier } = usePeriod();
   const { filters } = useFilters();
+  const { dateParams } = useDateParams();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
+  const { data: apiData } = useSWR(
+    `/api/points-program?${dateParams}`,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 300_000 },
+  );
+
+  // ── API-backed data with mock fallbacks ──
+  const apiFlowTrend = useMemo((): { date: string; awarded: number; redeemed: number }[] => {
+    if (!apiData?.pointsFlowTrend) return pointsFlowTrend;
+    return apiData.pointsFlowTrend.map((r: { month: string; earned: number; redeemed: number; expired: number; net: number }) => ({
+      date: r.month,
+      awarded: r.earned,
+      redeemed: r.redeemed,
+    }));
+  }, [apiData]);
+
+  const apiClosingTrend = useMemo((): { date: string; closing: number }[] => {
+    if (!apiData?.pointsClosingBalance) return closingBalanceTrend;
+    return apiData.pointsClosingBalance.map((r: { month: string; total_points: number; total_members: number }) => ({
+      date: r.month,
+      closing: r.total_points,
+    }));
+  }, [apiData]);
+
+  const apiRedemptionBreakdown = useMemo((): { bucket: string; account_count: number; pct: number }[] | null => {
+    if (!apiData?.redemptionBreakdown) return null;
+    return apiData.redemptionBreakdown.map((r: { category: string; points: number; count: number }) => ({
+      bucket: r.category,
+      account_count: r.count,
+      pct: 0,
+    }));
+  }, [apiData]);
+
   const periodFlowTrend = useMemo(
-    () => applyFilterToData(scaleTrendData(pointsFlowTrend, period), filters),
-    [period, filters],
+    () => applyFilterToData(scaleTrendData(apiFlowTrend, period), filters),
+    [period, filters, apiFlowTrend],
   );
   const periodClosingTrend = useMemo(
-    () => applyFilterToData(scaleTrendData(closingBalanceTrend, period), filters),
-    [period, filters],
+    () => applyFilterToData(scaleTrendData(apiClosingTrend, period), filters),
+    [period, filters, apiClosingTrend],
   );
   const periodDistribution = useMemo(
-    () => applyFilterToData(scaleTrendData(pointsDistribution, period, "bucket"), filters),
-    [period, filters],
+    () => applyFilterToData(scaleTrendData(apiRedemptionBreakdown ?? pointsDistribution, period, "bucket"), filters),
+    [period, filters, apiRedemptionBreakdown],
   );
   const periodExpiryTrend = useMemo(
     () => applyFilterToData(scaleTrendData(expiryTrend, period), filters),

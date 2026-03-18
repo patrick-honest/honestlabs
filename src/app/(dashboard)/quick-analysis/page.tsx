@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
+import useSWR from "swr";
 import {
   ResponsiveContainer,
   LineChart,
@@ -15,10 +16,23 @@ import { cn } from "@/lib/utils";
 import { formatNumber, formatPercent, formatCurrency } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
 import { useCurrency } from "@/hooks/use-currency";
+import { useDateParams } from "@/hooks/use-period";
 import { CohortBuilder, EMPTY_COHORT, type CohortFilters } from "@/components/analysis/cohort-builder";
 import { KpiSelector, AVAILABLE_KPIS, type KpiDefinition } from "@/components/analysis/kpi-selector";
 import { ChartDateRange, type DateRangeOverride } from "@/components/charts/chart-date-range";
 import { BarChart3, Users, GitCompareArrows, CalendarRange, TrendingUp, Info, Upload, FileSpreadsheet, X } from "lucide-react";
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
+
+// Map KPI IDs from the selector to supported BQ metric keys
+const KPI_TO_METRIC_KEY: Record<string, string> = {
+  eligible_to_spend: "eligible_count",
+  spend_activation_rate: "spend_active_rate",
+  active_purchase_rate: "spend_active_rate",
+  total_purchase_volume: "total_spend",
+  dpd_30_rate: "dpd_30_rate",
+  avg_txn_per_user: "transactor_count",
+};
 
 // ── Time range types ─────────────────────────────────────────────────
 
@@ -164,6 +178,7 @@ const GROUP_B_COLORS = ["#f97316", "#fb923c", "#ea580c", "#fdba74"];
 export default function QuickAnalysisPage() {
   const { isDark } = useTheme();
   const { currency } = useCurrency();
+  const { dateParams, startDate, endDate } = useDateParams();
 
   // Cohort state
   const [groupA, setGroupA] = useState<CohortFilters>({ ...EMPTY_COHORT });
@@ -191,10 +206,35 @@ export default function QuickAnalysisPage() {
   const [showSpreadsheetA, setShowSpreadsheetA] = useState(false);
   const [showSpreadsheetB, setShowSpreadsheetB] = useState(false);
 
-  // Chart data
+  // ── Fetch real data for the first selected KPI that has a BQ mapping ──
+  const firstMappedKpi = selectedKpis.find((id) => KPI_TO_METRIC_KEY[id]);
+  const firstMetricKey = firstMappedKpi ? KPI_TO_METRIC_KEY[firstMappedKpi] : null;
+
+  const { data: apiMetricData } = useSWR(
+    firstMetricKey ? `/api/quick-analysis?${dateParams}&metricKey=${firstMetricKey}` : null,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 300_000 },
+  );
+
+  // Chart data — use API data for the mapped KPI, mock for everything else
   const chartData = useMemo(() => {
     return selectedKpis.map((kpiId) => {
       const kpi = AVAILABLE_KPIS.find((k) => k.id === kpiId)!;
+
+      // If this KPI has API data and matches the fetched metric
+      const metricKey = KPI_TO_METRIC_KEY[kpiId];
+      if (metricKey && metricKey === firstMetricKey && apiMetricData?.timeSeries?.length) {
+        const apiSeries = apiMetricData.timeSeries as { date: string; value: number }[];
+        const seriesB = generateMockTimeSeries(kpiId, kpi, timeConfig.timeframe, timeConfig.specialRange, true);
+        const merged = apiSeries.map((pt, i) => ({
+          date: pt.date,
+          groupA: pt.value,
+          groupB: seriesB[i]?.value ?? 0,
+        }));
+        return { kpi, data: merged };
+      }
+
+      // Fallback to mock
       const seriesA = generateMockTimeSeries(kpiId, kpi, timeConfig.timeframe, timeConfig.specialRange, false);
       const seriesB = generateMockTimeSeries(kpiId, kpi, timeConfig.timeframe, timeConfig.specialRange, true);
 
@@ -206,7 +246,7 @@ export default function QuickAnalysisPage() {
 
       return { kpi, data: merged };
     });
-  }, [selectedKpis, timeConfig]);
+  }, [selectedKpis, timeConfig, firstMetricKey, apiMetricData]);
 
   const formatValue = useCallback(
     (value: number, unit: string) => {

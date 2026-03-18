@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
+import useSWR from "swr";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
@@ -8,7 +9,7 @@ import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
-import { usePeriod } from "@/hooks/use-period";
+import { usePeriod, useDateParams } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
 import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
@@ -21,6 +22,8 @@ import {
   Tooltip,
   Legend,
 } from "recharts";
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 const AS_OF = "Mar 15, 2026";
 
@@ -133,16 +136,56 @@ export default function CustomerServicePage() {
   const { period, periodLabel, timeRangeMultiplier } = usePeriod();
   const { filters } = useFilters();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
+  const { dateParams } = useDateParams();
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
+
+  const { data: apiData } = useSWR(
+    `/api/customer-service?${dateParams}`,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 300_000 },
+  );
 
   const handleRefresh = useCallback(async () => {
     await new Promise((r) => setTimeout(r, 800));
   }, []);
 
-  const pTicketVolume = useMemo(() => applyFilterToData(scaleTrendData(ticketVolumeTrend, period), filters), [period, filters]);
-  const pFirstResponse = useMemo(() => applyFilterToData(scaleTrendData(avgFirstResponseTime, period), filters), [period, filters]);
-  const pResolutionTime = useMemo(() => applyFilterToData(scaleTrendData(avgResolutionTime, period), filters), [period, filters]);
-  const pTopReasons = useMemo(() => applyFilterToData(scaleTrendData(topContactReasons, period, "reason"), filters), [period, filters]);
+  // ── API-backed data with mock fallbacks ──
+  const apiTicketVolume = useMemo(() => {
+    if (!apiData?.ticketVolumeTrend?.length) return ticketVolumeTrend;
+    return apiData.ticketVolumeTrend.map((r: { month: string; ticket_count: number }) => ({
+      date: r.month,
+      tickets: r.ticket_count,
+    }));
+  }, [apiData]);
+
+  const apiFirstResponse = useMemo(() => {
+    if (!apiData?.resolutionMetrics?.length) return avgFirstResponseTime;
+    return apiData.resolutionMetrics.map((r: { month: string; avg_first_response_hours: number }) => ({
+      date: r.month,
+      minutes: Math.round(r.avg_first_response_hours * 60 * 100) / 100,
+    }));
+  }, [apiData]);
+
+  const apiResolutionTime = useMemo(() => {
+    if (!apiData?.resolutionMetrics?.length) return avgResolutionTime;
+    return apiData.resolutionMetrics.map((r: { month: string; avg_resolution_hours: number }) => ({
+      date: r.month,
+      hours: r.avg_resolution_hours,
+    }));
+  }, [apiData]);
+
+  const apiTopReasons = useMemo(() => {
+    if (!apiData?.ticketsByCategory?.length) return topContactReasons;
+    return apiData.ticketsByCategory.map((r: { category: string; count: number }) => ({
+      reason: r.category,
+      count: r.count,
+    }));
+  }, [apiData]);
+
+  const pTicketVolume = useMemo(() => applyFilterToData(scaleTrendData(apiTicketVolume, period), filters), [apiTicketVolume, period, filters]);
+  const pFirstResponse = useMemo(() => applyFilterToData(scaleTrendData(apiFirstResponse, period), filters), [apiFirstResponse, period, filters]);
+  const pResolutionTime = useMemo(() => applyFilterToData(scaleTrendData(apiResolutionTime, period), filters), [apiResolutionTime, period, filters]);
+  const pTopReasons = useMemo(() => applyFilterToData(scaleTrendData(apiTopReasons, period, "reason"), filters), [apiTopReasons, period, filters]);
   const pBotVsHuman = useMemo(() => applyFilterToData(scaleTrendData(botVsHuman, period), filters), [period, filters]);
 
   // Sample data (not yet connected)
@@ -238,7 +281,7 @@ export default function CustomerServicePage() {
           asOf={AS_OF}
           dataRange={DATA_RANGE}
           higherIsBetter={false}
-          sparklineData={pTicketVolume.map((d) => d.tickets)}
+          sparklineData={pTicketVolume.map((d: Record<string, unknown>) => d.tickets as number)}
           onRefresh={handleRefresh}
         />
         <MetricCard
@@ -284,7 +327,7 @@ export default function CustomerServicePage() {
         onRefresh={handleRefresh}
       >
         <DashboardLineChart
-          data={pTicketVolume}
+          data={pTicketVolume as Record<string, string | number>[]}
           lines={[{ key: "tickets", color: "#3b82f6", label: "Tickets" }]}
           height={280}
         />
@@ -300,7 +343,7 @@ export default function CustomerServicePage() {
           onRefresh={handleRefresh}
         >
           <DashboardLineChart
-            data={pFirstResponse}
+            data={pFirstResponse as Record<string, string | number>[]}
             lines={[{ key: "minutes", color: "#22c55e", label: "Minutes" }]}
             height={260}
           />
@@ -315,7 +358,7 @@ export default function CustomerServicePage() {
           onRefresh={handleRefresh}
         >
           <DashboardLineChart
-            data={pResolutionTime}
+            data={pResolutionTime as Record<string, string | number>[]}
             lines={[{ key: "hours", color: "#f59e0b", label: "Hours" }]}
             height={260}
           />
@@ -333,7 +376,7 @@ export default function CustomerServicePage() {
           onRefresh={handleRefresh}
         >
           <DashboardBarChart
-            data={pTopReasons}
+            data={pTopReasons as Record<string, string | number>[]}
             bars={[{ key: "count", color: "#3b82f6", label: "Tickets" }]}
             xAxisKey="reason"
             height={320}

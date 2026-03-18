@@ -1,18 +1,21 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import useSWR from "swr";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { DashboardLineChart } from "@/components/charts/line-chart";
-import { usePeriod } from "@/hooks/use-period";
+import { usePeriod, useDateParams } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
 import { getPeriodRange } from "@/lib/period-data";
 import { getFilterMultiplier, hasActiveFilters } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 const AS_OF = "Mar 15, 2026";
 
@@ -286,9 +289,50 @@ export default function VintagePage() {
   const { filters } = useFilters();
   const { isDark } = useTheme();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
+  const { dateParams } = useDateParams();
   const [viewMode, setViewMode] = useState<ViewMode>("delinquency");
   const [timeFrame, setTimeFrame] = useState<TimeFrame>("monthly");
   const filterMultiplier = useMemo(() => getFilterMultiplier(filters), [filters]);
+
+  const { data: apiData } = useSWR(
+    `/api/vintage?${dateParams}`,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 300_000 },
+  );
+
+  // ── Build heatmap from API data when available ──
+  const apiDelinquencyHeatmap = useMemo(() => {
+    if (!apiData?.vintageCohorts?.length) return null;
+    type CohortRow = { cohort_month: string; mob: number; approved_count: number; delinquent_count: number };
+    const rows = apiData.vintageCohorts as CohortRow[];
+    const cohorts = [...new Set(rows.map((r) => r.cohort_month))].sort();
+    const maxMob = Math.max(...rows.map((r) => r.mob));
+    const matrix: (number | null)[][] = [];
+    const labels: string[] = [];
+    const sizes: { cohort_month: string; approved_count: number }[] = [];
+
+    for (const cohort of cohorts) {
+      const cohortRows = rows.filter((r) => r.cohort_month === cohort);
+      const row: (number | null)[] = [];
+      for (let m = 0; m <= Math.min(maxMob, 24); m++) {
+        const match = cohortRows.find((r) => r.mob === m);
+        if (match) {
+          const rate = match.approved_count > 0
+            ? Math.round((match.delinquent_count / match.approved_count) * 10000) / 100
+            : null;
+          row.push(rate);
+        } else {
+          row.push(null);
+        }
+      }
+      matrix.push(row);
+      labels.push(cohort);
+      if (cohortRows.length > 0) {
+        sizes.push({ cohort_month: cohort, approved_count: cohortRows[0].approved_count });
+      }
+    }
+    return { matrix, labels, sizes, maxMob };
+  }, [apiData]);
 
   const handleRefresh = useCallback(async () => {
     await new Promise((r) => setTimeout(r, 800));

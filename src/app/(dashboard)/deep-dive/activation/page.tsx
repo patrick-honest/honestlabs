@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
+import useSWR from "swr";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
@@ -8,7 +9,7 @@ import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
-import { usePeriod } from "@/hooks/use-period";
+import { usePeriod, useDateParams } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
 import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
@@ -16,6 +17,8 @@ import { getPeriodRange, getPeriodInsightLabels, scaleTrendData, scaleMetricValu
 
 const AS_OF = "Mar 15, 2026";
 // DATA_RANGE is now computed inside the component via useMemo
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 // Mock data
 const activationRateTrend = [
@@ -102,14 +105,55 @@ const actionItems: ActionItem[] = [
 export default function ActivationPage() {
   const { period, periodLabel, timeRangeMultiplier } = usePeriod();
   const { filters } = useFilters();
+  const { dateParams } = useDateParams();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
-  const periodActivationRate = useMemo(() => applyFilterToData(scaleTrendData(activationRateTrend, period), filters), [period, filters]);
+  const { data: apiData } = useSWR(
+    `/api/activation?${dateParams}`,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 300_000 },
+  );
+
+  // ── API-backed data with mock fallbacks ──
+  const apiActivationRate = useMemo((): { date: string; rate: number }[] => {
+    if (!apiData?.activationRateTrend) return activationRateTrend;
+    return apiData.activationRateTrend.map((r: { week: string; approved_count: number; activated_count: number; rate: number }) => ({
+      date: r.week,
+      rate: r.rate,
+    }));
+  }, [apiData]);
+
+  const apiDaysToFirstTxn = useMemo((): { days: string; count: number }[] => {
+    if (!apiData?.daysToFirstTransaction) return deliveryToActivation;
+    return apiData.daysToFirstTransaction.map((r: { days_bucket: string; count: number }) => ({
+      days: r.days_bucket,
+      count: r.count,
+    }));
+  }, [apiData]);
+
+  const apiActivationByProduct = useMemo((): { product: string; activated: number; total: number }[] => {
+    if (!apiData?.activationByProductType) return activationByProduct;
+    return apiData.activationByProductType.map((r: { product_type: string; approved: number; activated: number; rate: number }) => ({
+      product: r.product_type,
+      activated: r.activated,
+      total: r.approved,
+    }));
+  }, [apiData]);
+
+  const apiPinSetRate = useMemo((): { date: string; rate: number }[] | null => {
+    if (!apiData?.pinSetRateTrend) return null;
+    return apiData.pinSetRateTrend.map((r: { week: string; decision_count: number; pin_set_count: number; rate: number }) => ({
+      date: r.week,
+      rate: r.rate,
+    }));
+  }, [apiData]);
+
+  const periodActivationRate = useMemo(() => applyFilterToData(scaleTrendData(apiActivationRate, period), filters), [period, filters, apiActivationRate]);
   const periodAvgDays = useMemo(() => applyFilterToData(scaleTrendData(avgDaysToFirstTxn, period), filters), [period, filters]);
   const periodDormancy = useMemo(() => applyFilterToData(scaleTrendData(dormancy, period, "bucket"), filters), [period, filters]);
-  const periodActivationByProduct = useMemo(() => applyFilterToData(scaleTrendData(activationByProduct, period, "product"), filters), [period, filters]);
-  const periodDeliveryToActivation = useMemo(() => applyFilterToData(scaleTrendData(deliveryToActivation, period, "days"), filters), [period, filters]);
+  const periodActivationByProduct = useMemo(() => applyFilterToData(scaleTrendData(apiActivationByProduct, period, "product"), filters), [period, filters, apiActivationByProduct]);
+  const periodDeliveryToActivation = useMemo(() => applyFilterToData(scaleTrendData(apiDaysToFirstTxn, period, "days"), filters), [period, filters, apiDaysToFirstTxn]);
 
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
 
