@@ -249,12 +249,30 @@ export async function searchUserById(
       WHERE user_id = @userId
     ),
 
-    videocall AS (
+    -- Videocall verified: prefer DW005 f9_dw005_1st_unblk_all_mtd_tms, fallback to Rudderstack event
+    videocall_dw AS (
+      SELECT
+        FORMAT_DATETIME('%Y-%m-%d', DATETIME(dw5.f9_dw005_1st_unblk_all_mtd_tms, 'Asia/Jakarta')) AS videocall_verified_date
+      FROM ${TABLES.principal_card_updates} dw5
+      JOIN loc ON dw5.f9_dw005_loc_acct = loc.loc_acct
+      WHERE dw5.f9_dw005_1st_unblk_all_mtd_tms IS NOT NULL
+      ORDER BY dw5.f9_dw005_upd_tms DESC
+      LIMIT 1
+    ),
+
+    videocall_rs AS (
       SELECT
         FORMAT_DATE('%Y-%m-%d', DATE(MIN(timestamp), 'Asia/Jakarta')) AS videocall_verified_date
       FROM ${TABLES.milestone_complete}
       WHERE user_id = @userId
-        AND application_status = 'Videocall verified'
+        AND application_status IN ('Videocall verified', 'Decision to skip')
+    ),
+
+    videocall AS (
+      SELECT COALESCE(
+        (SELECT videocall_verified_date FROM videocall_dw),
+        (SELECT videocall_verified_date FROM videocall_rs)
+      ) AS videocall_verified_date
     ),
 
     card_status_cte AS (
