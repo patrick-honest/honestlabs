@@ -36,6 +36,7 @@ export interface UserSearchResult {
   current_min_due: number | null;
   current_dpd: number | null;
   collections_status: string | null; // fx_dw004_coll_stat_cde
+  credit_risk_category: string | null; // from decision_completed
 
   // Banking
   savings_account_number: string | null;
@@ -259,7 +260,9 @@ export async function searchUserById(
 
     decision AS (
       SELECT
-        FORMAT_DATE('%Y-%m-%d', DATE(MIN(timestamp), 'Asia/Jakarta')) AS decision_date
+        FORMAT_DATE('%Y-%m-%d', DATE(MIN(timestamp), 'Asia/Jakarta')) AS decision_date,
+        -- Get credit risk category from the most recent decision
+        ARRAY_AGG(credit_risk_category ORDER BY timestamp DESC LIMIT 1)[OFFSET(0)] AS credit_risk_category
       FROM ${TABLES.decision_completed}
       WHERE user_id = @userId
     ),
@@ -336,6 +339,7 @@ export async function searchUserById(
       acct.restriction_status,
       cl_stat.card_status,
       d.decision_date,
+      d.credit_risk_category,
       vc.videocall_verified_date,
       ps.pin_set_date,
       cma.cma_accepted_date,
@@ -483,6 +487,7 @@ export async function searchUserById(
     current_min_due: (masked.current_min_due as number) ?? null,
     current_dpd: (masked.current_dpd as number) ?? null,
     collections_status: rawCollStatus ? (COLLECTIONS_STATUS_MAP[rawCollStatus] ?? `Code ${rawCollStatus}`) : null,
+    credit_risk_category: (masked.credit_risk_category as string) ?? null,
     savings_account_number: savingsRows.length > 0 ? savingsRows[0].account_number : null,
     awb_number: awbRows.length > 0 ? awbRows[0].awb_no : null,
     awb_status: awbRows.length > 0 ? awbRows[0].status : null,

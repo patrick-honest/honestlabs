@@ -54,6 +54,7 @@ export interface UserSearchResult {
   current_min_due: number | null;
   current_dpd: number | null;
   collections_status: string | null;
+  credit_risk_category: string | null;
 
   // Banking
   savings_account_number: string | null;
