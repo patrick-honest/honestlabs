@@ -241,6 +241,7 @@ export function UserInfoCard({ user }: UserInfoCardProps) {
           <Field label="CRN" value={user.prin_crn} mono />
           <Field label="Current URN" value={user.current_urn ? `${user.current_urn}${user.current_urn_date ? ` (${formatDate(user.current_urn_date)})` : ""}` : null} mono />
           <Field label="Card Type" value={user.card_type} />
+          <Field label="Card Program" value={user.card_pgm} mono />
           <Field label="Product Type" value={user.product_type} />
           <Field label="Card Brand" value={user.card_brand} />
           <Field label="Credit Limit" value={formatCurrency(user.credit_limit)} />
@@ -273,6 +274,8 @@ export function UserInfoCard({ user }: UserInfoCardProps) {
         <div className="grid grid-cols-2 gap-x-8 gap-y-4 md:grid-cols-3 lg:grid-cols-4">
           <Field label="Decision Date" value={formatDate(user.decision_date)} />
           <Field label="Videocall Verified" value={formatDate(user.videocall_verified_date)} />
+          <Field label="CMA Accepted" value={formatDate(user.cma_accepted_date)} />
+          <Field label="CMA App Version" value={user.cma_app_version} mono />
           <Field label="Card Activation" value={formatDate(user.card_activation_date)} />
           <Field label="PIN Set Date" value={formatDate(user.pin_set_date)} />
         </div>
@@ -299,6 +302,7 @@ export function UserInfoCard({ user }: UserInfoCardProps) {
           <div className="grid grid-cols-2 gap-x-8 gap-y-4 md:grid-cols-3 lg:grid-cols-4">
             <Field label="AWB Number" value={user.awb_number} mono />
             <Field label="Delivery Status" value={user.awb_status?.replace(/_/g, " ")} />
+            <Field label="Delivered" value={formatDate(user.delivery_date)} />
           </div>
         </div>
       )}

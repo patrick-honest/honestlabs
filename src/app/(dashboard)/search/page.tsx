@@ -96,12 +96,42 @@ export default function SearchPage() {
           </div>
         )}
 
+        {/* Skeleton loading state */}
         {loading && (
-          <div className="flex flex-col items-center justify-center py-12 gap-3">
-            <div className={`h-8 w-8 animate-spin rounded-full border-2 border-t-transparent ${
-              isDark ? "border-[#5B22FF]" : "border-[#D00083]"
-            }`} />
-            <span className="text-xs text-[var(--text-muted)]">Querying BigQuery...</span>
+          <div className="space-y-4 animate-pulse">
+            {/* Skeleton header */}
+            <div className={cn("rounded-xl border p-5", isDark ? "border-[var(--border)] bg-[var(--surface)]" : "border-[var(--border)] bg-[var(--surface)]")}>
+              <div className="flex items-center gap-3 mb-4">
+                <div className={cn("h-10 w-10 rounded-full", isDark ? "bg-[#5B22FF]/20" : "bg-[#D00083]/10")} />
+                <div className="space-y-2 flex-1">
+                  <div className={cn("h-4 rounded w-48", isDark ? "bg-[var(--surface-elevated)]" : "bg-gray-200")} />
+                  <div className={cn("h-3 rounded w-32", isDark ? "bg-[var(--surface-elevated)]" : "bg-gray-100")} />
+                </div>
+              </div>
+              {/* Skeleton fields grid */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="space-y-1.5">
+                    <div className={cn("h-2.5 rounded w-16", isDark ? "bg-[var(--surface-elevated)]" : "bg-gray-100")} />
+                    <div className={cn("h-4 rounded", isDark ? "bg-[var(--surface-elevated)]" : "bg-gray-200")} style={{ width: `${60 + Math.random() * 40}%` }} />
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* Skeleton timeline */}
+            <div className={cn("rounded-xl border p-5", isDark ? "border-[var(--border)] bg-[var(--surface)]" : "border-[var(--border)] bg-[var(--surface)]")}>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="space-y-1.5">
+                    <div className={cn("h-2.5 rounded w-20", isDark ? "bg-[var(--surface-elevated)]" : "bg-gray-100")} />
+                    <div className={cn("h-4 rounded w-24", isDark ? "bg-[var(--surface-elevated)]" : "bg-gray-200")} />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex justify-center pt-2">
+              <span className={cn("text-xs", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>Querying BigQuery...</span>
+            </div>
           </div>
         )}
 
@@ -120,9 +150,9 @@ export default function SearchPage() {
           </div>
         )}
 
-        {/* Result */}
+        {/* Result — fade in animation */}
         {!loading && result && (
-          <div className="space-y-3">
+          <div className="space-y-3" style={{ animation: "fadeSlideIn 0.4s ease-out" }}>
             {/* Meta info + Save button */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4 text-[10px] text-[var(--text-muted)]">

@@ -31,7 +31,8 @@ export interface UserSearchResult {
   current_urn: string | null;
   current_urn_date: string | null;
   card_type: string | null;
-  product_type: string | null;
+  card_pgm: string | null;        // raw card program code (e.g. "10021")
+  product_type: string | null;    // human-readable product type
   card_brand: string | null;
   credit_limit: number | null;
 
@@ -43,6 +44,8 @@ export interface UserSearchResult {
   pin_set_date: string | null;
   videocall_verified_date: string | null;
   card_activation_date: string | null;
+  cma_accepted_date: string | null;  // Cardholder agreement accepted
+  cma_app_version: string | null;    // App version when CMA was signed
 
   // Account snapshot
   account_status: string | null;
@@ -58,6 +61,7 @@ export interface UserSearchResult {
   // Delivery
   awb_number: string | null;
   awb_status: string | null;
+  delivery_date: string | null;    // actual delivery date from tracking
 
   // Blocks / Restrictions
   card_status: string | null;

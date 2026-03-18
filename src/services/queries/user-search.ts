@@ -13,7 +13,8 @@ export interface UserSearchResult {
   current_urn: string | null;
   current_urn_date: string | null;
   card_type: string | null;       // fx_dw005_crd_prd: P=Physical, V=Virtual
-  product_type: string | null;    // fx_dw005_crd_pgm
+  card_pgm: string | null;        // fx_dw005_crd_pgm raw code (e.g. "10021")
+  product_type: string | null;    // human-readable product type
   card_brand: string | null;      // fx_dw005_crd_brn: VS=Visa, MC=Mastercard
   credit_limit: number | null;
 
@@ -25,6 +26,8 @@ export interface UserSearchResult {
   pin_set_date: string | null;
   videocall_verified_date: string | null;
   card_activation_date: string | null;
+  cma_accepted_date: string | null; // Cardholder agreement accepted date
+  cma_app_version: string | null;   // App version when CMA was signed
 
   // Account snapshot
   account_status: string | null;  // fx_dw004_loc_stat
@@ -40,6 +43,7 @@ export interface UserSearchResult {
   // Delivery
   awb_number: string | null;
   awb_status: string | null;
+  delivery_date: string | null;     // terminal_time from delivery tracking
 
   // Blocks / Restrictions
   card_status: string | null;       // fx_dw005_crd_stat
@@ -290,6 +294,15 @@ export async function searchUserById(
       FROM ${TABLES.milestone_complete}
       WHERE user_id = @userId
         AND application_status = 'PIN set'
+    ),
+
+    cma AS (
+      SELECT
+        FORMAT_DATE('%Y-%m-%d', DATE(MIN(timestamp), 'Asia/Jakarta')) AS cma_accepted_date,
+        MIN(context_app_version) AS cma_app_version
+      FROM ${TABLES.milestone_complete}
+      WHERE user_id = @userId
+        AND application_status = 'Cardholder agreement accepted'
     )
 
     SELECT
@@ -300,7 +313,7 @@ export async function searchUserById(
       cl.urn AS current_urn,
       cl.urn_date AS current_urn_date,
       cl.card_type,
-      cl.product_type,
+      cl.product_type AS card_pgm,
       cl.card_brand,
       FORMAT_DATETIME('%Y-%m-%d', cl.activation_ts) AS card_activation_date,
       acct.cycle_date,
@@ -313,7 +326,9 @@ export async function searchUserById(
       cl_stat.card_status,
       d.decision_date,
       vc.videocall_verified_date,
-      ps.pin_set_date
+      ps.pin_set_date,
+      cma.cma_accepted_date,
+      cma.cma_app_version
     FROM loc
     LEFT JOIN card_latest cl ON cl.rn = 1
     LEFT JOIN acct_snapshot acct ON acct.rn = 1
@@ -321,6 +336,7 @@ export async function searchUserById(
     LEFT JOIN videocall vc ON TRUE
     LEFT JOIN pin_set ps ON TRUE
     LEFT JOIN card_status_cte cl_stat ON cl_stat.rn = 1
+    LEFT JOIN cma ON TRUE
   `;
 
   // URN history (previous URNs, excluding the current one)
@@ -346,9 +362,16 @@ export async function searchUserById(
     LIMIT 1
   `;
 
-  // AWB (most recent)
+  // AWB (most recent) with delivery date from terminal_time
   const awbSql = `
-    SELECT awb_no, status
+    SELECT
+      awb_no,
+      status,
+      CASE
+        WHEN terminal_time IS NOT NULL AND terminal_time > 0
+        THEN FORMAT_TIMESTAMP('%Y-%m-%d', TIMESTAMP_MICROS(terminal_time), 'Asia/Jakarta')
+        ELSE NULL
+      END AS delivery_date
     FROM ${TABLES.card_delivery_tracking}
     WHERE user_id = @userId
     ORDER BY year DESC, month DESC, day DESC, hour DESC
@@ -380,7 +403,7 @@ export async function searchUserById(
     runQuery<Record<string, unknown>>(mainSql, { userId }),
     runQuery<{ urn: string; date: string }>(urnHistSql, { userId }),
     runQuery<{ account_number: string }>(savingsSql, { userId }),
-    runQuery<{ awb_no: string; status: string }>(awbSql, { userId }),
+    runQuery<{ awb_no: string; status: string; delivery_date: string | null }>(awbSql, { userId }),
     runQuery<FreshworksTicket>(openTicketsSql, { userId }),
     runQuery<FreshworksTicket>(ticketHistorySql, { userId }),
   ]);
@@ -397,7 +420,7 @@ export async function searchUserById(
 
   // Map coded values to human-readable
   const rawCardType = (masked.card_type as string) ?? null;
-  const rawProductType = (masked.product_type as string) ?? null;
+  const rawCardPgm = (masked.card_pgm as string) ?? null;
   const rawCardBrand = (masked.card_brand as string) ?? null;
   const rawAccountStatus = (masked.account_status as string) ?? null;
   const rawCollStatus = (masked.collections_status as string) ?? null;
@@ -417,7 +440,8 @@ export async function searchUserById(
     current_urn: currentUrn,
     current_urn_date: (masked.current_urn_date as string) ?? null,
     card_type: rawCardType ? (CARD_TYPE_MAP[rawCardType] ?? rawCardType) : null,
-    product_type: rawProductType ? (PRODUCT_TYPE_MAP[rawProductType] ?? rawProductType) : null,
+    card_pgm: rawCardPgm,
+    product_type: rawCardPgm ? (PRODUCT_TYPE_MAP[rawCardPgm] ?? rawCardPgm) : null,
     card_brand: rawCardBrand ? (CARD_BRAND_MAP[rawCardBrand] ?? rawCardBrand) : null,
     credit_limit: (masked.credit_limit as number) ?? null,
     previous_urns: previousUrns,
@@ -425,6 +449,8 @@ export async function searchUserById(
     pin_set_date: (masked.pin_set_date as string) ?? null,
     videocall_verified_date: (masked.videocall_verified_date as string) ?? null,
     card_activation_date: (masked.card_activation_date as string) ?? null,
+    cma_accepted_date: (masked.cma_accepted_date as string) ?? null,
+    cma_app_version: (masked.cma_app_version as string) ?? null,
     account_status: rawAccountStatus ? (ACCOUNT_STATUS_MAP[rawAccountStatus] ?? rawAccountStatus) : null,
     cycle_date: (masked.cycle_date as string) ?? null,
     next_due_date: (masked.next_due_date as string) ?? null,
@@ -434,6 +460,7 @@ export async function searchUserById(
     savings_account_number: savingsRows.length > 0 ? savingsRows[0].account_number : null,
     awb_number: awbRows.length > 0 ? awbRows[0].awb_no : null,
     awb_status: awbRows.length > 0 ? awbRows[0].status : null,
+    delivery_date: awbRows.length > 0 ? awbRows[0].delivery_date ?? null : null,
     card_status: rawCardStatus ? (CARD_STATUS_MAP[rawCardStatus] ?? rawCardStatus) : null,
     restriction_status: rawRestrictionStatus ? (RESTRICTION_MAP[rawRestrictionStatus] ?? rawRestrictionStatus) : null,
     has_spending_block: hasSpendingBlock,
