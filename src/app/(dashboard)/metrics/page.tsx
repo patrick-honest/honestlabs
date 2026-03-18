@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { Header } from "@/components/layout/header";
+import { useTranslations } from "next-intl";
 import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
 import { ChevronDown, Search } from "lucide-react";
@@ -878,6 +879,7 @@ function MetricDefCard({
 
 export default function MetricsDefinitionsPage() {
   const { isDark } = useTheme();
+  const tNav = useTranslations("nav");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
@@ -952,7 +954,7 @@ export default function MetricsDefinitionsPage() {
 
   return (
     <>
-      <Header title="Metrics Definitions" />
+      <Header title={tNav("definitions")} />
 
       <style jsx global>{`
         :root {

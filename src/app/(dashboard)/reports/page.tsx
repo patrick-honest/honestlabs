@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { Header } from "@/components/layout/header";
+import { useTranslations } from "next-intl";
 import { Search, Filter, ChevronDown, ChevronRight, TrendingUp, TrendingDown, Minus, Calendar, X, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
@@ -492,6 +493,7 @@ export default function ReportsPage() {
   const [cycleFilter, setCycleFilter] = useState<Cycle | "all">("all");
   const [sectionFilter, setSectionFilter] = useState("All");
   const { isDark } = useTheme();
+  const tNav = useTranslations("nav");
 
   const filtered = BACKFILLED_REPORTS.filter((r) => {
     if (cycleFilter !== "all" && r.cycle !== cycleFilter) return false;
@@ -502,7 +504,7 @@ export default function ReportsPage() {
 
   return (
     <div className="flex flex-col">
-      <Header title="Reports" />
+      <Header title={tNav("reports")} />
 
       <div className="flex-1 space-y-6 p-6">
         <div className="flex items-center justify-between">

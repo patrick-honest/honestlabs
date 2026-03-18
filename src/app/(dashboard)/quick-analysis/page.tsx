@@ -17,6 +17,7 @@ import { formatNumber, formatPercent, formatCurrency } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
 import { useCurrency } from "@/hooks/use-currency";
 import { useDateParams } from "@/hooks/use-period";
+import { useTranslations } from "next-intl";
 import { CohortBuilder, EMPTY_COHORT, type CohortFilters } from "@/components/analysis/cohort-builder";
 import { KpiSelector, AVAILABLE_KPIS, type KpiDefinition } from "@/components/analysis/kpi-selector";
 import { ChartDateRange, type DateRangeOverride } from "@/components/charts/chart-date-range";
@@ -179,6 +180,7 @@ export default function QuickAnalysisPage() {
   const { isDark } = useTheme();
   const { currency } = useCurrency();
   const { dateParams, startDate, endDate } = useDateParams();
+  const tNav = useTranslations("nav");
 
   // Cohort state
   const [groupA, setGroupA] = useState<CohortFilters>({ ...EMPTY_COHORT });
@@ -282,7 +284,7 @@ export default function QuickAnalysisPage() {
           <GitCompareArrows
             className={cn("h-5 w-5", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}
           />
-          <h1 className="text-xl font-bold text-[var(--text-primary)]">Quick Analysis</h1>
+          <h1 className="text-xl font-bold text-[var(--text-primary)]">{tNav("quickAnalysis")}</h1>
         </div>
         <p className="text-sm text-[var(--text-secondary)] mt-1">
           Compare any two customer segments across your most important KPIs

@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import useSWR from "swr";
 import { Header } from "@/components/layout/header";
+import { useTranslations } from "next-intl";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
@@ -160,6 +161,7 @@ export default function ChannelQualityPage() {
   const { dateParams } = useDateParams();
   const { isDark } = useTheme();
   const { filters } = useFilters();
+  const tNav = useTranslations("nav");
   const range = getPeriodRange(period);
 
   // Fetch real data from BigQuery — dateParams changes when user adjusts time selector
@@ -268,7 +270,7 @@ export default function ChannelQualityPage() {
 
   return (
     <div className="flex flex-col">
-      <Header title="Acquisition Channel Quality" />
+      <Header title={tNav("channelQuality")} />
 
       <div className="flex-1 space-y-6 p-6">
         <ActiveFiltersBanner />

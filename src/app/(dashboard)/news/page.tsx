@@ -4,6 +4,7 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { ExternalLink } from "lucide-react";
 import { useTheme } from "@/hooks/use-theme";
+import { useTranslations } from "next-intl";
 
 type Relevance = "high" | "medium" | "low";
 type Category = "BI Policy" | "OJK Regulation" | "Consumer Trends" | "QRIS/Payments" | "Market Analysis";
@@ -144,6 +145,7 @@ export default function NewsPage() {
   const [relevanceFilter, setRelevanceFilter] = useState<Relevance | "all">("all");
   const [categoryFilter, setCategoryFilter] = useState<Category | "all">("all");
   const { isDark } = useTheme();
+  const tNav = useTranslations("nav");
 
   const filtered = mockNews.filter((item) => {
     if (relevanceFilter !== "all" && item.relevance !== relevanceFilter) return false;
@@ -154,7 +156,7 @@ export default function NewsPage() {
   return (
     <div className="space-y-6 p-6">
       <div>
-        <h1 className="text-xl font-bold text-[var(--text-primary)]">Market News</h1>
+        <h1 className="text-xl font-bold text-[var(--text-primary)]">{tNav("marketNews")}</h1>
         <p className="text-sm text-[var(--text-secondary)] mt-1">
           Curated news relevant to Honest Bank credit card operations
         </p>

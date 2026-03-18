@@ -11,6 +11,7 @@ import { usePeriod, useDateParams } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
+import { useTranslations } from "next-intl";
 import { getPeriodRange } from "@/lib/period-data";
 import { getFilterMultiplier, hasActiveFilters } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
@@ -288,6 +289,7 @@ export default function VintagePage() {
   const { period, periodLabel } = usePeriod();
   const { filters } = useFilters();
   const { isDark } = useTheme();
+  const tNav = useTranslations("nav");
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
   const { dateParams } = useDateParams();
   const [viewMode, setViewMode] = useState<ViewMode>("delinquency");
@@ -347,7 +349,7 @@ export default function VintagePage() {
   return (
     <div className="space-y-6 p-6">
       <div>
-        <h1 className="text-xl font-bold text-[var(--text-primary)]">Vintage Analysis</h1>
+        <h1 className="text-xl font-bold text-[var(--text-primary)]">{tNav("vintageAnalysis")}</h1>
         <p className="text-sm text-[var(--text-secondary)] mt-1">{periodLabel}</p>
       </div>
 

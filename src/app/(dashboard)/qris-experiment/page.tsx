@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState, useEffect } from "react";
 import { Header } from "@/components/layout/header";
+import { useTranslations } from "next-intl";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { generateReportPdf } from "@/lib/report-pdf";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
@@ -364,6 +365,7 @@ export default function QrisExperimentPage() {
   const { filters } = useFilters();
   const { isDark } = useTheme();
   const { currency } = useCurrency();
+  const tNav = useTranslations("nav");
 
   // Currency-aware formatter (replaces old hardcoded fmtIDR)
   const fmtCur = useCallback((value: number) => formatAmountCompact(value, currency), [currency]);
@@ -427,7 +429,7 @@ export default function QrisExperimentPage() {
 
   return (
     <div className="flex flex-col">
-      <Header title="QRIS Experiment" />
+      <Header title={tNav("qrisExperiment")} />
 
       <div className="flex-1 space-y-6 p-6">
 
