@@ -18,6 +18,7 @@ import { navigation, type NavItem } from "@/config/navigation";
 import { useTheme } from "@/hooks/use-theme";
 import { useSession, signOut } from "next-auth/react";
 import { IS_STATIC_EXPORT } from "@/lib/static-mode";
+import { useTranslations } from "next-intl";
 
 const iconMap: Record<string, LucideIcon> = {
   // Top-level
@@ -40,10 +41,12 @@ function NavLinkExpanded({
   item,
   pathname,
   isDark,
+  tNav,
 }: {
   item: NavItem;
   pathname: string;
   isDark: boolean;
+  tNav: (key: string) => string;
 }) {
   const [expanded, setExpanded] = useState(
     item.children?.some((c) => pathname.startsWith(c.href)) ?? false
@@ -63,7 +66,7 @@ function NavLinkExpanded({
           )}
         >
           <Icon className="h-4 w-4 shrink-0" />
-          <span className="flex-1 text-left truncate">{item.label}</span>
+          <span className="flex-1 text-left truncate">{item.tKey ? tNav(item.tKey) : item.label}</span>
           {expanded ? (
             <ChevronDown className="h-4 w-4 shrink-0" />
           ) : (
@@ -94,7 +97,7 @@ function NavLinkExpanded({
                   )}
                 >
                   <ChildIcon className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">{child.label}</span>
+                  <span className="truncate">{child.tKey ? tNav(child.tKey) : child.label}</span>
                 </Link>
               );
             })}
@@ -117,7 +120,7 @@ function NavLinkExpanded({
       )}
     >
       <Icon className="h-4 w-4 shrink-0" />
-      <span className="truncate">{item.label}</span>
+      <span className="truncate">{item.tKey ? tNav(item.tKey) : item.label}</span>
     </Link>
   );
 }
@@ -127,10 +130,12 @@ function NavLinkExpanded({
 function NavLinkCollapsed({
   item,
   pathname,
+  tNav,
   isDark,
 }: {
   item: NavItem;
   pathname: string;
+  tNav: (key: string) => string;
   isDark: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
@@ -185,7 +190,7 @@ function NavLinkCollapsed({
 
       {/* Hover flyout — uses fixed positioning to escape stacking context */}
       {hovered && (
-        <FlyoutPortal item={item} isDark={isDark} isActive={!!isActive} pathname={pathname} onEnter={handleEnter} onLeave={handleLeave} />
+        <FlyoutPortal item={item} isDark={isDark} isActive={!!isActive} pathname={pathname} onEnter={handleEnter} onLeave={handleLeave} tNav={tNav} />
       )}
     </div>
   );
@@ -199,12 +204,14 @@ function FlyoutPortal({
   pathname,
   onEnter,
   onLeave,
+  tNav,
 }: {
   item: NavItem;
   isDark: boolean;
   isActive: boolean;
   pathname: string;
   onEnter: () => void;
+  tNav: (key: string) => string;
   onLeave: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -253,12 +260,12 @@ function FlyoutPortal({
                 : "text-[var(--text-primary)] hover:bg-[var(--surface-elevated)]"
             )}
           >
-            {item.label}
+            {item.tKey ? tNav(item.tKey) : item.label}
           </Link>
         ) : (
           <>
             <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-              {item.label}
+              {item.tKey ? tNav(item.tKey) : item.label}
             </div>
             {item.children!.map((child) => {
               const ChildIcon = iconMap[child.icon] ?? BarChart3;
@@ -277,7 +284,7 @@ function FlyoutPortal({
                   )}
                 >
                   <ChildIcon className="h-3.5 w-3.5 shrink-0" />
-                  <span>{child.label}</span>
+                  <span>{child.tKey ? tNav(child.tKey) : child.label}</span>
                 </Link>
               );
             })}
@@ -293,6 +300,7 @@ function FlyoutPortal({
 export function Sidebar() {
   const pathname = usePathname();
   const { isDark } = useTheme();
+  const tNav = useTranslations("nav");
   const { data: session } = useSession();
   const userName = session?.user?.name || "User";
   const userEmail = session?.user?.email || "";
@@ -415,7 +423,7 @@ export function Sidebar() {
                     "text-[9px] font-bold uppercase tracking-[0.15em]",
                     isDark ? "text-[var(--text-muted)]/50" : "text-[var(--text-muted)]/60"
                   )}>
-                    {item.divider}
+                    {item.dividerTKey ? tNav(item.dividerTKey) : item.divider}
                   </span>
                 </div>
               )}
@@ -423,6 +431,7 @@ export function Sidebar() {
                 <NavLinkCollapsed
                   item={item}
                   pathname={pathname}
+                  tNav={tNav}
                   isDark={isDark}
                 />
               ) : (
@@ -430,6 +439,7 @@ export function Sidebar() {
                   item={item}
                   pathname={pathname}
                   isDark={isDark}
+                  tNav={tNav}
                 />
               )}
             </div>

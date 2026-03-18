@@ -1,86 +1,90 @@
 export interface NavItem {
   label: string;
+  /** Translation key in nav namespace (e.g. "userSearch" → t('nav.userSearch')) */
+  tKey?: string;
   href: string;
   icon: string;
   children?: NavItem[];
   /** Visual group divider label shown above this item in the sidebar */
   divider?: string;
+  /** Translation key for divider */
+  dividerTKey?: string;
 }
 
 export const navigation: NavItem[] = [
-  { label: "User Search", href: "/search", icon: "Fingerprint" },
-  { label: "Dashboard", href: "/dashboard", icon: "LayoutDashboard" },
+  { label: "User Search", tKey: "userSearch", href: "/search", icon: "Fingerprint" },
+  { label: "Dashboard", tKey: "dashboard", href: "/dashboard", icon: "LayoutDashboard" },
 
   // ── Reports ──
   {
-    label: "Reports",
+    label: "Reports", tKey: "reports",
     href: "#",
     icon: "FileBarChart",
     children: [
-      { label: "Orico Reports", href: "/orico", icon: "Building2" },
-      { label: "QRIS Experiment", href: "/qris-experiment", icon: "QrCode" },
-      { label: "Report Archive", href: "/reports", icon: "Archive" },
+      { label: "Orico Reports", tKey: "oricoReports", href: "/orico", icon: "Building2" },
+      { label: "QRIS Experiment", tKey: "qrisExperiment", href: "/qris-experiment", icon: "QrCode" },
+      { label: "Report Archive", tKey: "reportArchive", href: "/reports", icon: "Archive" },
     ],
   },
 
   // ── Deep Dive: Growth ──
   {
-    label: "Growth",
+    label: "Growth", tKey: "growth",
     href: "#",
     icon: "Sprout",
-    divider: "Deep Dive",
+    divider: "Deep Dive", dividerTKey: "deepDive",
     children: [
-      { label: "Acquisition", href: "/deep-dive/acquisition", icon: "UserPlus" },
-      { label: "Activation", href: "/deep-dive/activation", icon: "Zap" },
-      { label: "Referrals", href: "/deep-dive/referral", icon: "Users" },
-      { label: "Channel Quality", href: "/channel-quality", icon: "Target" },
+      { label: "Acquisition", tKey: "acquisition", href: "/deep-dive/acquisition", icon: "UserPlus" },
+      { label: "Activation", tKey: "activation", href: "/deep-dive/activation", icon: "Zap" },
+      { label: "Referrals", tKey: "referrals", href: "/deep-dive/referral", icon: "Users" },
+      { label: "Channel Quality", tKey: "channelQuality", href: "/channel-quality", icon: "Target" },
     ],
   },
 
   // ── Deep Dive: Revenue ──
   {
-    label: "Revenue",
+    label: "Revenue", tKey: "revenue",
     href: "#",
     icon: "Wallet",
     children: [
-      { label: "Spend", href: "/deep-dive/spend", icon: "Wallet" },
-      { label: "Txn Auth", href: "/deep-dive/transaction-auth", icon: "ShieldCheck" },
-      { label: "Points", href: "/deep-dive/points-program", icon: "Star" },
-      { label: "Credit Line", href: "/deep-dive/credit-line", icon: "TrendingUp" },
-      { label: "Billing Cycle", href: "/deep-dive/billing-cycle", icon: "CalendarClock" },
+      { label: "Spend", tKey: "spend", href: "/deep-dive/spend", icon: "Wallet" },
+      { label: "Txn Auth", tKey: "txnAuth", href: "/deep-dive/transaction-auth", icon: "ShieldCheck" },
+      { label: "Points", tKey: "points", href: "/deep-dive/points-program", icon: "Star" },
+      { label: "Credit Line", tKey: "creditLine", href: "/deep-dive/credit-line", icon: "TrendingUp" },
+      { label: "Billing Cycle", tKey: "billingCycle", href: "/deep-dive/billing-cycle", icon: "CalendarClock" },
     ],
   },
 
   // ── Deep Dive: Risk & Collections ──
   {
-    label: "Risk & Collections",
+    label: "Risk & Collections", tKey: "riskCollections",
     href: "#",
     icon: "ShieldAlert",
     children: [
-      { label: "Portfolio", href: "/deep-dive/portfolio", icon: "PieChart" },
-      { label: "Risk", href: "/deep-dive/risk", icon: "ShieldAlert" },
-      { label: "Collections", href: "/deep-dive/collections", icon: "Scale" },
-      { label: "Repayments", href: "/deep-dive/repayments", icon: "ArrowDownCircle" },
+      { label: "Portfolio", tKey: "portfolio", href: "/deep-dive/portfolio", icon: "PieChart" },
+      { label: "Risk", tKey: "risk", href: "/deep-dive/risk", icon: "ShieldAlert" },
+      { label: "Collections", tKey: "collections", href: "/deep-dive/collections", icon: "Scale" },
+      { label: "Repayments", tKey: "repayments", href: "/deep-dive/repayments", icon: "ArrowDownCircle" },
     ],
   },
 
   // ── Deep Dive: Operations ──
   {
-    label: "Operations",
+    label: "Operations", tKey: "operations",
     href: "#",
     icon: "Activity",
     children: [
-      { label: "App Health", href: "/deep-dive/app-health", icon: "Activity" },
-      { label: "Customer Service", href: "/deep-dive/customer-service", icon: "MessageCircle" },
-      { label: "Users", href: "/deep-dive/users", icon: "Users" },
-      { label: "Cards", href: "/deep-dive/cards", icon: "CreditCard" },
+      { label: "App Health", tKey: "appHealth", href: "/deep-dive/app-health", icon: "Activity" },
+      { label: "Customer Service", tKey: "customerService", href: "/deep-dive/customer-service", icon: "MessageCircle" },
+      { label: "Users", tKey: "users", href: "/deep-dive/users", icon: "Users" },
+      { label: "Cards", tKey: "cards", href: "/deep-dive/cards", icon: "CreditCard" },
     ],
   },
 
   // ── Analytics ──
-  { label: "Vintage Analysis", href: "/vintage", icon: "Layers", divider: "Analytics" },
-  { label: "Quick Analysis", href: "/quick-analysis", icon: "ArrowLeftRight" },
-  { label: "Market News", href: "/news", icon: "Newspaper" },
-  { label: "Definitions", href: "/metrics", icon: "BookOpen", divider: "Reference" },
-  { label: "Admin", href: "/admin", icon: "Settings" },
+  { label: "Vintage Analysis", tKey: "vintageAnalysis", href: "/vintage", icon: "Layers", divider: "Analytics", dividerTKey: "analytics" },
+  { label: "Quick Analysis", tKey: "quickAnalysis", href: "/quick-analysis", icon: "ArrowLeftRight" },
+  { label: "Market News", tKey: "marketNews", href: "/news", icon: "Newspaper" },
+  { label: "Definitions", tKey: "definitions", href: "/metrics", icon: "BookOpen", divider: "Reference", dividerTKey: "reference" },
+  { label: "Admin", tKey: "admin", href: "/admin", icon: "Settings" },
 ];
