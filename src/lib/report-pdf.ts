@@ -141,13 +141,14 @@ function renderSection(
 /**
  * Generate a single-section report PDF.
  */
-export function generateReportPdf(report: ReportData): void {
+export function generateReportPdf(report: ReportData, locale?: string): void {
   generateCombinedReportPdf({
     cycle: report.cycle,
     periodStart: report.periodStart,
     periodEnd: report.periodEnd,
     generatedAt: report.generatedAt,
     overallTitle: report.title,
+    locale,
     sections: [{
       title: report.section,
       kpis: report.kpis,
@@ -159,6 +160,13 @@ export function generateReportPdf(report: ReportData): void {
 /**
  * Generate a combined PDF with multiple sections (for past reports).
  */
+// Locale-aware PDF labels
+const PDF_LABELS: Record<string, { confidential: string; generated: string; page: string; of: string; footer: string }> = {
+  en: { confidential: "CONFIDENTIAL", generated: "Generated", page: "Page", of: "of", footer: "Honest Bank · Data sourced from BigQuery (storage-58f5a02c) · Product type: Regular (default)" },
+  id: { confidential: "RAHASIA", generated: "Dibuat", page: "Halaman", of: "dari", footer: "Honest Bank · Sumber data: BigQuery (storage-58f5a02c) · Jenis produk: Regular (default)" },
+  ja: { confidential: "機密", generated: "作成日", page: "ページ", of: "/", footer: "Honest Bank · データソース: BigQuery (storage-58f5a02c) · 商品タイプ: Regular (デフォルト)" },
+};
+
 export function generateCombinedReportPdf(opts: {
   cycle: string;
   periodStart: string;
@@ -166,7 +174,9 @@ export function generateCombinedReportPdf(opts: {
   generatedAt: string;
   overallTitle: string;
   sections: { title: string; kpis: ReportKpi[]; trends: string[] }[];
+  locale?: string;
 }): void {
+  const labels = PDF_LABELS[opts.locale ?? "en"] ?? PDF_LABELS.en;
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 18;
@@ -181,9 +191,9 @@ export function generateCombinedReportPdf(opts: {
   doc.setFontSize(7);
   doc.setTextColor(150, 150, 150);
   doc.setFont("helvetica", "normal");
-  doc.text("CONFIDENTIAL", pageWidth - margin, y, { align: "right" });
+  doc.text(labels.confidential, pageWidth - margin, y, { align: "right" });
   doc.text(
-    `Generated: ${formatDate(opts.generatedAt)}`,
+    `${labels.generated}: ${formatDate(opts.generatedAt)}`,
     pageWidth - margin,
     y + 3.5,
     { align: "right" }
@@ -239,7 +249,7 @@ export function generateCombinedReportPdf(opts: {
   y += 4;
   doc.setFontSize(6.5);
   doc.setTextColor(150, 150, 150);
-  doc.text("Honest Bank · Data sourced from BigQuery (storage-58f5a02c) · Product type: Regular (default)", margin, y);
+  doc.text(labels.footer, margin, y);
 
   // ── Page numbers ──
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -249,7 +259,7 @@ export function generateCombinedReportPdf(opts: {
     doc.setFontSize(7);
     doc.setTextColor(150, 150, 150);
     doc.text(
-      `Page ${i} of ${pageCount}`,
+      `${labels.page} ${i} ${labels.of} ${pageCount}`,
       pageWidth / 2,
       doc.internal.pageSize.getHeight() - 8,
       { align: "center" }
