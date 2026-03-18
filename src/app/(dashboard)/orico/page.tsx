@@ -549,43 +549,24 @@ const monthlyMonths = ["Sep 25", "Oct 25", "Nov 25", "Dec 25", "Jan 26", "Feb 26
 const monthlyMetrics: MonthlyMetric[] = [
   // Customer & Growth
   { name: "Users", group: "Customer & Growth", values: { "Sep 25": "207,675", "Oct 25": "217,760", "Nov 25": "229,848", "Dec 25": "234,160", "Jan 26": "235,138", "Feb 26": "238,371" } },
-  { name: "Revenue from all products (gross)", group: "Customer & Growth", isSample: true, blockedBy: "mart_finance", values: { "Sep 25": "1,635,746", "Oct 25": "1,694,061", "Nov 25": "1,869,548", "Dec 25": "1,799,641", "Jan 26": "1,853,544", "Feb 26": "1,865,948" } },
-  { name: "Total Revenue (incl reg fee)", group: "Customer & Growth", isSample: true, blockedBy: "mart_finance", values: { "Sep 25": "1,623,902", "Oct 25": "1,678,665", "Nov 25": "1,861,108", "Dec 25": "1,788,803", "Jan 26": "1,842,467", "Feb 26": "1,865,948" } },
-  { name: "Revenue before write off (card only)", group: "Customer & Growth", isSample: true, blockedBy: "mart_finance", values: { "Sep 25": "1,593,194", "Oct 25": "1,645,841", "Nov 25": "1,834,365", "Dec 25": "1,774,144", "Jan 26": "1,832,513", "Feb 26": "1,858,560" } },
-  { name: "Revenue after write off (card + reg fee)", group: "Customer & Growth", isSample: true, blockedBy: "mart_finance", values: { "Sep 25": "1,421,647", "Oct 25": "1,332,141", "Nov 25": "1,861,108", "Dec 25": "1,788,803", "Jan 26": "1,842,467", "Feb 26": "1,865,948" } },
+  { name: "Total Revenue", group: "Customer & Growth", isSample: true, blockedBy: "mart_finance", values: { "Sep 25": "1,623,902", "Oct 25": "1,678,665", "Nov 25": "1,861,108", "Dec 25": "1,788,803", "Jan 26": "1,842,467", "Feb 26": "1,865,948" } },
   { name: "Transactions (Count)", group: "Customer & Growth", values: { "Sep 25": "616,878", "Oct 25": "675,665", "Nov 25": "669,501", "Dec 25": "664,907", "Jan 26": "586,913", "Feb 26": "489,875" } },
   // Per-Customer Economics
-  { name: "ARPAC", group: "Per-Customer Economics", isSample: true, blockedBy: "mart_finance", values: { "Sep 25": "$14.12", "Oct 25": "$12.54", "Nov 25": "$17.17", "Dec 25": "$16.96", "Jan 26": "$18.63", "Feb 26": "$21.01" } },
-  { name: "Average Monthly Fees", group: "Per-Customer Economics", isSample: true, blockedBy: "mart_finance", values: { "Sep 25": "$11.29", "Oct 25": "$11.46", "Nov 25": "$11.71", "Dec 25": "$11.69", "Jan 26": "$11.87", "Feb 26": "$12.04" } },
-  { name: "Average Monthly Fees (refund adjusted)", group: "Per-Customer Economics", isSample: true, blockedBy: "mart_finance", values: { "Sep 25": "$8.17", "Oct 25": "$8.34", "Nov 25": "$8.38", "Dec 25": "$8.35", "Jan 26": "$8.57", "Feb 26": "$8.69" } },
-  { name: "CAC of Approved Customer", group: "Per-Customer Economics", isSample: true, blockedBy: "Marketing platforms", values: { "Sep 25": "--", "Oct 25": "--", "Nov 25": "--", "Dec 25": "--", "Jan 26": "--", "Feb 26": "--" } },
-  { name: "Cost of Debt Capital", group: "Per-Customer Economics", isSample: true, blockedBy: "mart_finance", values: { "Sep 25": "9.10%", "Oct 25": "9.10%", "Nov 25": "9.10%", "Dec 25": "9.10%", "Jan 26": "9.10%", "Feb 26": "9.10%" } },
-  { name: "Cost to Serve per Active Customer", group: "Per-Customer Economics", isSample: true, blockedBy: "mart_finance", values: { "Sep 25": "$0.42", "Oct 25": "$0.40", "Nov 25": "$0.36", "Dec 25": "$0.37", "Jan 26": "$0.43", "Feb 26": "$0.46" } },
-  { name: "Monthly Income Customers", group: "Per-Customer Economics", isSample: true, blockedBy: "mart_finance", values: { "Sep 25": "$531", "Oct 25": "$523", "Nov 25": "$531", "Dec 25": "$510", "Jan 26": "$299", "Feb 26": "$328" } },
+  { name: "CAC per customer (USD)", group: "Per-Customer Economics", isSample: true, blockedBy: "Marketing platforms", values: { "Sep 25": "$21.67", "Oct 25": "$17.95", "Nov 25": "$17.43", "Dec 25": "$13.32", "Jan 26": "$9.20", "Feb 26": "$19.69" } },
+  { name: "Average limit per customer (USD)", group: "Per-Customer Economics", values: { "Sep 25": "$295", "Oct 25": "$291", "Nov 25": "$287", "Dec 25": "$282", "Jan 26": "$278", "Feb 26": "$275" } },
+  { name: "Receivables per customer (USD)", group: "Per-Customer Economics", values: { "Sep 25": "$173", "Oct 25": "$170", "Nov 25": "$167", "Dec 25": "$164", "Jan 26": "$162", "Feb 26": "$159" } },
   // Portfolio Quality
   { name: "Revolve Rate", group: "Portfolio Quality", values: { "Sep 25": "66.17%", "Oct 25": "65.23%", "Nov 25": "65.44%", "Dec 25": "63.80%", "Jan 26": "64.24%", "Feb 26": "64.98%" } },
   { name: "Active Customers", group: "Portfolio Quality", values: { "Sep 25": "63%", "Oct 25": "65%", "Nov 25": "66%", "Dec 25": "64%", "Jan 26": "61%", "Feb 26": "57%" } },
   { name: "Credit Line Used (Utilization)", group: "Portfolio Quality", values: { "Sep 25": "45.35%", "Oct 25": "45.65%", "Nov 25": "47.45%", "Dec 25": "47.99%", "Jan 26": "48.55%", "Feb 26": "49.72%" } },
-  { name: "Churn (Voluntary)", group: "Portfolio Quality", values: { "Sep 25": "0.025%", "Oct 25": "0.016%", "Nov 25": "0.026%", "Dec 25": "0.021%", "Jan 26": "0.022%", "Feb 26": "0.020%" } },
   // Risk & Delinquency
-  { name: "Delinquency Rate (15-90 days)", group: "Risk & Delinquency", values: { "Sep 25": "9.87%", "Oct 25": "7.64%", "Nov 25": "10.70%", "Dec 25": "11.35%", "Jan 26": "8.00%", "Feb 26": "11.37%" } },
-  { name: "Customers 30-149 Days Past Due", group: "Risk & Delinquency", values: { "Sep 25": "8.94%", "Oct 25": "9.79%", "Nov 25": "10.15%", "Dec 25": "10.98%", "Jan 26": "11.89%", "Feb 26": "15.09%" } },
+  { name: "NPL Ratio", group: "Risk & Delinquency", values: { "Sep 25": "6.82%", "Oct 25": "7.41%", "Nov 25": "8.12%", "Dec 25": "8.89%", "Jan 26": "10.05%", "Feb 26": "10.52%" } },
   { name: "Customers 30+ DPD last monthly cohort", group: "Risk & Delinquency", values: { "Sep 25": "5.94%", "Oct 25": "5.10%", "Nov 25": "5.46%", "Dec 25": "1.86%", "Jan 26": "--", "Feb 26": "--" } },
   // Marketing & Acquisition
-  { name: "CAC (Approved & Declined) - new", group: "Marketing & Acquisition", isSample: true, blockedBy: "Marketing platforms", values: { "Sep 25": "$21.67", "Oct 25": "$17.95", "Nov 25": "$17.43", "Dec 25": "$13.32", "Jan 26": "$9.49", "Feb 26": "$19.69" } },
-  { name: "Marketing per customer - Google", group: "Marketing & Acquisition", isSample: true, blockedBy: "Google Ads", values: { "Sep 25": "$31.05", "Oct 25": "$30.50", "Nov 25": "$29.63", "Dec 25": "$21.54", "Jan 26": "$0.00", "Feb 26": "$0.00" } },
-  { name: "Marketing per customer - Meta", group: "Marketing & Acquisition", isSample: true, blockedBy: "Meta Ads", values: { "Sep 25": "$35.66", "Oct 25": "$32.27", "Nov 25": "$31.51", "Dec 25": "$24.86", "Jan 26": "$0.00", "Feb 26": "$15.03" } },
-  { name: "Marketing per customer - TikTok", group: "Marketing & Acquisition", isSample: true, blockedBy: "TikTok Ads", values: { "Sep 25": "$38.80", "Oct 25": "$30.76", "Nov 25": "$30.44", "Dec 25": "$15.63", "Jan 26": "$0.00", "Feb 26": "$49.46" } },
-  { name: "Organic Traffic", group: "Marketing & Acquisition", values: { "Sep 25": "43.8%", "Oct 25": "48.8%", "Nov 25": "43.2%", "Dec 25": "73.5%", "Jan 26": "99.10%", "Feb 26": "79.90%" } },
   { name: "Applicant Approval Rate", group: "Marketing & Acquisition", values: { "Sep 25": "18.35%", "Oct 25": "16.94%", "Nov 25": "16.86%", "Dec 25": "12.67%", "Jan 26": "8.18%", "Feb 26": "10.67%" } },
-  // Product & Engagement
-  { name: "Calls Answered in 45 Seconds", group: "Product & Engagement", values: { "Sep 25": "94%", "Oct 25": "96%", "Nov 25": "98%", "Dec 25": "99%", "Jan 26": "98%", "Feb 26": "95%" } },
-  { name: "Google Play Store Rating", group: "Product & Engagement", isSample: true, blockedBy: "Play Console API", values: { "Sep 25": "4.6", "Oct 25": "4.5", "Nov 25": "4.9", "Dec 25": "4.9", "Jan 26": "4.9", "Feb 26": "4.9" } },
-  { name: "First or Second Credit Card", group: "Product & Engagement", isSample: true, blockedBy: "Survey data", values: { "Sep 25": "85.56%", "Oct 25": "85.77%", "Nov 25": "85.60%", "Dec 25": "88.85%", "Jan 26": "91.01%", "Feb 26": "87.52%" } },
-  { name: "Used BNPL", group: "Product & Engagement", isSample: true, blockedBy: "Survey data", values: { "Sep 25": "88.42%", "Oct 25": "88.17%", "Nov 25": "88.58%", "Dec 25": "85.37%", "Jan 26": "83.80%", "Feb 26": "88.67%" } },
 ];
 
-const monthlyGroups = ["Customer & Growth", "Per-Customer Economics", "Portfolio Quality", "Risk & Delinquency", "Marketing & Acquisition", "Product & Engagement"];
+const monthlyGroups = ["Customer & Growth", "Per-Customer Economics", "Portfolio Quality", "Risk & Delinquency", "Marketing & Acquisition"];
 
 // ── Tab 4: KPIs & Financial Results (OJK Plan) ───────────────────────────────
 
