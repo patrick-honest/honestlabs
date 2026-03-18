@@ -331,7 +331,7 @@ export default function QrisExperimentPage() {
           style={{
             background: isDark
               ? "linear-gradient(135deg, #5B22FF 0%, #7C4DFF 40%, #3D1299 100%)"
-              : "linear-gradient(135deg, #D00083 0%, #FF1493 40%, #A00066 100%)",
+              : "linear-gradient(135deg, #059669 0%, #10B981 40%, #047857 100%)",
           }}
         >
           {/* Background decorative elements */}
