@@ -480,21 +480,19 @@ export function Sidebar() {
           </button>
         </div>
 
-        {/* Settings toggles: currency, theme, language */}
+        {/* Settings toggles: currency, theme, language — left-justified, uniform height */}
         <div className={cn(
-          "flex items-center gap-1.5 border-t py-2",
-          isDark ? "border-[var(--border)]" : "border-[var(--border)]",
+          "flex items-center gap-1 border-t py-2",
+          "border-[var(--border)]",
           collapsed ? "flex-col px-2" : "px-3"
         )}>
           {/* Currency toggle */}
           <button
             onClick={toggleCurrency}
             className={cn(
-              "flex items-center gap-0.5 rounded-md px-2 py-1 text-[11px] font-medium transition-colors",
-              isDark
-                ? "bg-[var(--surface-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                : "bg-[var(--surface-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
-              collapsed && "px-1.5"
+              "flex h-7 items-center gap-0.5 rounded-md px-2 text-[11px] font-medium transition-colors",
+              "bg-[var(--surface-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
+              collapsed && "w-7 justify-center px-0"
             )}
             title="Toggle currency"
           >
@@ -525,12 +523,12 @@ export function Sidebar() {
 
           {/* Language selector */}
           {!collapsed ? (
-            <div className="relative ml-auto">
+            <div className="relative">
               <select
                 value={locale}
                 onChange={(e) => setLocale(e.target.value as Locale)}
                 className={cn(
-                  "appearance-none rounded-md border px-1.5 py-0.5 pr-5 text-[10px] font-medium cursor-pointer outline-none transition-colors",
+                  "appearance-none h-7 rounded-md border px-1.5 pr-5 text-[10px] font-medium cursor-pointer outline-none transition-colors",
                   "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]"
                 )}
               >

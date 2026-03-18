@@ -433,10 +433,33 @@ export function Header({ title }: HeaderProps) {
           : "border-[var(--border)] bg-[var(--background)]/95"
       )}
     >
-      {/* Row 1: Title + Time dropdown + Filters */}
-      <div className="flex items-center gap-2 px-4 pt-1.5 pb-0.5">
-        <h1 className="text-sm font-semibold text-[var(--text-primary)] shrink-0">{title}</h1>
+      {/* Row 1: Filter groups (Acct) + Time dropdown + Comparison */}
+      <div className="flex items-center gap-2 px-4 pt-1.5 pb-0.5 flex-wrap">
+        {/* First filter group (Account) inline */}
+        {visibleGroups.length > 0 && (
+          <div className="flex items-center gap-1">
+            <span className={cn(
+              "text-[9px] font-bold uppercase tracking-widest shrink-0",
+              isDark ? "text-[#7C4DFF]/60" : "text-[#D00083]/60"
+            )}>
+              {visibleGroups[0].label}
+            </span>
+            {visibleGroups[0].filters.map((f) => (
+              <HeaderFilterDropdown
+                key={String(f.key)}
+                label={f.label}
+                options={f.options}
+                selected={filters[f.key] ?? []}
+                onToggle={(val) => toggleFilterValue(f.key, val)}
+                onClear={() => clearFilter(f.key)}
+              />
+            ))}
+          </div>
+        )}
 
+        <div className="h-4 w-px bg-[var(--border)] shrink-0" />
+
+        {/* Time dropdown */}
         <UnifiedTimeSelector
           period={period}
           timeRange={timeRange}
@@ -449,48 +472,7 @@ export function Header({ title }: HeaderProps) {
           isDark={isDark}
         />
 
-        {/* Filters toggle */}
-        {hasAnyFilters && (
-          <>
-            <button
-              onClick={() => setFiltersExpanded((p) => !p)}
-              className={cn(
-                "flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors shrink-0",
-                totalFilters > 0
-                  ? isDark
-                    ? "bg-[#5B22FF]/15 text-[#7C4DFF] border border-[#5B22FF]/30"
-                    : "bg-[#D00083]/10 text-[#D00083] border border-[#D00083]/30"
-                  : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-              )}
-            >
-              <SlidersHorizontal className="h-3 w-3" />
-              <span>{tCommon("filters")}</span>
-              {totalFilters > 0 && (
-                <span className={cn(
-                  "flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[9px] font-bold text-white",
-                  isDark ? "bg-[#5B22FF]" : "bg-[#D00083]"
-                )}>
-                  {totalFilters}
-                </span>
-              )}
-              <ChevronDown className={cn("h-3 w-3 transition-transform", filtersExpanded && "rotate-180")} />
-            </button>
-            {totalFilters > 0 && (
-              <button
-                onClick={() => clearFilters()}
-                className="text-[var(--text-muted)] hover:text-[var(--danger)] shrink-0"
-                aria-label="Reset filters"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </>
-        )}
-      </div>
-
-      {/* Row 2: Time range label + date range + comparison */}
-      <div className="flex items-center gap-2 px-4 pb-1.5">
-        <span className="text-[10px] text-[var(--text-muted)]">Time range:</span>
+        {/* Date range + comparison */}
         <span className={cn("text-[10px] font-semibold", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>
           {dateRange.label}
         </span>
@@ -512,180 +494,44 @@ export function Header({ title }: HeaderProps) {
           </select>
           <ChevronDown className="pointer-events-none absolute right-0.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-[var(--text-muted)]" />
         </div>
+
+        {totalFilters > 0 && (
+          <button
+            onClick={() => clearFilters()}
+            className="text-[var(--text-muted)] hover:text-[var(--danger)] shrink-0 ml-1"
+            aria-label="Reset filters"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
 
-      {/* Expandable filter panel */}
-      {filtersExpanded && hasAnyFilters && (
-        <div className={cn(
-          "border-t px-4 py-2",
-          isDark ? "border-[var(--border)] bg-[var(--surface)]/50" : "border-[var(--border)] bg-[var(--surface)]/50"
-        )}>
-          {/* Filter dropdowns */}
-          <div className="flex items-start gap-4">
-            {visibleGroups.map((group, gi) => (
-              <div key={group.label} className="flex items-center gap-1.5">
-                <span className={cn(
-                  "text-[9px] font-bold uppercase tracking-widest shrink-0 w-7",
-                  isDark ? "text-[#7C4DFF]/60" : "text-[#D00083]/60"
-                )}>
-                  {group.label}
-                </span>
-                <div className="flex flex-wrap gap-1">
-                  {group.filters.map((f) => (
-                    <HeaderFilterDropdown
-                      key={f.key}
-                      label={f.label}
-                      options={f.options}
-                      selected={filters[f.key]}
-                      onToggle={(v) => toggleFilterValue(f.key, v)}
-                      onClear={() => clearFilter(f.key)}
-                    />
-                  ))}
-                </div>
-                {gi < visibleGroups.length - 1 && (
-                  <div className="h-5 w-px bg-[var(--border)] ml-1.5 shrink-0" />
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* Saved filter presets bar */}
-          <div className="flex items-center gap-2 mt-2 pt-2 border-t border-[var(--border)]/50">
-            <Bookmark className={cn("h-3 w-3 shrink-0", isDark ? "text-[#7C4DFF]/50" : "text-[#D00083]/50")} />
-
-            {/* Saved preset chips */}
-            {savedPresets.map((preset) => (
-              <div key={preset.id} className="flex items-center gap-0.5">
-                {editingPresetId === preset.id ? (
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="text"
-                      value={editingName}
-                      onChange={(e) => setEditingName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          renamePreset(preset.id, editingName);
-                          setEditingPresetId(null);
-                        } else if (e.key === "Escape") {
-                          setEditingPresetId(null);
-                        }
-                      }}
-                      className={cn(
-                        "rounded border px-1.5 py-0.5 text-[10px] w-28 outline-none",
-                        isDark ? "border-[#5B22FF]/30 bg-[#141226] text-[var(--text-primary)]" : "border-[#D00083]/30 bg-white text-[var(--text-primary)]"
-                      )}
-                      autoFocus
-                    />
-                    <button
-                      onClick={() => { renamePreset(preset.id, editingName); setEditingPresetId(null); }}
-                      className="text-[var(--success)] hover:opacity-80"
-                    >
-                      <Check className="h-3 w-3" />
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => loadPreset(preset.id)}
-                    className={cn(
-                      "rounded-md px-2 py-0.5 text-[10px] font-medium transition-colors",
-                      isDark
-                        ? "bg-[var(--surface-elevated)] text-[var(--text-secondary)] hover:bg-[#5B22FF]/15 hover:text-[#7C4DFF]"
-                        : "bg-[var(--surface-elevated)] text-[var(--text-secondary)] hover:bg-[#D00083]/10 hover:text-[#D00083]"
-                    )}
-                  >
-                    {preset.name}
-                  </button>
-                )}
-                {editingPresetId !== preset.id && (
-                  <>
-                    <button
-                      onClick={() => { setEditingPresetId(preset.id); setEditingName(preset.name); }}
-                      className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] opacity-0 group-hover:opacity-100"
-                      title="Rename"
-                    >
-                      <Pencil className="h-2.5 w-2.5" />
-                    </button>
-                    <button
-                      onClick={() => deletePreset(preset.id)}
-                      className="text-[var(--text-muted)] hover:text-[var(--danger)]"
-                      title="Delete preset"
-                    >
-                      <Trash2 className="h-2.5 w-2.5" />
-                    </button>
-                  </>
-                )}
-              </div>
-            ))}
-
-            {/* Save current as preset */}
-            {totalFilters > 0 && !showSaveDialog && (
-              <button
-                onClick={() => { setPresetName(suggestPresetName()); setShowSaveDialog(true); }}
-                className={cn(
-                  "flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-medium transition-colors",
-                  isDark
-                    ? "text-[#7C4DFF] hover:bg-[#5B22FF]/15 border border-dashed border-[#5B22FF]/30"
-                    : "text-[#D00083] hover:bg-[#D00083]/10 border border-dashed border-[#D00083]/30"
-                )}
-              >
-                <Save className="h-2.5 w-2.5" />
-                {tCommon("saveFilters")}
-              </button>
-            )}
-
-            {/* Save dialog inline */}
-            {showSaveDialog && (
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="text"
-                  value={presetName}
-                  onChange={(e) => setPresetName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && presetName.trim()) {
-                      savePreset(presetName.trim());
-                      setShowSaveDialog(false);
-                      setPresetName("");
-                    } else if (e.key === "Escape") {
-                      setShowSaveDialog(false);
-                    }
-                  }}
-                  placeholder={tCommon("presetName")}
-                  className={cn(
-                    "rounded border px-2 py-0.5 text-[10px] w-36 outline-none",
-                    isDark ? "border-[#5B22FF]/30 bg-[#141226] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]" : "border-[#D00083]/30 bg-white text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
-                  )}
-                  autoFocus
+      {/* Row 2: Remaining filter groups (Txn, Risk) — always visible */}
+      {visibleGroups.length > 1 && (
+        <div className="flex items-center gap-3 px-4 pb-1.5 flex-wrap">
+          {visibleGroups.slice(1).map((group) => (
+            <div key={group.label} className="flex items-center gap-1">
+              <span className={cn(
+                "text-[9px] font-bold uppercase tracking-widest shrink-0",
+                isDark ? "text-[#7C4DFF]/60" : "text-[#D00083]/60"
+              )}>
+                {group.label}
+              </span>
+              {group.filters.map((f) => (
+                <HeaderFilterDropdown
+                  key={String(f.key)}
+                  label={f.label}
+                  options={f.options}
+                  selected={filters[f.key] ?? []}
+                  onToggle={(val) => toggleFilterValue(f.key, val)}
+                  onClear={() => clearFilter(f.key)}
                 />
-                <button
-                  onClick={() => {
-                    if (presetName.trim()) {
-                      savePreset(presetName.trim());
-                      setShowSaveDialog(false);
-                      setPresetName("");
-                    }
-                  }}
-                  className={cn(
-                    "rounded px-2 py-0.5 text-[10px] font-medium text-white",
-                    isDark ? "bg-[#5B22FF]" : "bg-[#D00083]"
-                  )}
-                >
-                  {tCommon("save")}
-                </button>
-                <button
-                  onClick={() => setShowSaveDialog(false)}
-                  className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            )}
-
-            {savedPresets.length === 0 && totalFilters === 0 && (
-              <span className="text-[10px] text-[var(--text-muted)] italic">{tCommon("noFiltersHint")}</span>
-            )}
-          </div>
+              ))}
+            </div>
+          ))}
         </div>
       )}
+
     </header>
   );
 }
