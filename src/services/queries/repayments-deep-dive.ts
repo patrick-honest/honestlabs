@@ -28,6 +28,40 @@ export interface RepaymentToBalanceRatioRow {
   avg_ratio: number;
 }
 
+export interface WeeklyRepaymentTrendRow {
+  week_start: string;
+  payment_count: number;
+  total_amount_idr: number;
+  unique_accounts: number;
+}
+
+// ---------------------------------------------------------------------------
+// 0. Weekly Repayment Trend (from DW009 posted_transaction)
+// ---------------------------------------------------------------------------
+
+export async function getWeeklyRepaymentTrend(
+  startDate: Date,
+  endDate: Date,
+): Promise<WeeklyRepaymentTrendRow[]> {
+  const sql = `
+    SELECT
+      DATE_TRUNC(p9_dw009_pst_dt, ISOWEEK) AS week_start,
+      COUNT(*) AS payment_count,
+      ROUND(SUM(CAST(f9_dw009_amt AS FLOAT64) / 100), 2) AS total_amount_idr,
+      COUNT(DISTINCT fx_dw009_loc_acct) AS unique_accounts
+    FROM ${TABLES.posted_transaction}
+    WHERE p9_dw009_pst_dt BETWEEN @startDate AND @endDate
+      AND fx_dw009_txn_typ IN ('PM', 'RF')
+    GROUP BY week_start
+    ORDER BY week_start
+  `;
+
+  return runQuery<WeeklyRepaymentTrendRow>(sql, {
+    startDate: toSqlDate(startDate),
+    endDate: toSqlDate(endDate),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // 1. Repayment Volume Trend (monthly, from DW009 posted_transaction)
 // ---------------------------------------------------------------------------

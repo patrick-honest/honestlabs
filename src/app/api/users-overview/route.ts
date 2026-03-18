@@ -6,12 +6,21 @@ import {
   getVerificationBreakdown,
   getGeographicDistribution,
 } from "@/services/queries/users-overview";
+import {
+  getAccountStatusBreakdown,
+  getDeviceBreakdown as getDeviceManufacturers,
+  getOsBreakdown,
+  getGeographicDistribution as getGeoDeepDive,
+  getAccountGrowthTrend,
+} from "@/services/queries/users-deep-dive";
 
 // ---------------------------------------------------------------------------
 // GET /api/users-overview?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
 //
 // Returns real BigQuery users overview data — account statuses, devices,
 // demographics, verification breakdown, and geographic distribution.
+// Also returns deep-dive data: status breakdown by date, device manufacturers,
+// OS breakdown, geographic distribution, and account growth trend.
 // ---------------------------------------------------------------------------
 
 export async function GET(request: NextRequest) {
@@ -30,12 +39,24 @@ export async function GET(request: NextRequest) {
       demographics,
       verification,
       geographic,
+      // Deep-dive queries
+      statusBreakdown,
+      deviceManufacturers,
+      osBreakdown,
+      geoDeepDive,
+      accountGrowth,
     ] = await Promise.all([
       getAccountStatusDistribution().catch(() => []),
       getDeviceBreakdown(start, end).catch(() => []),
       getDemographics(start, end).catch(() => []),
       getVerificationBreakdown(start, end).catch(() => []),
       getGeographicDistribution(start, end).catch(() => []),
+      // Deep-dive queries
+      getAccountStatusBreakdown(end).catch(() => []),
+      getDeviceManufacturers().catch(() => []),
+      getOsBreakdown().catch(() => []),
+      getGeoDeepDive(start, end).catch(() => []),
+      getAccountGrowthTrend(start, end).catch(() => []),
     ]);
 
     const response = NextResponse.json({
@@ -44,6 +65,12 @@ export async function GET(request: NextRequest) {
       demographics,
       verification,
       geographic,
+      // Deep-dive data
+      statusBreakdown,
+      deviceManufacturers,
+      osBreakdown,
+      geoDeepDive,
+      accountGrowth,
       asOf: new Date().toISOString(),
       dataRange: { start: startDate, end: endDate },
     });

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  getWeeklyRepaymentTrend,
   getRepaymentVolumeTrend,
   getRepaymentByVendor,
   getRepaymentTimeliness,
@@ -22,8 +23,9 @@ export async function GET(request: Request) {
     const start = new Date(startDate);
     const end = new Date(endDate);
 
-    const [volumeTrend, byVendor, timeliness, balanceRatio] =
+    const [weeklyTrend, volumeTrend, byVendor, timeliness, balanceRatio] =
       await Promise.all([
+        getWeeklyRepaymentTrend(start, end),
         getRepaymentVolumeTrend(start, end),
         getRepaymentByVendor(start, end),
         getRepaymentTimeliness(end),
@@ -31,6 +33,7 @@ export async function GET(request: Request) {
       ]);
 
     return NextResponse.json({
+      weeklyTrend,
       volumeTrend,
       byVendor,
       timeliness,

@@ -69,46 +69,61 @@ export interface WeeklySpendTrendRow {
 
 export async function getWeeklySpendTrend(startDate: Date, endDate: Date): Promise<WeeklySpendTrendRow[]> {
   const sql = `
-    WITH card_unblocked AS (
+    WITH
+    -- 1. Exclude RP1 and Registration Fee users
+    excluded_users AS (
+      SELECT DISTINCT m.external_id AS loc_acct
+      FROM ${TABLES.decision_completed} d
+      JOIN ${TABLES.cms_line_of_credit} m ON d.user_id = m.user_id
+      WHERE IFNULL(d.is_prepaid_card_applicable, FALSE) IS TRUE
+         OR IFNULL(d.is_account_opening_fee_applicable, FALSE) IS TRUE
+    ),
+    -- 2. Cards unblocked & enabled for contactless/NFC/etc.
+    card_unblocked AS (
       SELECT DISTINCT f9_dw005_loc_acct AS loc_acct
       FROM ${TABLES.principal_card_updates}
       WHERE f9_dw005_1st_unblk_all_mtd_tms IS NOT NULL
         AND TRIM(CAST(f9_dw005_1st_unblk_all_mtd_tms AS STRING)) != ''
+        AND (fx_dw005_crd_stat IS NULL OR TRIM(CAST(fx_dw005_crd_stat AS STRING)) != '')
         AND f9_dw005_hce_txn_ind LIKE '%0%'
         AND f9_dw005_net_txn_ind LIKE '%0%'
         AND fx_dw005_contc_less_flg LIKE '%Y%'
         AND f9_dw005_contc_txn_ind LIKE '%0%'
     ),
+    -- 3. Eligible users per week (Sunday snapshot of Mon-Sun week)
     weekly_eligible AS (
       SELECT
-        DATE_TRUNC(dw4.f9_dw004_bus_dt, ISOWEEK) AS week_start,
-        COUNT(DISTINCT dw4.p9_dw004_loc_acct) AS eligible_count
-      FROM ${TABLES.financial_account_updates} dw4
-      JOIN card_unblocked cu ON dw4.p9_dw004_loc_acct = cu.loc_acct
-      WHERE dw4.f9_dw004_bus_dt BETWEEN @startDate AND @endDate
-        AND EXTRACT(DAYOFWEEK FROM dw4.f9_dw004_bus_dt) = 1
-        AND dw4.fx_dw004_loc_stat IN ('G', 'N')
-        AND dw4.f9_dw004_curr_dpd = 0
+        DATE_TRUNC(a.f9_dw004_bus_dt, WEEK(MONDAY)) AS week_start,
+        COUNT(DISTINCT a.p9_dw004_loc_acct) AS eligible_count
+      FROM ${TABLES.financial_account_updates} a
+      JOIN card_unblocked c ON a.p9_dw004_loc_acct = c.loc_acct
+      WHERE EXTRACT(DAYOFWEEK FROM a.f9_dw004_bus_dt) = 1
+        AND a.fx_dw004_loc_stat IN ('G', 'N')
+        AND a.f9_dw004_bus_dt BETWEEN @startDate AND @endDate
+        AND a.f9_dw004_curr_dpd >= 0
+        AND a.p9_dw004_loc_acct NOT IN (SELECT loc_acct FROM excluded_users)
       GROUP BY week_start
     ),
+    -- 4. CRN → loc_acct mapping
     card_acct_map AS (
       SELECT DISTINCT f9_dw005_crn AS crn, f9_dw005_loc_acct AS loc_acct
       FROM ${TABLES.principal_card_updates}
     ),
+    -- 5. Weekly transactors & transaction counts
     weekly_transactors AS (
       SELECT
-        DATE_TRUNC(dw7.f9_dw007_dt, ISOWEEK) AS week_start,
+        DATE_TRUNC(t.f9_dw007_dt, WEEK(MONDAY)) AS week_start,
         COUNT(DISTINCT cam.loc_acct) AS transactor_count,
         COUNT(*) AS total_transactions,
-        ROUND(SUM(CAST(f9_dw007_amt_req AS FLOAT64) / 100), 2) AS total_spend_idr,
-        ROUND(SUM(CASE WHEN dw7.fx_dw007_txn_typ = 'TM' THEN CAST(f9_dw007_amt_req AS FLOAT64) / 100 ELSE 0 END), 2) AS online_spend_idr,
-        ROUND(SUM(CASE WHEN dw7.fx_dw007_txn_typ != 'TM' AND NOT (dw7.fx_dw007_txn_typ = 'RA' AND dw7.fx_dw007_rte_dest = 'L') THEN CAST(f9_dw007_amt_req AS FLOAT64) / 100 ELSE 0 END), 2) AS offline_spend_idr,
-        ROUND(SUM(CASE WHEN dw7.fx_dw007_txn_typ = 'RA' AND dw7.fx_dw007_rte_dest = 'L' THEN CAST(f9_dw007_amt_req AS FLOAT64) / 100 ELSE 0 END), 2) AS qris_spend_idr
-      FROM ${TABLES.authorized_transaction} dw7
-      JOIN card_acct_map cam ON dw7.f9_dw007_prin_crn = cam.crn
-      WHERE dw7.f9_dw007_dt BETWEEN @startDate AND @endDate
-        AND COALESCE(dw7.fx_dw007_stat, '', ' ') IN ('', ' ')
-        AND dw7.fx_dw007_txn_typ NOT IN ('PM', 'RF', 'BE')
+        ROUND(SUM(CAST(t.f9_dw007_amt_req AS FLOAT64) / 100), 2) AS total_spend_idr,
+        ROUND(SUM(CASE WHEN t.fx_dw007_txn_typ = 'TM' THEN CAST(t.f9_dw007_amt_req AS FLOAT64) / 100 ELSE 0 END), 2) AS online_spend_idr,
+        ROUND(SUM(CASE WHEN t.fx_dw007_txn_typ != 'TM' AND NOT (t.fx_dw007_txn_typ = 'RA' AND t.fx_dw007_rte_dest = 'L') THEN CAST(t.f9_dw007_amt_req AS FLOAT64) / 100 ELSE 0 END), 2) AS offline_spend_idr,
+        ROUND(SUM(CASE WHEN t.fx_dw007_txn_typ = 'RA' AND t.fx_dw007_rte_dest = 'L' THEN CAST(t.f9_dw007_amt_req AS FLOAT64) / 100 ELSE 0 END), 2) AS qris_spend_idr
+      FROM ${TABLES.authorized_transaction} t
+      JOIN card_acct_map cam ON t.f9_dw007_prin_crn = cam.crn
+      WHERE (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '')
+        AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+        AND t.f9_dw007_dt BETWEEN @startDate AND @endDate
       GROUP BY week_start
     )
     SELECT
@@ -123,7 +138,7 @@ export async function getWeeklySpendTrend(startDate: Date, endDate: Date): Promi
       ROUND(COALESCE(t.qris_spend_idr, 0), 2) AS qris_spend_idr,
       ROUND(SAFE_DIVIDE(COALESCE(t.total_spend_idr, 0), NULLIF(COALESCE(t.total_transactions, 0), 0)), 2) AS avg_spend_per_txn_idr
     FROM weekly_eligible e
-    LEFT JOIN weekly_transactors t ON e.week_start = t.week_start
+    LEFT JOIN weekly_transactors t USING (week_start)
     ORDER BY e.week_start
   `;
 
@@ -148,42 +163,55 @@ export interface PeriodSpendSummary {
 
 export async function getPeriodSpendSummary(startDate: Date, endDate: Date): Promise<PeriodSpendSummary | null> {
   const sql = `
-    WITH card_unblocked AS (
+    WITH
+    -- 1. Exclude RP1 and Registration Fee users
+    excluded_users AS (
+      SELECT DISTINCT m.external_id AS loc_acct
+      FROM ${TABLES.decision_completed} d
+      JOIN ${TABLES.cms_line_of_credit} m ON d.user_id = m.user_id
+      WHERE IFNULL(d.is_prepaid_card_applicable, FALSE) IS TRUE
+         OR IFNULL(d.is_account_opening_fee_applicable, FALSE) IS TRUE
+    ),
+    -- 2. Cards unblocked & enabled
+    card_unblocked AS (
       SELECT DISTINCT f9_dw005_loc_acct AS loc_acct
       FROM ${TABLES.principal_card_updates}
       WHERE f9_dw005_1st_unblk_all_mtd_tms IS NOT NULL
         AND TRIM(CAST(f9_dw005_1st_unblk_all_mtd_tms AS STRING)) != ''
+        AND (fx_dw005_crd_stat IS NULL OR TRIM(CAST(fx_dw005_crd_stat AS STRING)) != '')
         AND f9_dw005_hce_txn_ind LIKE '%0%'
         AND f9_dw005_net_txn_ind LIKE '%0%'
         AND fx_dw005_contc_less_flg LIKE '%Y%'
         AND f9_dw005_contc_txn_ind LIKE '%0%'
     ),
-    -- Eligible: snapshot on the last available date in the period
+    -- 3. Eligible: snapshot on the last available date in the period
     eligible AS (
-      SELECT COUNT(DISTINCT dw4.p9_dw004_loc_acct) AS cnt
-      FROM ${TABLES.financial_account_updates} dw4
-      JOIN card_unblocked cu ON dw4.p9_dw004_loc_acct = cu.loc_acct
-      WHERE dw4.f9_dw004_bus_dt = (
+      SELECT COUNT(DISTINCT a.p9_dw004_loc_acct) AS cnt
+      FROM ${TABLES.financial_account_updates} a
+      JOIN card_unblocked c ON a.p9_dw004_loc_acct = c.loc_acct
+      WHERE a.f9_dw004_bus_dt = (
         SELECT MAX(f9_dw004_bus_dt) FROM ${TABLES.financial_account_updates} WHERE f9_dw004_bus_dt <= @endDate
       )
-        AND dw4.fx_dw004_loc_stat IN ('G', 'N')
-        AND dw4.f9_dw004_curr_dpd = 0
+        AND a.fx_dw004_loc_stat IN ('G', 'N')
+        AND a.f9_dw004_curr_dpd >= 0
+        AND a.p9_dw004_loc_acct NOT IN (SELECT loc_acct FROM excluded_users)
     ),
+    -- 4. CRN → loc_acct mapping
     card_acct_map AS (
       SELECT DISTINCT f9_dw005_crn AS crn, f9_dw005_loc_acct AS loc_acct
       FROM ${TABLES.principal_card_updates}
     ),
-    -- Transactors: distinct accounts with >=1 valid txn in the ENTIRE period
+    -- 5. Transactors: distinct accounts with >=1 valid txn in the ENTIRE period
     transactors AS (
       SELECT
         COUNT(DISTINCT cam.loc_acct) AS cnt,
         COUNT(*) AS total_txns,
-        ROUND(SUM(CAST(f9_dw007_amt_req AS FLOAT64) / 100), 2) AS total_spend
+        ROUND(SUM(CAST(dw7.f9_dw007_amt_req AS FLOAT64) / 100), 2) AS total_spend
       FROM ${TABLES.authorized_transaction} dw7
       JOIN card_acct_map cam ON dw7.f9_dw007_prin_crn = cam.crn
-      WHERE dw7.f9_dw007_dt BETWEEN @startDate AND @endDate
-        AND COALESCE(dw7.fx_dw007_stat, '', ' ') IN ('', ' ')
-        AND dw7.fx_dw007_txn_typ NOT IN ('PM', 'RF', 'BE')
+      WHERE (dw7.fx_dw007_stat IS NULL OR TRIM(dw7.fx_dw007_stat) = '')
+        AND dw7.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+        AND dw7.f9_dw007_dt BETWEEN @startDate AND @endDate
     )
     SELECT
       e.cnt AS eligible_count,
