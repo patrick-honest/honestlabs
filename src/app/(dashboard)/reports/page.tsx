@@ -5,7 +5,7 @@ import { Header } from "@/components/layout/header";
 import { Search, Filter, ChevronDown, ChevronRight, TrendingUp, TrendingDown, Minus, Calendar, X, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
-import { generateReportPdf } from "@/lib/report-pdf";
+import { generateCombinedReportPdf, type ReportKpi } from "@/lib/report-pdf";
 import type { Cycle } from "@/types/reports";
 
 // ---------------------------------------------------------------------------
@@ -368,7 +368,20 @@ function ReportRow({ report, isDark }: { report: ReportEntry; isDark: boolean })
         <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
           {report.status === "complete" && (
             <button
-              onClick={() => generateReportPdf(report)}
+              onClick={() => generateCombinedReportPdf({
+                cycle: report.cycle,
+                periodStart: report.periodStart,
+                periodEnd: report.periodEnd,
+                generatedAt: report.generatedAt,
+                overallTitle: report.title,
+                sections: [
+                  { title: "Executive Summary", kpis: report.kpis as ReportKpi[], trends: report.trends },
+                  { title: "Spend Deep Dive", kpis: [], trends: ["Spend metrics for this period — see webapp for detailed charts."] },
+                  { title: "Risk Deep Dive", kpis: [], trends: ["Portfolio risk metrics for this period — see webapp for DPD distribution."] },
+                  { title: "Acquisition Deep Dive", kpis: [], trends: ["Funnel and approval metrics for this period."] },
+                  { title: "Activation Deep Dive", kpis: [], trends: ["Card activation and first transaction metrics."] },
+                ],
+              })}
               className={cn(
                 "flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium transition-colors",
                 isDark

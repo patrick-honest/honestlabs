@@ -32,10 +32,17 @@ export default function DeepDiveLayout({
 }) {
   const pathname = usePathname();
   const { isDark } = useTheme();
-  const { period, periodLabel, dateRange } = usePeriod();
+  const { period, periodLabel, dateRange, timeRange } = usePeriod();
 
   const sectionLabel = PAGE_LABELS[pathname] ?? "Deep Dive";
   const title = `${sectionLabel} Deep Dive`;
+
+  // Time range label for display
+  const timeRangeLabels: Record<string, string> = {
+    last_full: period === "weekly" ? "Last Full Week" : period === "monthly" ? "Last Full Month" : period === "quarterly" ? "Last Full Quarter" : "Last Full Year",
+    xtd: period === "weekly" ? "Week to Date" : period === "monthly" ? "Month to Date" : period === "quarterly" ? "Quarter to Date" : "Year to Date",
+    full: period === "weekly" ? "Full Week" : period === "monthly" ? "Full Month" : period === "quarterly" ? "Full Quarter" : "Full Year",
+  };
 
   const handleDownloadPdf = useCallback(() => {
     generateReportPdf({
@@ -44,42 +51,48 @@ export default function DeepDiveLayout({
       periodStart: dateRange.start.toISOString().slice(0, 10),
       periodEnd: dateRange.end.toISOString().slice(0, 10),
       section: `${sectionLabel} Deep Dive`,
-      title: `${sectionLabel} Deep Dive — ${periodLabel}`,
+      title: `${sectionLabel} Deep Dive — ${timeRangeLabels[timeRange] ?? periodLabel}`,
       generatedAt: new Date().toISOString(),
       kpis: [],
       trends: [
-        `This report covers the ${periodLabel} period.`,
+        `This report covers the ${timeRangeLabels[timeRange] ?? periodLabel} period.`,
         `Data range: ${dateRange.label}.`,
-        "For detailed metrics, refer to the webapp dashboard.",
+        "For detailed metrics and charts, refer to the webapp dashboard.",
       ],
     });
-  }, [sectionLabel, pathname, period, periodLabel, dateRange]);
+  }, [sectionLabel, pathname, period, periodLabel, dateRange, timeRange, timeRangeLabels]);
 
   return (
     <div className="flex flex-col h-full">
       <Header title={title} />
 
-      {/* Save PDF bar — slim, below header */}
-      <div className={cn(
-        "flex items-center justify-end px-6 py-1 border-b",
-        isDark ? "border-[var(--border)] bg-[var(--background)]" : "border-[var(--border)] bg-[var(--background)]"
-      )}>
-        <button
-          onClick={handleDownloadPdf}
-          className={cn(
-            "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[10px] font-medium transition-colors",
-            isDark
-              ? "text-[#7C4DFF] hover:bg-[#5B22FF]/15"
-              : "text-[#D00083] hover:bg-[#D00083]/10"
-          )}
-          title={`Save ${sectionLabel} as PDF`}
-        >
-          <Download className="h-3 w-3" />
-          Save PDF
-        </button>
-      </div>
+      {/* Page content with inline title + save PDF */}
+      <div className="flex-1 overflow-y-auto p-6">
+        {/* Title row with Save PDF button */}
+        <div className="flex items-start justify-between mb-1">
+          <div>
+            <h1 className="text-xl font-bold text-[var(--text-primary)]">{title}</h1>
+            <p className="text-xs text-[var(--text-muted)] mt-0.5">
+              {timeRangeLabels[timeRange] ?? periodLabel} · {dateRange.label}
+            </p>
+          </div>
+          <button
+            onClick={handleDownloadPdf}
+            className={cn(
+              "flex items-center gap-1.5 shrink-0 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+              isDark
+                ? "text-[#7C4DFF] hover:bg-[#5B22FF]/15 border border-[#5B22FF]/30"
+                : "text-[#D00083] hover:bg-[#D00083]/10 border border-[#D00083]/30"
+            )}
+            title={`Save ${sectionLabel} as PDF`}
+          >
+            <Download className="h-3.5 w-3.5" />
+            Save PDF
+          </button>
+        </div>
 
-      <div className="flex-1 overflow-y-auto p-6">{children}</div>
+        {children}
+      </div>
     </div>
   );
 }
