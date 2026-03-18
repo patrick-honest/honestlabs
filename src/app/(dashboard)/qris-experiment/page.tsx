@@ -6,7 +6,7 @@ import { Header } from "@/components/layout/header";
 import { useTranslations } from "next-intl";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
-import { QrCode, CheckCircle2, TrendingUp, Users, CreditCard, ArrowUpRight, Star, Store, DollarSign } from "lucide-react";
+import { QrCode, CheckCircle2, TrendingUp, Users, CreditCard, ArrowUpRight, Star, Store, DollarSign, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
 import { usePeriod } from "@/hooks/use-period";
@@ -98,38 +98,38 @@ const actionItems: ActionItem[] = [
   {
     id: "qris-1",
     priority: "positive",
-    action: "QRIS drives higher overall engagement.",
-    detail: "QRIS users transact 2.1x more frequently and spend 45% more overall than non-QRIS users. The higher transaction frequency more than compensates for lower per-txn interchange.",
+    action: "QRIS drives +16.9% total spend and +18.2% more transactions.",
+    detail: "Test group shows significantly higher engagement: more transactors (+5.8%), more transactions per user (+12.3%), and higher total spend. QRIS adoption at 55% of Test transactors.",
   },
   {
     id: "qris-2",
-    priority: "positive",
-    action: "Revenue per user is 2.5x higher for QRIS adopters.",
-    detail: "Even accounting for the lower 0.7% QRIS MDR vs 1.5% card interchange, total revenue generated per QRIS user is IDR 24.8K/month vs IDR 10.2K/month for non-QRIS users.",
+    priority: "urgent",
+    action: "Total revenue per user is 13.6% LOWER for Test group.",
+    detail: "Card interchange cannibalization (-28.9%) far outweighs the QRIS MDR revenue gain. QRIS issuer share (0.2035%) is ~8x lower than card interchange (1.6%). Net revenue loss of ~IDR 154K per user.",
   },
   {
     id: "qris-3",
     priority: "positive",
-    action: "Multi-channel usage is a strong signal.",
-    detail: "78% of QRIS users also use their card online and offline, compared to only 35% of non-QRIS users. QRIS activation unlocks broader card utility.",
+    action: "Fee and interest revenue is +5.4% higher for Test group.",
+    detail: "Admin fees +4.3%, charge fees +5.1%, interest +18.9%. Higher transaction activity generates more fee income. This partially offsets interchange losses but does not close the gap.",
   },
   {
     id: "qris-4",
     priority: "monitor",
-    action: "Monitor QRIS-only users carefully.",
-    detail: "A small subset (~8%) of QRIS users only transact via QR. These users generate the lowest interchange. Consider targeted campaigns to encourage card usage alongside QRIS.",
+    action: "Card interchange cannibalization is the key concern.",
+    detail: "Test group lost IDR 1.07B in card interchange but gained only IDR 200M in QRIS revenue + IDR 103M in extra fees. The question: does higher engagement and LTV justify the ~IDR 770M net revenue gap?",
   },
   {
     id: "qris-5",
     priority: "monitor",
-    action: "Grocery dominance suggests expansion opportunity.",
-    detail: "Grocery/Supermarket is the #1 QRIS category by far. Explore merchant partnerships in underpenetrated categories like electronics and fashion to grow QRIS volume.",
+    action: "80K+ QRIS-only merchants expand card acceptance reach.",
+    detail: "These merchants only process QRIS — they represent new transaction opportunities that would not exist without QRIS. However, the low MDR (0.2035% issuer share) limits revenue from this expanded reach.",
   },
   {
     id: "qris-6",
-    priority: "urgent",
-    action: "Recommend: Make QRIS generally available.",
-    detail: "Data strongly supports graduating QRIS from experiment to permanent feature. Adoption is growing 2-3% weekly, engagement lift is clear, and profitability per user is materially higher.",
+    priority: "monitor",
+    action: "Decision requires LTV modeling and strategic assessment.",
+    detail: "QRIS clearly drives engagement and customer stickiness. Before graduating: (1) model long-term LTV including churn reduction, (2) assess BI regulatory trajectory on QRIS mandates, (3) evaluate competitive positioning if Honest does NOT offer QRIS.",
   },
 ];
 
@@ -449,11 +449,11 @@ export default function QrisExperimentPage() {
             {/* Verdict Badge */}
             <div className="shrink-0">
               <div className="flex flex-col items-center rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 px-8 py-5">
-                <CheckCircle2 className="h-8 w-8 text-[#06D6A0] mb-2" />
+                <AlertTriangle className="h-8 w-8 text-[#FFD166] mb-2" />
                 <span className="text-xs font-semibold uppercase tracking-widest text-white/60 mb-1">Verdict</span>
-                <span className="text-lg font-bold text-[#06D6A0]">RECOMMENDED</span>
-                <span className="text-[11px] text-white/50 mt-1 text-center">
-                  Graduate to permanent feature
+                <span className="text-lg font-bold text-[#FFD166]">NEEDS REVIEW</span>
+                <span className="text-[11px] text-white/50 mt-1 text-center max-w-[150px]">
+                  Higher engagement but lower RPU
                 </span>
               </div>
             </div>
@@ -930,11 +930,19 @@ export default function QrisExperimentPage() {
             <span className="font-semibold text-[var(--text-secondary)]">Methodology:</span>{" "}
             A/B test with {hasData ? `${(test.cohort_size + control.cohort_size).toLocaleString()}` : "~10,000"} users from <code className={cn("px-1 rounded", isDark ? "text-[#7C4DFF] bg-[#5B22FF]/10" : "text-[#D00083] bg-[#D00083]/10")}>sandbox_risk.sample_qris_rollout_test_10k_202601</code>.
             Contaminated Control users (with QRIS transactions) are excluded dynamically.
-            QRIS transactions are identified by <code className={cn("px-1 rounded", isDark ? "text-[#7C4DFF] bg-[#5B22FF]/10" : "text-[#D00083] bg-[#D00083]/10")}>fx_dw007_txn_typ = &apos;RA&apos;</code> and{" "}
+            QRIS transactions are identified by{" "}
             <code className={cn("px-1 rounded", isDark ? "text-[#7C4DFF] bg-[#5B22FF]/10" : "text-[#D00083] bg-[#D00083]/10")}>fx_dw007_rte_dest = &apos;L&apos;</code>.
-            Currency conversion: cents / 100 / 16,000 = USD.
-            Spend data is based on <strong>authorized transactions</strong> (DW007). Interchange estimates use 0.7% MDR for QRIS and ~1.5% weighted average for card transactions.
-            Data as of {AS_OF}.
+            Currency conversion: cents / 100 for IDR, / 16,000 for USD.
+            Interchange estimates: card ~1.6% (blended Visa+MC domestic, Kansas City Fed Aug 2025), QRIS MDR ~0.55% weighted avg (PBI No. 24/8/PBI/2022) with 37% issuer share via PT ALTO Network.
+            Fee and interest revenue sourced from actual billed amounts in DW004 (f9_dw004_tot_int, f9_dw004_bil_fee_chrg_1, f9_dw004_bil_chrg_fee).
+            Spend data from authorized transactions (DW007). Data as of {AS_OF}.
+          </p>
+          <p className="text-xs text-[var(--text-muted)] leading-relaxed mt-2">
+            <span className="font-semibold text-amber-600">Revenue Note:</span>{" "}
+            While QRIS drives higher engagement (+16.9% total spend, +18.2% transactions) and modestly higher fee/interest revenue (+5.4%),
+            the card interchange cannibalization (-28.9%) results in <strong>lower total revenue per user</strong> for the Test group.
+            The QRIS issuer share (0.2035% effective rate) is ~8x lower than card interchange (1.6%).
+            Decision to graduate QRIS should weigh customer engagement benefits and long-term LTV against short-term revenue impact.
           </p>
         </div>
       </div>
