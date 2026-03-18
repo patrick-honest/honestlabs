@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, useMemo, type FormEvent } from "react";
 import { Search, Loader2, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
+import { useTranslations } from "next-intl";
 import type { SearchField } from "@/types/search";
 
 interface UserSearchFormProps {
@@ -11,15 +12,15 @@ interface UserSearchFormProps {
   isLoading?: boolean;
 }
 
-const SEARCH_FIELDS: { value: SearchField; label: string; placeholder: string; isPii?: boolean }[] = [
-  { value: "user_id", label: "User ID", placeholder: "Enter user_id (UUID format)" },
-  { value: "urn", label: "URN", placeholder: "Enter URN (e.g., URN-2024-001)" },
-  { value: "crn", label: "CRN", placeholder: "Enter Principal CRN" },
-  { value: "loc", label: "LOC Account", placeholder: "Enter LOC account number" },
-  { value: "anonymous_id", label: "Anonymous ID", placeholder: "Enter anonymous_id" },
-  { value: "application_id", label: "Application ID", placeholder: "Enter application_id" },
-  { value: "phone", label: "Phone Number", placeholder: "Enter phone number (not stored or displayed)", isPii: true },
-  { value: "email", label: "Email", placeholder: "Enter email address (not stored or displayed)", isPii: true },
+const SEARCH_FIELD_DEFS: { value: SearchField; labelKey: string; placeholderKey: string; isPii?: boolean }[] = [
+  { value: "user_id", labelKey: "userId", placeholderKey: "userIdPlaceholder" },
+  { value: "urn", labelKey: "urn", placeholderKey: "urnPlaceholder" },
+  { value: "crn", labelKey: "crn", placeholderKey: "crnPlaceholder" },
+  { value: "loc", labelKey: "locAcct", placeholderKey: "locPlaceholder" },
+  { value: "anonymous_id", labelKey: "anonId", placeholderKey: "anonPlaceholder" },
+  { value: "application_id", labelKey: "appId", placeholderKey: "appIdPlaceholder" },
+  { value: "phone", labelKey: "phone", placeholderKey: "phonePlaceholder", isPii: true },
+  { value: "email", labelKey: "email", placeholderKey: "emailPlaceholder", isPii: true },
 ];
 
 export function UserSearchForm({ onSearch, isLoading = false }: UserSearchFormProps) {
@@ -27,8 +28,21 @@ export function UserSearchForm({ onSearch, isLoading = false }: UserSearchFormPr
   const [field, setField] = useState<SearchField>("user_id");
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const { isDark } = useTheme();
+  const tForm = useTranslations("searchForm");
+  const tCommon = useTranslations("common");
 
-  const currentField = SEARCH_FIELDS.find((f) => f.value === field)!;
+  const searchFields = useMemo(
+    () =>
+      SEARCH_FIELD_DEFS.map((def) => ({
+        value: def.value,
+        label: tForm(def.labelKey),
+        placeholder: tForm(def.placeholderKey),
+        isPii: def.isPii,
+      })),
+    [tForm]
+  );
+
+  const currentField = searchFields.find((f) => f.value === field)!;
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -61,7 +75,7 @@ export function UserSearchForm({ onSearch, isLoading = false }: UserSearchFormPr
               ? "border-[var(--border)] bg-[#141226] shadow-black/40"
               : "border-[var(--border)] bg-white shadow-black/10"
           )}>
-            {SEARCH_FIELDS.map((f) => (
+            {searchFields.map((f) => (
               <button
                 key={f.value}
                 type="button"
@@ -79,7 +93,7 @@ export function UserSearchForm({ onSearch, isLoading = false }: UserSearchFormPr
                 <span>{f.label}</span>
                 {f.isPii && (
                   <span className="ml-auto text-[10px] text-[var(--text-muted)] rounded-full bg-[var(--warning)]/20 px-1.5 py-0.5">
-                    PII
+                    {tForm("pii")}
                   </span>
                 )}
               </button>
@@ -108,7 +122,7 @@ export function UserSearchForm({ onSearch, isLoading = false }: UserSearchFormPr
         />
         {currentField.isPii && (
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-[var(--warning)]">
-            Not stored or displayed
+            {tForm("piiNotStored")}
           </span>
         )}
       </div>
@@ -127,12 +141,12 @@ export function UserSearchForm({ onSearch, isLoading = false }: UserSearchFormPr
         {isLoading ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin" />
-            Searching...
+            {tForm("searching")}
           </>
         ) : (
           <>
             <Search className="h-4 w-4" />
-            Search
+            {tCommon("search")}
           </>
         )}
       </button>

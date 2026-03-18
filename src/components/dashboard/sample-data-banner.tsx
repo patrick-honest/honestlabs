@@ -2,6 +2,7 @@
 
 import { Lock, AlertTriangle, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTranslations } from "next-intl";
 
 interface SampleDataBannerProps {
   /** Which dataset is blocked */
@@ -32,6 +33,7 @@ export function SampleDataBanner({
   className,
   children,
 }: SampleDataBannerProps) {
+  const tSample = useTranslations("sampleBanner");
   const isInline = variant === "inline";
 
   return (
@@ -67,10 +69,10 @@ export function SampleDataBanner({
                     "font-black tracking-wide text-amber-700 dark:text-amber-300",
                     isInline ? "text-xs" : "text-sm"
                   )}>
-                    ⚠ SAMPLE DATA — NOT REAL
+                    ⚠ {tSample("sampleDataWarning")}
                   </span>
                   <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] font-bold uppercase tracking-wider border border-amber-500/30">
-                    Demo Only
+                    {tSample("demoOnly")}
                   </span>
                 </div>
                 <p className={cn(
@@ -78,7 +80,7 @@ export function SampleDataBanner({
                   isInline ? "text-[10px]" : "text-xs"
                 )}>
                   {reason} because the <code className="px-1 py-0.5 rounded bg-amber-200/50 dark:bg-amber-800/50 font-mono font-bold text-amber-800 dark:text-amber-200">{dataset}</code> dataset
-                  has not been made accessible to this tool.
+                  {tSample("notAccessible")}
                 </p>
               </div>
             </div>
@@ -91,11 +93,11 @@ export function SampleDataBanner({
                   rel="noopener noreferrer"
                   className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold transition-colors"
                 >
-                  Request Access <ExternalLink className="w-3 h-3" />
+                  {tSample("requestAccess")} <ExternalLink className="w-3 h-3" />
                 </a>
               ) : (
                 <span className="px-3 py-1.5 rounded-lg bg-amber-600/20 dark:bg-amber-600/30 text-amber-700 dark:text-amber-300 text-xs font-semibold border border-amber-500/30">
-                  Access Required
+                  {tSample("accessRequired")}
                 </span>
               )}
             </div>
@@ -152,6 +154,7 @@ export function SampleDataBanner({
  * Smaller badge to mark individual metrics as sample data
  */
 export function SampleDataBadge({ className }: { className?: string }) {
+  const tSample = useTranslations("sampleBanner");
   return (
     <span className={cn(
       "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider",
@@ -159,7 +162,7 @@ export function SampleDataBadge({ className }: { className?: string }) {
       className
     )}>
       <AlertTriangle className="w-2.5 h-2.5" />
-      Sample
+      {tSample("sample")}
     </span>
   );
 }

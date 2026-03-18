@@ -402,10 +402,10 @@ export function Sidebar() {
               "-mt-0.5 text-[11px] font-semibold tracking-wide",
               isDark ? "text-[var(--text-secondary)]" : "text-[var(--text-secondary)]"
             )}>
-              Business Reviews
+              {tNav("businessReviews")}
             </span>
             <p className="text-[8px] font-medium tracking-wider text-[var(--text-muted)] opacity-50">
-              by claudetrick
+              {tNav("byClaudetrick")}
             </p>
           </div>
         )}
@@ -469,7 +469,7 @@ export function Sidebar() {
             ) : (
               <>
                 <PanelLeftClose className="h-4 w-4 shrink-0" />
-                <span>Collapse</span>
+                <span>{tNav("collapse")}</span>
               </>
             )}
           </button>
@@ -512,7 +512,7 @@ export function Sidebar() {
                 className="mt-2 flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]"
               >
                 <LogOut className="h-4 w-4" />
-                <span>Sign out</span>
+                <span>{tNav("signOut")}</span>
               </button>
             </>
           )}

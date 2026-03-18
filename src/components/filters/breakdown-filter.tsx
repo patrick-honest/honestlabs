@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Filter, Check, ChevronDown, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTranslations } from "next-intl";
 
 export type BreakdownDimension = "risk_category" | "cohort" | "card_type" | "product_type";
 
@@ -17,46 +18,62 @@ export interface BreakdownConfig {
   options: BreakdownOption[];
 }
 
-const BREAKDOWN_CONFIGS: BreakdownConfig[] = [
+/** Static config with tKeys — labels resolved via useTranslations inside the component */
+const BREAKDOWN_CONFIGS_STATIC: {
+  dimension: BreakdownDimension;
+  labelKey: string;
+  options: { value: string; labelKey: string }[] | "cohort";
+}[] = [
   {
     dimension: "risk_category",
-    label: "Credit Risk",
+    labelKey: "creditRisk",
     options: [
-      { value: "current", label: "Current (0 DPD)" },
-      { value: "dpd_1_30", label: "1-30 DPD" },
-      { value: "dpd_31_60", label: "31-60 DPD" },
-      { value: "dpd_61_90", label: "61-90 DPD" },
-      { value: "dpd_90_plus", label: "90+ DPD" },
+      { value: "current", labelKey: "current0dpd" },
+      { value: "dpd_1_30", labelKey: "dpd1_30" },
+      { value: "dpd_31_60", labelKey: "dpd31_60" },
+      { value: "dpd_61_90", labelKey: "dpd61_90" },
+      { value: "dpd_90_plus", labelKey: "dpd90plus" },
     ],
   },
   {
     dimension: "cohort",
-    label: "Cohort",
-    options: Array.from({ length: 12 }, (_, i) => {
-      const d = new Date(2025, 3 + i); // Start from Apr 2025
-      const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      return { value: val, label: d.toLocaleDateString("en-US", { month: "short", year: "numeric" }) };
-    }),
+    labelKey: "cohort",
+    options: "cohort",
   },
   {
     dimension: "card_type",
-    label: "Card Type",
+    labelKey: "cardType",
     options: [
-      { value: "physical", label: "Physical Card" },
-      { value: "virtual", label: "Virtual Card" },
-      { value: "nfc", label: "NFC-Enabled" },
+      { value: "physical", labelKey: "physicalCard" },
+      { value: "virtual", labelKey: "virtualCard" },
+      { value: "nfc", labelKey: "nfcEnabled" },
     ],
   },
   {
     dimension: "product_type",
-    label: "Product Type",
+    labelKey: "productType",
     options: [
-      { value: "rp1", label: "RP1 (Prepaid)" },
-      { value: "reg_fee", label: "Registration Fee Card" },
-      { value: "regular", label: "Regular Card" },
+      { value: "rp1", labelKey: "rp1Prepaid" },
+      { value: "reg_fee", labelKey: "regFeeCard" },
+      { value: "regular", labelKey: "regularCard" },
     ],
   },
 ];
+
+function buildBreakdownConfigs(tBd: (key: string) => string): BreakdownConfig[] {
+  return BREAKDOWN_CONFIGS_STATIC.map((s) => ({
+    dimension: s.dimension,
+    label: tBd(s.labelKey),
+    options:
+      s.options === "cohort"
+        ? Array.from({ length: 12 }, (_, i) => {
+            const d = new Date(2025, 3 + i);
+            const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+            return { value: val, label: d.toLocaleDateString("en-US", { month: "short", year: "numeric" }) };
+          })
+        : s.options.map((o) => ({ value: o.value, label: tBd(o.labelKey) })),
+  }));
+}
 
 export interface ActiveBreakdowns {
   [dimension: string]: string[]; // dimension -> selected values
@@ -75,10 +92,12 @@ export function BreakdownFilter({
   availableDimensions,
   className,
 }: BreakdownFilterProps) {
+  const tBd = useTranslations("breakdown");
   const [open, setOpen] = useState(false);
   const [activeDimension, setActiveDimension] = useState<BreakdownDimension | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
+  const BREAKDOWN_CONFIGS = buildBreakdownConfigs(tBd);
   const configs = availableDimensions
     ? BREAKDOWN_CONFIGS.filter((c) => availableDimensions.includes(c.dimension))
     : BREAKDOWN_CONFIGS;
@@ -135,7 +154,7 @@ export function BreakdownFilter({
         )}
       >
         <Filter className="h-3 w-3" />
-        <span>Breakdown</span>
+        <span>{tBd("title")}</span>
         {totalSelected > 0 && (
           <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#5B22FF] text-[10px] text-white">
             {totalSelected}

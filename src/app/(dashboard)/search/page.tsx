@@ -36,6 +36,8 @@ export default function SearchPage() {
   } = useSearchState();
   const { isDark } = useTheme();
   const tSearch = useTranslations("search");
+  const tForm = useTranslations("searchForm");
+  const tAuth = useTranslations("auth");
 
   const isCurrentSaved = result ? savedUsers.some((u) => u.user_id === result.user_id) : false;
 
@@ -65,7 +67,7 @@ export default function SearchPage() {
               isDark ? "text-[#7C4DFF]/60" : "text-[#D00083]/60"
             )}>
               <Bookmark className="h-3 w-3" />
-              Saved
+              {tForm("saved")}
             </span>
             {savedUsers.map((saved) => (
               <div
@@ -89,7 +91,7 @@ export default function SearchPage() {
                 <button
                   onClick={(e) => { e.stopPropagation(); removeSavedUser(saved.user_id); }}
                   className="opacity-0 group-hover:opacity-100 transition-opacity text-[var(--text-muted)] hover:text-[var(--danger)]"
-                  aria-label="Remove saved user"
+                  aria-label={tForm("removeSaved")}
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -132,7 +134,7 @@ export default function SearchPage() {
               </div>
             </div>
             <div className="flex justify-center pt-2">
-              <span className={cn("text-xs", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>Querying BigQuery...</span>
+              <span className={cn("text-xs", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>{tForm("queryingBigQuery")}</span>
             </div>
           </div>
         )}
@@ -147,7 +149,7 @@ export default function SearchPage() {
               {error}
             </p>
             <p className="mt-1 text-xs text-[var(--text-muted)]">
-              Check the identifier and try again.
+              {tForm("checkAndRetry")}
             </p>
           </div>
         )}
@@ -189,7 +191,7 @@ export default function SearchPage() {
               ) : (
                 <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
                   <Bookmark className="h-3.5 w-3.5" />
-                  Saved
+                  {tForm("saved")}
                 </span>
               )}
             </div>

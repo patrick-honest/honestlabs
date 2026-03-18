@@ -9,5 +9,13 @@ export default getRequestConfig(async () => {
     locale,
     timeZone: "Asia/Jakarta",
     messages: (await import(`../../messages/${locale}.json`)).default,
+    // Suppress ENVIRONMENT_FALLBACK warnings during SSG builds
+    onError(error) {
+      if (error.code === "ENVIRONMENT_FALLBACK") return;
+      console.error(error);
+    },
+    getMessageFallback({ namespace, key }) {
+      return `${namespace}.${key}`;
+    },
   };
 });

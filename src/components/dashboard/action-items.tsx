@@ -2,6 +2,7 @@
 
 import { AlertCircle, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTranslations } from "next-intl";
 
 export type ActionPriority = "urgent" | "monitor" | "positive";
 
@@ -40,12 +41,13 @@ const priorityConfig: Record<
 };
 
 export function ActionItems({ section, items, className }: ActionItemsProps) {
+  const tMetrics = useTranslations("metrics");
   if (items.length === 0) return null;
 
   return (
     <div className={cn("rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 transition-colors", className)}>
       <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">
-        Action Items &mdash; {section}
+        {tMetrics("actionItems")} &mdash; {section}
       </h3>
       <ul className="space-y-2">
         {items.map((item) => {

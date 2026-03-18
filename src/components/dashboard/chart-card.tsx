@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTranslations } from "next-intl";
 import { QueryInspectorButton, type QueryInfo } from "@/components/query-inspector/query-inspector";
 import { BreakdownFilter, type ActiveBreakdowns, type BreakdownDimension } from "@/components/filters/breakdown-filter";
 import { ChartDateRange, type DateRangeOverride } from "@/components/charts/chart-date-range";
@@ -44,6 +45,7 @@ export function ChartCard({
   onDateOverride: controlledOnDateOverride,
   showDatePicker = true,
 }: ChartCardProps) {
+  const tMetrics = useTranslations("metrics");
   const [refreshing, setRefreshing] = useState(false);
   // Self-managed date override when no external control is provided
   const [internalDateOverride, setInternalDateOverride] = useState<DateRangeOverride | null>(null);
@@ -83,13 +85,13 @@ export function ChartCard({
           {showDatePicker && (
             <ChartDateRange override={dateOverride} onOverride={onDateOverride} />
           )}
-          <span className="text-[10px] text-[var(--text-muted)]">As of: {asOf}</span>
+          <span className="text-[10px] text-[var(--text-muted)]">{tMetrics("asOf")}: {asOf}</span>
           {onRefresh && (
             <button
               onClick={handleRefresh}
               disabled={refreshing}
               className="text-[var(--text-muted)] hover:text-[var(--accent-light)] transition-colors disabled:opacity-50"
-              aria-label={`Refresh ${title}`}
+              aria-label={tMetrics("refresh") + " " + title}
             >
               <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
             </button>
