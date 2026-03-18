@@ -9,7 +9,7 @@ import {
   ChevronDown, ChevronRight, LogOut, QrCode, MessageCircle,
   PanelLeftClose, PanelLeftOpen, ArrowLeftRight, ArrowDownCircle, Settings,
   ShieldCheck, Activity, Users, TrendingUp, Star, Target, BookOpen,
-  Fingerprint, Sprout, CreditCard,
+  CircleUser, Sprout, CreditCard,
   type LucideIcon,
 } from "lucide-react";
 import Image from "next/image";
@@ -30,7 +30,7 @@ const iconMap: Record<string, LucideIcon> = {
   // Deep dive children
   UserPlus, PieChart, Wallet, ShieldAlert, Zap, Scale, ArrowDownCircle,
   MessageCircle, ShieldCheck, Activity, Users, TrendingUp, Star,
-  Fingerprint, CreditCard,
+  CircleUser, CreditCard,
 };
 
 const MIN_WIDTH = 56;   // collapsed

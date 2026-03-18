@@ -12,7 +12,7 @@ export interface NavItem {
 }
 
 export const navigation: NavItem[] = [
-  { label: "User Search", tKey: "userSearch", href: "/search", icon: "Fingerprint" },
+  { label: "User Search", tKey: "userSearch", href: "/search", icon: "CircleUser" },
   { label: "Dashboard", tKey: "dashboard", href: "/dashboard", icon: "LayoutDashboard" },
 
   // ── Reports ──
