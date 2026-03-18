@@ -50,7 +50,7 @@ weekly_eligible AS (
   WHERE dw4.f9_dw004_bus_dt BETWEEN @startDate AND @endDate
     AND EXTRACT(DAYOFWEEK FROM dw4.f9_dw004_bus_dt) = 1
     AND dw4.fx_dw004_loc_stat IN ('G', 'N')
-    AND dw4.f9_dw004_curr_dpd >= 0
+    AND dw4.f9_dw004_curr_dpd = 0                        -- Current only (not past due)
   GROUP BY week_start
 ),
 
@@ -556,7 +556,7 @@ ORDER BY total_approved DESC`;
 
 const ALL_METRICS: MetricDef[] = [
   // --- Executive ---
-  { key: "eligible_count", label: "Eligible Accounts", unit: "count", section: "Executive", queryFn: "getEligibleAndTransactors", description: "Number of active accounts eligible for spend (unblocked, status G/N, DPD >= 0)", sql: SQL_ELIGIBLE_AND_TRANSACTORS, higherIsBetter: true },
+  { key: "eligible_count", label: "Eligible Accounts", unit: "count", section: "Executive", queryFn: "getEligibleAndTransactors", description: "Accounts eligible to spend on last day of period. Requires: account status G or N, DPD = 0 (current), card unblocked (videocall verified + all txn channels enabled).", sql: SQL_ELIGIBLE_AND_TRANSACTORS, higherIsBetter: true },
   { key: "transactor_count", label: "Transactors", unit: "count", section: "Executive", queryFn: "getEligibleAndTransactors", description: "Number of eligible accounts with at least one valid authorized transaction", sql: SQL_ELIGIBLE_AND_TRANSACTORS, higherIsBetter: true },
   { key: "spend_active_rate", label: "Spend Active Rate", unit: "percent", section: "Executive", queryFn: "getEligibleAndTransactors", description: "Percentage of eligible accounts that transacted (transactors / eligible)", sql: SQL_ELIGIBLE_AND_TRANSACTORS, target: 60, warningThreshold: 50, dangerThreshold: 40, higherIsBetter: true },
   { key: "total_spend", label: "Total Spend", unit: "idr", section: "Executive", queryFn: "getSpendMetrics", description: "Total authorized spend amount in IDR across all valid transactions", sql: SQL_SPEND_METRICS, higherIsBetter: true },

@@ -81,6 +81,7 @@ export async function getEligibleAndTransactors(
   endDate: Date,
 ): Promise<EligibleAndTransactorsRow[]> {
   const sql = `
+    -- Card unblocked: videocall verified + all transaction channels enabled
     WITH card_unblocked AS (
       SELECT DISTINCT f9_dw005_loc_acct AS loc_acct
       FROM ${TABLES.principal_card_updates}
@@ -92,6 +93,8 @@ export async function getEligibleAndTransactors(
         AND f9_dw005_contc_txn_ind LIKE '%0%'
     ),
 
+    -- Eligible to spend: G/N status + DPD = 0 + card unblocked (videocall verified)
+    -- Counted on the last day of each ISO week within the date range
     weekly_eligible AS (
       SELECT
         DATE_TRUNC(dw4.f9_dw004_bus_dt, ISOWEEK) AS week_start,
@@ -100,9 +103,9 @@ export async function getEligibleAndTransactors(
       JOIN card_unblocked cu
         ON dw4.p9_dw004_loc_acct = cu.loc_acct
       WHERE dw4.f9_dw004_bus_dt BETWEEN @startDate AND @endDate
-        AND EXTRACT(DAYOFWEEK FROM dw4.f9_dw004_bus_dt) = 1
-        AND dw4.fx_dw004_loc_stat IN ('G', 'N')
-        AND dw4.f9_dw004_curr_dpd >= 0
+        AND EXTRACT(DAYOFWEEK FROM dw4.f9_dw004_bus_dt) = 1  -- Sunday = last day of ISO week
+        AND dw4.fx_dw004_loc_stat IN ('G', 'N')              -- Good or Normal standing
+        AND dw4.f9_dw004_curr_dpd = 0                        -- Current (not past due)
         -- Product type filtering handled by UI (productType filter dimension)
       GROUP BY week_start
     ),
