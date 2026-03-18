@@ -43,6 +43,7 @@ export const PAGE_FILTER_CONFIG: { prefix: string; filters: FilterKey[] | null }
   // ── Admin / utility pages (no filters) ──
   { prefix: "/admin", filters: [] },
   { prefix: "/search", filters: [] },
+  { prefix: "/metrics", filters: [] },
 
   // ── Deep dive pages ──
   {
