@@ -35,5 +35,6 @@ export const navigation: NavItem[] = [
   { label: "Quick Analysis", href: "/quick-analysis", icon: "GitCompareArrows" },
   { label: "QRIS Experiment", href: "/qris-experiment", icon: "QrCode" },
   { label: "Market News", href: "/news", icon: "Newspaper" },
+  { label: "Definitions", href: "/metrics", icon: "BookOpen" },
   { label: "Admin", href: "/admin", icon: "Settings" },
 ];
