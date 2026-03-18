@@ -9,7 +9,7 @@ import {
   ChevronDown, ChevronRight, LogOut, QrCode, MessageCircle,
   PanelLeftClose, PanelLeftOpen, ArrowLeftRight, ArrowDownCircle, Settings,
   ShieldCheck, Activity, Users, TrendingUp, Star, Target, BookOpen,
-  Fingerprint,
+  Fingerprint, Sprout,
   type LucideIcon,
 } from "lucide-react";
 import Image from "next/image";
@@ -22,7 +22,7 @@ import { IS_STATIC_EXPORT } from "@/lib/static-mode";
 const iconMap: Record<string, LucideIcon> = {
   // Top-level
   LayoutDashboard, FileBarChart, BarChart3, Search, Newspaper, Settings,
-  Layers, Building2, Target, ArrowLeftRight, QrCode, BookOpen,
+  Layers, Building2, Target, ArrowLeftRight, QrCode, BookOpen, Sprout,
   // Deep dive children
   UserPlus, PieChart, Wallet, ShieldAlert, Zap, Scale, ArrowDownCircle,
   MessageCircle, ShieldCheck, Activity, Users, TrendingUp, Star,
@@ -405,24 +405,35 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className={cn("flex-1 py-4", collapsed ? "px-2 overflow-visible" : "px-3 overflow-y-auto")}>
-        <div className={cn("flex flex-col", collapsed ? "items-center gap-1" : "gap-1")}>
-          {navigation.map((item) =>
-            collapsed ? (
-              <NavLinkCollapsed
-                key={item.label}
-                item={item}
-                pathname={pathname}
-                isDark={isDark}
-              />
-            ) : (
-              <NavLinkExpanded
-                key={item.label}
-                item={item}
-                pathname={pathname}
-                isDark={isDark}
-              />
-            )
-          )}
+        <div className={cn("flex flex-col", collapsed ? "items-center gap-1" : "gap-0.5")}>
+          {navigation.map((item) => (
+            <div key={item.label}>
+              {/* Section divider */}
+              {!collapsed && item.divider && (
+                <div className="mt-4 mb-1.5 px-3">
+                  <span className={cn(
+                    "text-[9px] font-bold uppercase tracking-[0.15em]",
+                    isDark ? "text-[var(--text-muted)]/50" : "text-[var(--text-muted)]/60"
+                  )}>
+                    {item.divider}
+                  </span>
+                </div>
+              )}
+              {collapsed ? (
+                <NavLinkCollapsed
+                  item={item}
+                  pathname={pathname}
+                  isDark={isDark}
+                />
+              ) : (
+                <NavLinkExpanded
+                  item={item}
+                  pathname={pathname}
+                  isDark={isDark}
+                />
+              )}
+            </div>
+          ))}
         </div>
       </nav>
 

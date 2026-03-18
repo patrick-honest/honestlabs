@@ -6,20 +6,26 @@ import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
 import { Header } from "@/components/layout/header";
 
-const tabs = [
-  { label: "Acquisition", href: "/deep-dive/acquisition" },
-  { label: "Portfolio", href: "/deep-dive/portfolio" },
-  { label: "Spend", href: "/deep-dive/spend" },
-  { label: "Risk", href: "/deep-dive/risk" },
+interface Tab { label: string; href: string; group?: string }
+
+const tabs: Tab[] = [
+  // Growth
+  { label: "Acquisition", href: "/deep-dive/acquisition", group: "Growth" },
   { label: "Activation", href: "/deep-dive/activation" },
+  { label: "Referrals", href: "/deep-dive/referral" },
+  // Revenue
+  { label: "Spend", href: "/deep-dive/spend", group: "Revenue" },
+  { label: "Txn Auth", href: "/deep-dive/transaction-auth" },
+  { label: "Points", href: "/deep-dive/points-program" },
+  { label: "Credit Line", href: "/deep-dive/credit-line" },
+  // Risk & Collections
+  { label: "Portfolio", href: "/deep-dive/portfolio", group: "Risk" },
+  { label: "Risk", href: "/deep-dive/risk" },
   { label: "Collections", href: "/deep-dive/collections" },
   { label: "Repayments", href: "/deep-dive/repayments" },
+  // Operations
+  { label: "App Health", href: "/deep-dive/app-health", group: "Ops" },
   { label: "Customer Service", href: "/deep-dive/customer-service" },
-  { label: "Txn Auth", href: "/deep-dive/transaction-auth" },
-  { label: "App Health", href: "/deep-dive/app-health" },
-  { label: "Referrals", href: "/deep-dive/referral" },
-  { label: "Credit Line", href: "/deep-dive/credit-line" },
-  { label: "Points", href: "/deep-dive/points-program" },
 ];
 
 export default function DeepDiveLayout({
@@ -46,24 +52,37 @@ export default function DeepDiveLayout({
           ? "border-[var(--border)] bg-[var(--background)]/80"
           : "border-[var(--border)] bg-[var(--background)]/90"
       )}>
-        <div className="flex gap-1 overflow-x-auto scrollbar-none">
-          {tabs.map((tab) => {
+        <div className="flex items-center gap-0 overflow-x-auto scrollbar-none">
+          {tabs.map((tab, idx) => {
             const isActive = pathname === tab.href;
             return (
-              <Link
-                key={tab.href}
-                href={tab.href}
-                className={cn(
-                  "shrink-0 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors",
-                  isActive
-                    ? isDark
-                      ? "border-[#5B22FF] text-[var(--text-primary)]"
-                      : "border-[#D00083] text-[var(--text-primary)]"
-                    : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--border)]"
+              <div key={tab.href} className="flex items-center shrink-0">
+                {/* Group divider */}
+                {tab.group && idx > 0 && (
+                  <div className="mx-1 h-4 w-px bg-[var(--border)]" />
                 )}
-              >
-                {tab.label}
-              </Link>
+                {tab.group && (
+                  <span className={cn(
+                    "text-[8px] font-bold uppercase tracking-[0.15em] px-1.5 shrink-0",
+                    isDark ? "text-[var(--text-muted)]/40" : "text-[var(--text-muted)]/50"
+                  )}>
+                    {tab.group}
+                  </span>
+                )}
+                <Link
+                  href={tab.href}
+                  className={cn(
+                    "shrink-0 px-3 py-2.5 text-xs font-medium border-b-2 transition-colors",
+                    isActive
+                      ? isDark
+                        ? "border-[#5B22FF] text-[var(--text-primary)]"
+                        : "border-[#D00083] text-[var(--text-primary)]"
+                      : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--border)]"
+                  )}
+                >
+                  {tab.label}
+                </Link>
+              </div>
             );
           })}
         </div>
