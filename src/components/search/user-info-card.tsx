@@ -275,7 +275,6 @@ export function UserInfoCard({ user }: UserInfoCardProps) {
           <Field label="Decision Date" value={formatDate(user.decision_date)} />
           <Field label="Videocall Verified" value={formatDate(user.videocall_verified_date)} />
           <Field label="CMA Accepted" value={formatDate(user.cma_accepted_date)} />
-          <Field label="CMA App Version" value={user.cma_app_version} mono />
           <Field label="Card Activation" value={formatDate(user.card_activation_date)} />
           <Field label="PIN Set Date" value={formatDate(user.pin_set_date)} />
         </div>
@@ -291,6 +290,7 @@ export function UserInfoCard({ user }: UserInfoCardProps) {
           <Field label="Current Min Due" value={formatCurrency(user.current_min_due)} />
           <Field label="Current DPD" value={user.current_dpd !== null ? String(user.current_dpd) : null} highlight={dpdHighlight} />
           <Field label="Collections Status" value={user.collections_status} highlight={user.collections_status !== null && user.collections_status !== "Current" && user.collections_status !== "No collections"} />
+          <Field label="CMA Version" value={user.cma_app_version} mono />
           <Field label="Savings Account" value={user.savings_account_number} mono />
         </div>
       </div>
