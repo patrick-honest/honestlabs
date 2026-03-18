@@ -2,48 +2,19 @@
 
 import { useCallback, useMemo, useState, useEffect, useRef } from "react";
 import useSWR from "swr";
-import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
-import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { usePeriod, useDateParams } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
-import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
-import { getPeriodRange, scaleTrendData, scaleMetricValue, getPeriodLabels, getPeriodInsightLabels } from "@/lib/period-data";
-import {
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  Legend,
-} from "recharts";
+import { getPeriodRange, getPeriodInsightLabels } from "@/lib/period-data";
 
-// --- Mock data ---
 const AS_OF = "Mar 15, 2026";
-
-// Mock fallback — matches real milestone_complete application_status values
-const MOCK_FUNNEL = [
-  { stage: "OTP login started", label: "OTP Started", count: 24000, conversion_from_prev_pct: null },
-  { stage: "Mobile verified", label: "Mobile Verified", count: 24000, conversion_from_prev_pct: 100 },
-  { stage: "Application agreements accepted", label: "Agreements Accepted", count: 23700, conversion_from_prev_pct: 98.8 },
-  { stage: "KYC complete", label: "KYC Complete", count: 18300, conversion_from_prev_pct: 77.2 },
-  { stage: "Personal details entered", label: "Personal Details", count: 16500, conversion_from_prev_pct: 90.2 },
-  { stage: "Personal info details part 2 complete", label: "Personal Info Pt2", count: 16400, conversion_from_prev_pct: 99.4 },
-  { stage: "Application submitted", label: "App Submitted", count: 18100, conversion_from_prev_pct: 110.4 },
-  { stage: "Decision complete", label: "Decision Complete", count: 17200, conversion_from_prev_pct: 95.0 },
-  { stage: "Cardholder agreement viewed", label: "CMA Viewed", count: 16500, conversion_from_prev_pct: 95.9 },
-  { stage: "Cardholder agreement accepted", label: "CMA Accepted", count: 15100, conversion_from_prev_pct: 91.5 },
-  { stage: "Tutorial complete", label: "Tutorial Complete", count: 13400, conversion_from_prev_pct: 88.7 },
-  { stage: "Delivery Address Entered", label: "Delivery Address", count: 13300, conversion_from_prev_pct: 99.3 },
-  { stage: "PIN set", label: "PIN Set", count: 13200, conversion_from_prev_pct: 99.2 },
-];
 
 const stageToSqlValue: Record<string, string> = {
   "OTP Started": "OTP login started",
@@ -72,111 +43,6 @@ function getDropoffSql(prevStageName: string, currentStageName: string): string 
   return `SELECT DISTINCT a.user_id\nFROM \`storage-58f5a02c.refined_rudderstack.milestone_complete\` a\nLEFT JOIN \`storage-58f5a02c.refined_rudderstack.milestone_complete\` b\n  ON a.user_id = b.user_id AND b.application_status = '${curVal}'\nWHERE a.application_status = '${prevVal}'\n  AND b.user_id IS NULL`;
 }
 
-const decisionBreakdown = [
-  { date: "W1 Feb", approved: 980, declined: 320, waitlisted: 150 },
-  { date: "W2 Feb", approved: 1050, declined: 290, waitlisted: 180 },
-  { date: "W3 Feb", approved: 1100, declined: 310, waitlisted: 160 },
-  { date: "W4 Feb", approved: 1020, declined: 350, waitlisted: 200 },
-  { date: "W1 Mar", approved: 1150, declined: 280, waitlisted: 170 },
-  { date: "W2 Mar", approved: 1200, declined: 260, waitlisted: 140 },
-];
-
-const productMix = [
-  { name: "Standard CC", value: 2800, color: "#3b82f6" },
-  { name: "RP1", value: 900, color: "#8b5cf6" },
-  { name: "Opening Fee", value: 500, color: "#06b6d4" },
-];
-
-const approvalRateTrend = [
-  { date: "Oct", rate: 68.2 },
-  { date: "Nov", rate: 70.1 },
-  { date: "Dec", rate: 69.5 },
-  { date: "Jan", rate: 71.8 },
-  { date: "Feb", rate: 72.4 },
-  { date: "Mar", rate: 73.1 },
-];
-
-const avgCreditLineTrend = [
-  { date: "Oct", avgLimit: 8500000 },
-  { date: "Nov", avgLimit: 8700000 },
-  { date: "Dec", avgLimit: 8600000 },
-  { date: "Jan", avgLimit: 9100000 },
-  { date: "Feb", avgLimit: 9300000 },
-  { date: "Mar", avgLimit: 9500000 },
-];
-
-const vintageCounts = [
-  { month: "Oct 2025", count: 3200 },
-  { month: "Nov 2025", count: 3450 },
-  { month: "Dec 2025", count: 2900 },
-  { month: "Jan 2026", count: 3800 },
-  { month: "Feb 2026", count: 4100 },
-  { month: "Mar 2026", count: 4200 },
-];
-
-
-// --- Sample data: CAC Metrics (blocked by mart_finance + Ad Platform APIs) ---
-const cacTrend = [
-  { date: "Apr 25", cacApproved: 9.20, cacAll: 42.50, google: 21.80, meta: 58.40, tiktok: 36.50 },
-  { date: "May 25", cacApproved: 8.90, cacAll: 40.10, google: 20.50, meta: 55.20, tiktok: 33.80 },
-  { date: "Jun 25", cacApproved: 8.50, cacAll: 38.70, google: 19.80, meta: 52.10, tiktok: 30.20 },
-  { date: "Jul 25", cacApproved: 8.80, cacAll: 39.40, google: 18.90, meta: 48.70, tiktok: 28.50 },
-  { date: "Aug 25", cacApproved: 8.30, cacAll: 37.20, google: 17.60, meta: 45.30, tiktok: 25.90 },
-  { date: "Sep 25", cacApproved: 8.10, cacAll: 35.80, google: 16.40, meta: 42.80, tiktok: 22.10 },
-  { date: "Oct 25", cacApproved: 7.90, cacAll: 34.50, google: 15.80, meta: 39.50, tiktok: 19.80 },
-  { date: "Nov 25", cacApproved: 7.75, cacAll: 33.20, google: 15.20, meta: 36.10, tiktok: 17.40 },
-  { date: "Dec 25", cacApproved: 8.10, cacAll: 36.80, google: 16.90, meta: 41.20, tiktok: 21.50 },
-  { date: "Jan 26", cacApproved: 8.40, cacAll: 38.50, google: 18.10, meta: 44.60, tiktok: 24.30 },
-  { date: "Feb 26", cacApproved: 8.80, cacAll: 41.20, google: 19.40, meta: 49.80, tiktok: 28.70 },
-  { date: "Mar 26", cacApproved: 9.10, cacAll: 43.80, google: 20.90, meta: 53.50, tiktok: 32.10 },
-];
-
-const cacChannelTrend = [
-  { date: "Apr 25", google: 21.80, meta: 58.40, tiktok: 36.50 },
-  { date: "May 25", google: 20.50, meta: 55.20, tiktok: 33.80 },
-  { date: "Jun 25", google: 19.80, meta: 52.10, tiktok: 30.20 },
-  { date: "Jul 25", google: 18.90, meta: 48.70, tiktok: 28.50 },
-  { date: "Aug 25", google: 17.60, meta: 45.30, tiktok: 25.90 },
-  { date: "Sep 25", google: 16.40, meta: 42.80, tiktok: 22.10 },
-  { date: "Oct 25", google: 15.80, meta: 39.50, tiktok: 19.80 },
-  { date: "Nov 25", google: 15.20, meta: 36.10, tiktok: 17.40 },
-  { date: "Dec 25", google: 16.90, meta: 41.20, tiktok: 21.50 },
-  { date: "Jan 26", google: 18.10, meta: 44.60, tiktok: 24.30 },
-  { date: "Feb 26", google: 19.40, meta: 49.80, tiktok: 28.70 },
-  { date: "Mar 26", google: 20.90, meta: 53.50, tiktok: 32.10 },
-];
-
-// --- Sample data: Organic Traffic (blocked by Mixpanel) ---
-const organicTrafficTrend = [
-  { date: "Apr 25", organicPct: 26.2, paidPct: 73.8 },
-  { date: "May 25", organicPct: 27.1, paidPct: 72.9 },
-  { date: "Jun 25", organicPct: 28.5, paidPct: 71.5 },
-  { date: "Jul 25", organicPct: 29.3, paidPct: 70.7 },
-  { date: "Aug 25", organicPct: 30.8, paidPct: 69.2 },
-  { date: "Sep 25", organicPct: 31.2, paidPct: 68.8 },
-  { date: "Oct 25", organicPct: 30.5, paidPct: 69.5 },
-  { date: "Nov 25", organicPct: 32.1, paidPct: 67.9 },
-  { date: "Dec 25", organicPct: 28.9, paidPct: 71.1 },
-  { date: "Jan 26", organicPct: 31.7, paidPct: 68.3 },
-  { date: "Feb 26", organicPct: 33.4, paidPct: 66.6 },
-  { date: "Mar 26", organicPct: 34.8, paidPct: 65.2 },
-];
-
-// --- Sample data: First or Second Credit Card (blocked by Credit Bureau) ---
-const firstCcTrend = [
-  { date: "Apr 25", firstOrSecondPct: 78.2 },
-  { date: "May 25", firstOrSecondPct: 76.5 },
-  { date: "Jun 25", firstOrSecondPct: 74.1 },
-  { date: "Jul 25", firstOrSecondPct: 72.8 },
-  { date: "Aug 25", firstOrSecondPct: 70.3 },
-  { date: "Sep 25", firstOrSecondPct: 68.9 },
-  { date: "Oct 25", firstOrSecondPct: 65.4 },
-  { date: "Nov 25", firstOrSecondPct: 62.1 },
-  { date: "Dec 25", firstOrSecondPct: 60.7 },
-  { date: "Jan 26", firstOrSecondPct: 58.3 },
-  { date: "Feb 26", firstOrSecondPct: 57.1 },
-  { date: "Mar 26", firstOrSecondPct: 56.2 },
-];
 
 const actionItems: ActionItem[] = [
   {
@@ -209,7 +75,7 @@ type ContextMenuState = {
 } | null;
 
 export default function AcquisitionPage() {
-  const { period, periodLabel, timeRangeMultiplier } = usePeriod();
+  const { period } = usePeriod();
   const { dateParams } = useDateParams();
   const { filters } = useFilters();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
@@ -223,27 +89,15 @@ export default function AcquisitionPage() {
 
   const funnelIsLive = !!apiData?.funnel?.length;
 
-  // Use real funnel data or fall back to mock
+  // Use real funnel data
   const periodFunnel = useMemo(() => {
-    if (apiData?.funnel?.length) {
-      return apiData.funnel.map((s: { stage: string; label: string; count: number; conversion_from_prev_pct: number | null }) => ({
-        stage: s.label,
-        count: s.count,
-        rate: s.conversion_from_prev_pct,
-      }));
-    }
-    // Mock fallback with scaling
-    return MOCK_FUNNEL.map(s => ({
+    if (!apiData?.funnel?.length) return null;
+    return apiData.funnel.map((s: { stage: string; label: string; count: number; conversion_from_prev_pct: number | null }) => ({
       stage: s.label,
-      count: applyFilterToMetric(scaleMetricValue(s.count, period, false, timeRangeMultiplier), filters, false),
+      count: s.count,
       rate: s.conversion_from_prev_pct,
     }));
-  }, [apiData, period, filters, timeRangeMultiplier]);
-
-  const periodDecisionBreakdown = useMemo(() => applyFilterToData(scaleTrendData(decisionBreakdown, period), filters), [period, filters]);
-  const periodApprovalRateTrend = useMemo(() => applyFilterToData(scaleTrendData(approvalRateTrend, period), filters), [period, filters]);
-  const periodAvgCreditLineTrend = useMemo(() => applyFilterToData(scaleTrendData(avgCreditLineTrend, period), filters), [period, filters]);
-  const periodVintageCounts = useMemo(() => applyFilterToData(scaleTrendData(vintageCounts, period, "month"), filters), [period, filters]);
+  }, [apiData]);
 
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
 
@@ -348,52 +202,19 @@ export default function AcquisitionPage() {
     <div className="space-y-6">
       <ActiveFiltersBanner />
 
-      {/* KPI row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard
-          metricKey="acq_total_applications"
-          label="Total Applications"
-          value={applyFilterToMetric(scaleMetricValue(8900, period, false, timeRangeMultiplier), filters, false)}
-          prevValue={applyFilterToMetric(scaleMetricValue(8200, period, false, timeRangeMultiplier), filters, false)}
-          unit="count"
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          onRefresh={handleRefresh}
-        />
-        <MetricCard
-          metricKey="acq_approval_rate"
-          label="Approval Rate"
-          value={applyFilterToMetric(scaleMetricValue(73.1, period, true), filters, true)}
-          prevValue={applyFilterToMetric(scaleMetricValue(72.4, period, true), filters, true)}
-          unit="percent"
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          target={75}
-          onRefresh={handleRefresh}
-        />
-        <MetricCard
-          metricKey="acq_avg_credit_line"
-          label="Avg Credit Line"
-          value={applyFilterToMetric(9500000, filters, false)}
-          prevValue={applyFilterToMetric(9300000, filters, false)}
-          unit="idr"
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          onRefresh={handleRefresh}
-        />
-        <MetricCard
-          metricKey="acq_cards_activated"
-          label="Cards Activated"
-          value={applyFilterToMetric(scaleMetricValue(3400, period, false, timeRangeMultiplier), filters, false)}
-          prevValue={applyFilterToMetric(scaleMetricValue(3100, period, false, timeRangeMultiplier), filters, false)}
-          unit="count"
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          onRefresh={handleRefresh}
-        />
-      </div>
+      {/* KPI row — requires real data */}
+      <SampleDataBanner
+        dataset="refined_rudderstack + mart_finexus"
+        reason="Decision and product mix data requires decision_completed and financial_account_updates"
+      />
 
       {/* Funnel visualization */}
+      {!periodFunnel ? (
+        <SampleDataBanner
+          dataset="refined_rudderstack"
+          reason="Acquisition funnel requires milestone_complete and decision_completed tables"
+        />
+      ) : (
       <ChartCard
         title="Application Funnel"
         subtitle="Conversion rates between stages"
@@ -502,135 +323,13 @@ export default function AcquisitionPage() {
         </div>
         <ChartInsights insights={funnelInsights} />
       </ChartCard>
+      )}
 
-      {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Decision Breakdown */}
-        <ChartCard
-          title="Decision Breakdown"
-          subtitle={`Approved / Declined / Waitlisted by ${p.unit}`}
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          onRefresh={handleRefresh}
-        >
-          <DashboardBarChart
-            data={periodDecisionBreakdown}
-            bars={[
-              { key: "approved", color: "#22c55e", label: "Approved" },
-              { key: "declined", color: "#ef4444", label: "Declined" },
-              { key: "waitlisted", color: "#f59e0b", label: "Waitlisted" },
-            ]}
-            stacked
-            height={280}
-          />
-          <ChartInsights insights={decisionInsights} />
-        </ChartCard>
-
-        {/* Product Mix */}
-        <ChartCard
-          title="Product Mix"
-          subtitle="Approved accounts by product type"
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          onRefresh={handleRefresh}
-        >
-          <div style={{ height: 280 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={productMix}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
-                  paddingAngle={3}
-                  dataKey="value"
-                  nameKey="name"
-                >
-                  {productMix.map((entry) => (
-                    <Cell key={entry.name} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#1e293b",
-                    border: "1px solid #334155",
-                    borderRadius: 8,
-                    color: "#f1f5f9",
-                    fontSize: 12,
-                  }}
-                />
-                <Legend wrapperStyle={{ fontSize: 12, color: "#94a3b8" }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <ChartInsights insights={productMixInsights} />
-        </ChartCard>
-      </div>
-
-      {/* Line charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ChartCard
-          title="Approval Rate Trend"
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          onRefresh={handleRefresh}
-        >
-          <DashboardLineChart
-            data={periodApprovalRateTrend}
-            lines={[{ key: "rate", color: "#3b82f6", label: "Approval Rate %" }]}
-            valueType="percent"
-            height={260}
-          />
-          <ChartInsights insights={approvalRateInsights} />
-        </ChartCard>
-
-        <ChartCard
-          title="Avg Approved Credit Limit"
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          onRefresh={handleRefresh}
-        >
-          <DashboardLineChart
-            data={periodAvgCreditLineTrend}
-            lines={[{ key: "avgLimit", color: "#8b5cf6", label: "Avg Limit" }]}
-            valueType="currency"
-            height={260}
-          />
-          <ChartInsights insights={avgCreditLimitInsights} />
-        </ChartCard>
-      </div>
-
-      {/* Vintage table */}
-      <ChartCard
-        title="Vintage Acquisition Counts"
-        subtitle="Monthly cohort new accounts"
-        asOf={AS_OF}
-        dataRange={DATA_RANGE}
-        onRefresh={handleRefresh}
-      >
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--border)]">
-                <th className="text-left py-2 px-3 text-[var(--text-secondary)] font-medium">Cohort Month</th>
-                <th className="text-right py-2 px-3 text-[var(--text-secondary)] font-medium">New Accounts</th>
-              </tr>
-            </thead>
-            <tbody>
-              {periodVintageCounts.map((row) => (
-                <tr key={row.month} className="border-b border-[var(--border)]">
-                  <td className="py-2 px-3 text-[var(--text-primary)]">{row.month}</td>
-                  <td className="py-2 px-3 text-[var(--text-primary)] text-right font-medium">
-                    {row.count.toLocaleString()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <ChartInsights insights={vintageInsights} />
-      </ChartCard>
+      {/* Charts row — Decision, Product Mix, Approval Rate, Credit Limit, Vintage */}
+      <SampleDataBanner
+        dataset="refined_rudderstack + mart_finexus"
+        reason="Decision and product mix data requires decision_completed and financial_account_updates"
+      />
 
       {/* === SAMPLE DATA SECTIONS: Metrics from Orico spreadsheets not yet automated === */}
 
@@ -638,170 +337,19 @@ export default function AcquisitionPage() {
       <SampleDataBanner
         dataset="mart_finance + Ad Platform APIs"
         reason="CAC and marketing cost data requires access to mart_finance and Google/Meta/TikTok ad APIs"
-      >
-        <div className="space-y-4 p-3">
-          <h2 className="text-lg font-bold text-[var(--text-primary)]">Customer Acquisition Cost (CAC)</h2>
-
-          {/* CAC KPI row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <MetricCard
-              metricKey="sample_cac_approved"
-              label="CAC (Approved)"
-              value={applyFilterToMetric(9.10, filters, false)}
-              prevValue={applyFilterToMetric(8.80, filters, false)}
-              unit="usd"
-              asOf={AS_OF}
-              dataRange={DATA_RANGE}
-            />
-            <MetricCard
-              metricKey="sample_cac_all"
-              label="CAC (All Applicants)"
-              value={applyFilterToMetric(43.80, filters, false)}
-              prevValue={applyFilterToMetric(41.20, filters, false)}
-              unit="usd"
-              asOf={AS_OF}
-              dataRange={DATA_RANGE}
-            />
-            <MetricCard
-              metricKey="sample_mktg_google"
-              label="Mktg/Customer - Google"
-              value={applyFilterToMetric(20.90, filters, false)}
-              prevValue={applyFilterToMetric(19.40, filters, false)}
-              unit="usd"
-              asOf={AS_OF}
-              dataRange={DATA_RANGE}
-            />
-            <MetricCard
-              metricKey="sample_mktg_meta"
-              label="Mktg/Customer - Meta"
-              value={applyFilterToMetric(53.50, filters, false)}
-              prevValue={applyFilterToMetric(49.80, filters, false)}
-              unit="usd"
-              asOf={AS_OF}
-              dataRange={DATA_RANGE}
-            />
-          </div>
-
-          {/* CAC trend chart */}
-          <ChartCard
-            title="CAC Trend (Approved vs All)"
-            subtitle="Monthly customer acquisition cost"
-            asOf={AS_OF}
-            dataRange={DATA_RANGE}
-          >
-            <DashboardLineChart
-              data={cacTrend}
-              lines={[
-                { key: "cacApproved", color: "#22c55e", label: "CAC Approved ($)" },
-                { key: "cacAll", color: "#ef4444", label: "CAC All ($)" },
-              ]}
-              height={280}
-            />
-          </ChartCard>
-
-          {/* Marketing cost per customer by channel */}
-          <ChartCard
-            title="Marketing Cost per Customer by Channel"
-            subtitle="Google / Meta / TikTok spend per acquired customer"
-            asOf={AS_OF}
-            dataRange={DATA_RANGE}
-          >
-            <DashboardLineChart
-              data={cacChannelTrend}
-              lines={[
-                { key: "google", color: "#4285F4", label: "Google ($)" },
-                { key: "meta", color: "#1877F2", label: "Meta ($)" },
-                { key: "tiktok", color: "#000000", label: "TikTok ($)" },
-              ]}
-              height={280}
-            />
-          </ChartCard>
-        </div>
-      </SampleDataBanner>
+      />
 
       {/* Organic Traffic — blocked by Mixpanel */}
       <SampleDataBanner
         dataset="Mixpanel"
         reason="Traffic source attribution requires Mixpanel integration"
-      >
-        <div className="space-y-4 p-3">
-          <h2 className="text-lg font-bold text-[var(--text-primary)]">Organic vs Paid Traffic</h2>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <MetricCard
-              metricKey="sample_organic_pct"
-              label="Organic Traffic %"
-              value={applyFilterToMetric(34.8, filters, true)}
-              prevValue={applyFilterToMetric(33.4, filters, true)}
-              unit="percent"
-              asOf={AS_OF}
-              dataRange={DATA_RANGE}
-            />
-            <MetricCard
-              metricKey="sample_paid_pct"
-              label="Paid Traffic %"
-              value={applyFilterToMetric(65.2, filters, true)}
-              prevValue={applyFilterToMetric(66.6, filters, true)}
-              unit="percent"
-              asOf={AS_OF}
-              dataRange={DATA_RANGE}
-            />
-          </div>
-
-          <ChartCard
-            title="Organic vs Paid Traffic Split"
-            subtitle="Monthly traffic source breakdown (%)"
-            asOf={AS_OF}
-            dataRange={DATA_RANGE}
-          >
-            <DashboardBarChart
-              data={organicTrafficTrend}
-              bars={[
-                { key: "organicPct", color: "#22c55e", label: "Organic %" },
-                { key: "paidPct", color: "#3b82f6", label: "Paid %" },
-              ]}
-              stacked
-              height={280}
-            />
-          </ChartCard>
-        </div>
-      </SampleDataBanner>
+      />
 
       {/* First or Second Credit Card — blocked by Credit Bureau */}
       <SampleDataBanner
         dataset="Credit Bureau"
         reason="Credit history data requires bureau API integration"
-      >
-        <div className="space-y-4 p-3">
-          <h2 className="text-lg font-bold text-[var(--text-primary)]">First or Second Credit Card</h2>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <MetricCard
-              metricKey="sample_first_cc_pct"
-              label="1st/2nd Credit Card %"
-              value={applyFilterToMetric(56.2, filters, true)}
-              prevValue={applyFilterToMetric(57.1, filters, true)}
-              unit="percent"
-              asOf={AS_OF}
-              dataRange={DATA_RANGE}
-            />
-          </div>
-
-          <ChartCard
-            title="First or Second Credit Card Rate"
-            subtitle="% of applicants for whom this is their 1st or 2nd credit card"
-            asOf={AS_OF}
-            dataRange={DATA_RANGE}
-          >
-            <DashboardLineChart
-              data={firstCcTrend}
-              lines={[{ key: "firstOrSecondPct", color: "#8b5cf6", label: "1st/2nd CC %" }]}
-              valueType="percent"
-              height={260}
-            />
-          </ChartCard>
-        </div>
-      </SampleDataBanner>
+      />
 
       {/* Action items */}
       <ActionItems section="Acquisition" items={actionItems} />

@@ -5,84 +5,18 @@ import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
 import { Header } from "@/components/layout/header";
 import { MetricCard } from "@/components/dashboard/metric-card";
-import { DashboardLineChart } from "@/components/charts/line-chart";
-import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { Newspaper, TrendingUp, TrendingDown, AlertTriangle, Sparkles, ArrowRight, Info, X } from "lucide-react";
 import { usePeriod } from "@/hooks/use-period";
 import { useTheme } from "@/hooks/use-theme";
 import { useFilters } from "@/hooks/use-filters";
-import { useCurrency } from "@/hooks/use-currency";
 import { useKpis } from "@/hooks/use-cached-fetch";
-import { applyFilterToData, applyFilterToMetric, hasActiveFilters } from "@/lib/filter-utils";
+import { applyFilterToMetric, hasActiveFilters } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
-import { getPeriodRange, scaleMetricValue } from "@/lib/period-data";
-import { formatAmountCompact } from "@/lib/currency";
+import { getPeriodRange } from "@/lib/period-data";
+import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { cn } from "@/lib/utils";
 import type { KpiMetric, Cycle } from "@/types/reports";
 import Link from "next/link";
-
-// ── Mock data generators (period-aware) ─────────────────────────────────────
-
-function generateMockKpis(period: Cycle, trm: number = 1): KpiMetric[] {
-  const m: Record<Cycle, number> = { weekly: 0.25, monthly: 1, quarterly: 3, yearly: 12 };
-  const scale = m[period] * trm; // Apply time range multiplier to absolute values
-  return [
-    { metric: "eligible_to_spend", label: "Active Accounts", value: Math.round(60240 * (0.85 + scale * 0.05)), prevValue: Math.round(58100 * (0.85 + m[period] * 0.05)), unit: "count", changePercent: 3.7, direction: "up" },
-    { metric: "spend_active_rate", label: "Spend Active Rate", value: period === "weekly" ? 39.8 : period === "monthly" ? 42.1 : period === "quarterly" ? 40.5 : 38.9, prevValue: period === "weekly" ? 38.5 : period === "monthly" ? 41.6 : period === "quarterly" ? 39.2 : 36.1, unit: "percent", changePercent: period === "weekly" ? 3.4 : 1.2, direction: "up" },
-    { metric: "total_spend", label: "Total Spend", value: Math.round(78500000000 * scale), prevValue: Math.round(72000000000 * m[period]), unit: "idr", changePercent: 9.0, direction: "up" },
-    { metric: "dpd_30_plus_rate", label: "30+ DPD Rate", value: period === "weekly" ? 4.8 : period === "monthly" ? 4.6 : period === "quarterly" ? 4.9 : 5.2, prevValue: period === "weekly" ? 5.0 : period === "monthly" ? 5.1 : period === "quarterly" ? 5.2 : 5.8, unit: "percent", changePercent: -4.0, direction: "down" },
-  ];
-}
-
-function generateSparklines(period: Cycle) {
-  const base: Record<string, number[]> = {
-    eligible_to_spend: [52000, 54000, 55200, 56800, 57500, 58100, 59400, 60240],
-    spend_active_rate: [38.5, 39.2, 39.8, 40.1, 40.9, 41.6, 41.8, 42.1],
-    total_spend: [58e9, 62e9, 65e9, 67e9, 70e9, 72e9, 75e9, 78.5e9],
-    dpd_30_plus_rate: [5.8, 5.6, 5.4, 5.2, 5.1, 5.0, 4.8, 4.6],
-  };
-  const m: Record<Cycle, number> = { weekly: 0.25, monthly: 1, quarterly: 3, yearly: 12 };
-  const scale = m[period];
-  const result: Record<string, number[]> = {};
-  for (const [key, values] of Object.entries(base)) {
-    const isRate = key.includes("rate");
-    result[key] = values.map((v) => (isRate ? v : Math.round(v * scale)));
-  }
-  return result;
-}
-
-function generateChartData(period: Cycle) {
-  const labels: Record<Cycle, string[]> = {
-    weekly: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-    monthly: ["Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb"],
-    quarterly: ["Q1 2025", "Q2 2025", "Q3 2025", "Q4 2025", "Q1 2026"],
-    yearly: ["2022", "2023", "2024", "2025", "2026 YTD"],
-  };
-  const dates = labels[period];
-
-  const spendRateData = dates.map((d, i) => ({
-    date: d,
-    rate: 38.5 + i * (period === "weekly" ? 0.5 : period === "monthly" ? 0.5 : period === "quarterly" ? 0.8 : 1.2),
-    target: 50,
-  }));
-  const prevSpendRateData = dates.map((d, i) => ({
-    date: d,
-    rate: 36.8 + i * (period === "weekly" ? 0.4 : period === "monthly" ? 0.4 : period === "quarterly" ? 0.7 : 1.0),
-    target: 50,
-  }));
-
-  const m: Record<Cycle, number> = { weekly: 0.25, monthly: 1, quarterly: 3, yearly: 12 };
-  const scale = m[period];
-  const dpdData = [
-    { bucket: "Current", count: Math.round(42500 * (0.9 + scale * 0.03)), prev: Math.round(40100 * (0.9 + scale * 0.03)) },
-    { bucket: "1-30 DPD", count: Math.round(8200 * (0.9 + scale * 0.03)), prev: Math.round(8800 * (0.9 + scale * 0.03)) },
-    { bucket: "31-60", count: Math.round(2100 * (0.9 + scale * 0.03)), prev: Math.round(2350 * (0.9 + scale * 0.03)) },
-    { bucket: "61-90", count: Math.round(850 * (0.9 + scale * 0.03)), prev: Math.round(920 * (0.9 + scale * 0.03)) },
-    { bucket: "90+", count: Math.round(730 * (0.9 + scale * 0.03)), prev: Math.round(800 * (0.9 + scale * 0.03)) },
-  ];
-
-  return { spendRateData, prevSpendRateData, dpdData };
-}
 
 // ── Health score computation ────────────────────────────────────────────────
 
@@ -265,18 +199,18 @@ export default function DashboardPage() {
   const tDash = useTranslations("dashboard");
   const tCommon = useTranslations("common");
   const [showHealthInfo, setShowHealthInfo] = useState(false);
-  const { period, periodLabel, dateRange, prevDateRange, comparisonMode, timeRangeMultiplier } = usePeriod();
+  const { period, periodLabel, dateRange } = usePeriod();
   const { isDark } = useTheme();
   const { filters } = useFilters();
-  const { currency } = useCurrency();
   const { data: apiData, isLoading: loading } = useKpis(period);
   const kpisAreLive = !!apiData?.kpis;
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
-  // KPIs: extract the Big 4 from API data, or fall back to mock
-  const kpis = useMemo(() => {
+  // KPIs: extract the Big 4 from API data
+  const kpis = useMemo((): KpiMetric[] | null => {
     const apiKpis = apiData?.kpis as KpiMetric[] | undefined;
+    if (!apiKpis || apiKpis.length === 0) return null;
 
     // Map API KPIs to our Big 4 dashboard metrics
     const big4Keys = ["eligible_count", "spend_active_rate", "total_spend", "total_delinquent_rate"];
@@ -287,27 +221,11 @@ export default function DashboardPage() {
       total_delinquent_rate: tDash("dpdRate"),
     };
 
-    let raw: KpiMetric[];
-    if (apiKpis && apiKpis.length > 0) {
-      // Use real BQ data — pick the Big 4
-      raw = big4Keys.map((key) => {
-        const found = apiKpis.find((k) => k.metric === key);
-        if (found) return { ...found, label: big4Labels[key] ?? found.label };
-        // Fallback for missing metrics
-        return { metric: key, label: big4Labels[key] ?? key, value: 0, prevValue: null, unit: key.includes("rate") ? "percent" : "count", changePercent: null, direction: "flat" as const };
-      });
-    } else {
-      const mockLabels: Record<string, string> = {
-        eligible_to_spend: tDash("activeAccounts"),
-        spend_active_rate: tDash("spendActiveRate"),
-        total_spend: tDash("totalSpend"),
-        dpd_30_plus_rate: tDash("dpdRate"),
-      };
-      raw = generateMockKpis(period, timeRangeMultiplier).map((k) => ({
-        ...k,
-        label: mockLabels[k.metric] ?? k.label,
-      }));
-    }
+    const raw = big4Keys.map((key) => {
+      const found = apiKpis.find((k) => k.metric === key);
+      if (found) return { ...found, label: big4Labels[key] ?? found.label };
+      return { metric: key, label: big4Labels[key] ?? key, value: 0, prevValue: null, unit: (key.includes("rate") ? "percent" : "count") as "count" | "percent" | "idr" | "usd", changePercent: null, direction: "flat" as const };
+    });
 
     if (!hasActiveFilters(filters)) return raw;
     return raw.map((k) => ({
@@ -315,21 +233,10 @@ export default function DashboardPage() {
       value: applyFilterToMetric(k.value, filters, k.unit === "percent"),
       prevValue: k.prevValue != null ? applyFilterToMetric(k.prevValue, filters, k.unit === "percent") : k.prevValue,
     }));
-  }, [apiData, period, timeRangeMultiplier, filters]);
+  }, [apiData, filters]);
 
-  const sparklines = useMemo(() => generateSparklines(period), [period]);
-  const { spendRateData, prevSpendRateData, dpdData } = useMemo(() => {
-    const raw = generateChartData(period);
-    if (!hasActiveFilters(filters)) return raw;
-    return {
-      spendRateData: applyFilterToData(raw.spendRateData, filters),
-      prevSpendRateData: applyFilterToData(raw.prevSpendRateData, filters),
-      dpdData: applyFilterToData(raw.dpdData, filters),
-    };
-  }, [period, filters]);
-
-  const health = useMemo(() => computeHealth(kpis, isDark, tDash), [kpis, isDark, tDash]);
-  const alerts = useMemo(() => generateAlerts(kpis, period, tDash), [kpis, period, tDash]);
+  const health = useMemo(() => kpis ? computeHealth(kpis, isDark, tDash) : null, [kpis, isDark, tDash]);
+  const alerts = useMemo(() => kpis ? generateAlerts(kpis, period, tDash) : [], [kpis, period, tDash]);
 
   const severityConfig = {
     act: { icon: AlertTriangle, label: tDash("actNow"), bg: isDark ? "bg-red-500/10 border-red-500/30" : "bg-red-50 border-red-200", text: isDark ? "text-[#FF6B6B]" : "text-red-700" },
@@ -347,6 +254,14 @@ export default function DashboardPage() {
         {/* ════════════════════════════════════════════════════════════════ */}
         {/* 1. HEALTH SCORE BANNER                                         */}
         {/* ════════════════════════════════════════════════════════════════ */}
+        {!kpis && !loading && (
+          <SampleDataBanner
+            dataset="mart_finexus"
+            reason="KPI data requires financial_account_updates (DW004) and authorized_transaction (DW007)"
+          />
+        )}
+
+        {kpis && health && (
         <div className={cn(
           "rounded-2xl border p-6 bg-gradient-to-r relative",
           isDark ? "border-[var(--border)] bg-[var(--surface)]" : "border-[var(--border)] bg-[var(--surface)] shadow-sm",
@@ -409,7 +324,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-        </div>
+        </div>)}
 
         {/* Learn More modal overlay — portaled to body to escape sidebar stacking context */}
         {showHealthInfo && typeof document !== "undefined" && createPortal(
@@ -493,6 +408,7 @@ export default function DashboardPage() {
         {/* ════════════════════════════════════════════════════════════════ */}
         {/* 2. THE BIG 4 KPIs                                              */}
         {/* ════════════════════════════════════════════════════════════════ */}
+        {kpis && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {kpis.map((kpi) => (
             <MetricCard
@@ -504,18 +420,18 @@ export default function DashboardPage() {
               unit={kpi.unit as "count" | "percent" | "idr" | "usd"}
               asOf={DATA_RANGE.end}
               dataRange={DATA_RANGE}
-              sparklineData={sparklines[kpi.metric]}
               target={kpi.metric === "spend_active_rate" ? 50 : kpi.metric === "dpd_30_plus_rate" ? 3 : undefined}
               higherIsBetter={kpi.metric !== "dpd_30_plus_rate"}
               liveData={kpisAreLive}
             />
           ))}
         </div>
+        )}
 
         {/* ════════════════════════════════════════════════════════════════ */}
         {/* 3. ALERTS & ACTIONS                                            */}
         {/* ════════════════════════════════════════════════════════════════ */}
-        <div className={cn(
+        {kpis && alerts.length > 0 && <div className={cn(
           "rounded-xl border p-5",
           isDark ? "border-[var(--border)] bg-[var(--surface)]" : "border-[var(--border)] bg-[var(--surface)] shadow-sm"
         )}>
@@ -548,65 +464,20 @@ export default function DashboardPage() {
               );
             })}
           </div>
-        </div>
+        </div>}
 
         {/* ════════════════════════════════════════════════════════════════ */}
         {/* 4. TWO KEY CHARTS                                              */}
         {/* ════════════════════════════════════════════════════════════════ */}
-        <div className="grid gap-5 lg:grid-cols-2">
-          {/* Growth Story */}
-          <div className={cn(
-            "rounded-xl border p-5",
-            isDark ? "border-[var(--border)] bg-[var(--surface)]" : "border-[var(--border)] bg-[var(--surface)] shadow-sm"
-          )}>
-            <div className="flex items-center justify-between mb-1">
-              <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--text-muted)]">{tDash("growthStory")}</h3>
-              <Link href="/deep-dive/spend" className={cn("text-[10px] font-medium flex items-center gap-0.5", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>
-                {tDash("deepDive")} <ArrowRight className="h-2.5 w-2.5" />
-              </Link>
-            </div>
-            <p className="text-[11px] text-[var(--text-muted)] mb-3">{tDash("sarDescription")}</p>
-            <DashboardLineChart
-              data={spendRateData}
-              lines={[
-                { key: "rate", color: isDark ? "#06D6A0" : "#059669", label: tDash("spendActiveRatePct") },
-                { key: "target", color: isDark ? "#ffffff20" : "#00000015", label: tDash("targetPct", { pct: "50" }) },
-              ]}
-              prevPeriodData={comparisonMode !== "none" ? prevSpendRateData : undefined}
-              prevPeriodLabel={tDash("prior")}
-              valueType="percent"
-              height={200}
-            />
-          </div>
-
-          {/* Risk Story */}
-          <div className={cn(
-            "rounded-xl border p-5",
-            isDark ? "border-[var(--border)] bg-[var(--surface)]" : "border-[var(--border)] bg-[var(--surface)] shadow-sm"
-          )}>
-            <div className="flex items-center justify-between mb-1">
-              <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--text-muted)]">{tDash("riskStory")}</h3>
-              <Link href="/deep-dive/risk" className={cn("text-[10px] font-medium flex items-center gap-0.5", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>
-                {tDash("deepDive")} <ArrowRight className="h-2.5 w-2.5" />
-              </Link>
-            </div>
-            <p className="text-[11px] text-[var(--text-muted)] mb-3">{tDash("dpdDescription")}</p>
-            <DashboardBarChart
-              data={dpdData}
-              bars={[
-                { key: "count", color: isDark ? "#FFD166" : "#F5A623", label: tDash("current") },
-                { key: "prev", color: isDark ? "#ffffff20" : "#00000015", label: tDash("prior") },
-              ]}
-              xAxisKey="bucket"
-              height={200}
-            />
-          </div>
-        </div>
+        <SampleDataBanner
+          dataset="mart_finexus"
+          reason="KPI data requires financial_account_updates (DW004) and authorized_transaction (DW007)"
+        />
 
         {/* ════════════════════════════════════════════════════════════════ */}
         {/* 5. INVESTOR SNAPSHOT                                            */}
         {/* ════════════════════════════════════════════════════════════════ */}
-        <div>
+        {kpis && <div>
           <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--text-muted)] mb-3">{tDash("investorSnapshot")}</h3>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {INVESTOR_HIGHLIGHT_KEYS.map((h, i) => (
@@ -620,7 +491,7 @@ export default function DashboardPage() {
               </div>
             ))}
           </div>
-        </div>
+        </div>}
 
         {/* ════════════════════════════════════════════════════════════════ */}
         {/* 6. MARKET CONTEXT (slim footer)                                 */}

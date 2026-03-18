@@ -8,21 +8,13 @@ import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
+import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { usePeriod, useDateParams } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
 import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
-
-// ---------------------------------------------------------------------------
-// Mock fallback data
-// ---------------------------------------------------------------------------
-
-const MOCK_OVERVIEW = [
-  { cycle_day: 4, total_accounts: 266363, with_balance: 95739, revolving: 14841, revolve_rate: 15.5, avg_utilization: 72.3, avg_balance_idr: 1791977, avg_limit_idr: 3824300, avg_dpd: 12.3 },
-  { cycle_day: 26, total_accounts: 165107, with_balance: 31803, revolving: 26625, revolve_rate: 83.7, avg_utilization: 68.9, avg_balance_idr: 455879, avg_limit_idr: 1252600, avg_dpd: 8.1 },
-];
 
 // ---------------------------------------------------------------------------
 // Page
@@ -46,11 +38,11 @@ export default function BillingCyclePage() {
   // ── Overview KPIs ──────────────────────────────────────────────────
 
   const overview = useMemo(() => {
-    return apiData?.overview?.length ? apiData.overview : MOCK_OVERVIEW;
+    return apiData?.overview?.length ? apiData.overview : null;
   }, [apiData]);
 
-  const cycle4 = useMemo(() => overview.find((r: { cycle_day: number }) => r.cycle_day === 4), [overview]);
-  const cycle26 = useMemo(() => overview.find((r: { cycle_day: number }) => r.cycle_day === 26), [overview]);
+  const cycle4 = useMemo(() => overview?.find((r: { cycle_day: number }) => r.cycle_day === 4) ?? null, [overview]);
+  const cycle26 = useMemo(() => overview?.find((r: { cycle_day: number }) => r.cycle_day === 26) ?? null, [overview]);
 
   const totalActive = (cycle4?.total_accounts ?? 0) + (cycle26?.total_accounts ?? 0);
   const totalRevolving = (cycle4?.revolving ?? 0) + (cycle26?.revolving ?? 0);
@@ -166,6 +158,14 @@ export default function BillingCyclePage() {
     <div className="space-y-6 mt-4">
       <ActiveFiltersBanner />
 
+      {!overview && (
+        <SampleDataBanner
+          dataset="mart_finexus"
+          reason="Billing cycle data requires financial_account_updates (DW004)"
+        />
+      )}
+
+      {overview && <>
       {/* KPI Row */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <MetricCard
@@ -358,6 +358,7 @@ export default function BillingCyclePage() {
           </table>
         </div>
       </div>
+      </>}
     </div>
   );
 }

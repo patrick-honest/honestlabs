@@ -1,39 +1,15 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
-import useSWR from "swr";
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-} from "recharts";
 import { cn } from "@/lib/utils";
-import { formatNumber, formatPercent, formatCurrency } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
-import { useCurrency } from "@/hooks/use-currency";
 import { useDateParams } from "@/hooks/use-period";
 import { useTranslations } from "next-intl";
 import { CohortBuilder, EMPTY_COHORT, type CohortFilters } from "@/components/analysis/cohort-builder";
-import { KpiSelector, AVAILABLE_KPIS, type KpiDefinition } from "@/components/analysis/kpi-selector";
+import { KpiSelector, AVAILABLE_KPIS } from "@/components/analysis/kpi-selector";
 import { ChartDateRange, type DateRangeOverride } from "@/components/charts/chart-date-range";
-import { BarChart3, Users, GitCompareArrows, CalendarRange, TrendingUp, Info, Upload, FileSpreadsheet, X } from "lucide-react";
-
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
-
-// Map KPI IDs from the selector to supported BQ metric keys
-const KPI_TO_METRIC_KEY: Record<string, string> = {
-  eligible_to_spend: "eligible_count",
-  spend_activation_rate: "spend_active_rate",
-  active_purchase_rate: "spend_active_rate",
-  total_purchase_volume: "total_spend",
-  dpd_30_rate: "dpd_30_rate",
-  avg_txn_per_user: "transactor_count",
-};
+import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
+import { BarChart3, GitCompareArrows, CalendarRange, TrendingUp, Info, FileSpreadsheet, X } from "lucide-react";
 
 // ── Time range types ─────────────────────────────────────────────────
 
@@ -51,135 +27,15 @@ const TIMEFRAME_OPTIONS: { value: AnalysisTimeframe; label: string; points: stri
   { value: "quarterly", label: "Quarterly", points: "Past 12 quarters" },
 ];
 
-// ── Mock data generation ────────────────────────────────────────────
-
-function generateMockTimeSeries(
-  kpiId: string,
-  kpi: KpiDefinition,
-  timeframe: AnalysisTimeframe,
-  specialRange: SpecialRange,
-  isGroupB: boolean,
-): { date: string; value: number }[] {
-  const points: { date: string; value: number }[] = [];
-  const today = new Date(2026, 2, 16);
-
-  let numPoints: number;
-  let getLabel: (i: number) => string;
-
-  if (specialRange === "ytd") {
-    // YTD: show monthly from Jan to current month
-    numPoints = today.getMonth() + 1;
-    getLabel = (i) => {
-      const d = new Date(today.getFullYear(), i, 1);
-      return d.toLocaleDateString("en-US", { month: "short" });
-    };
-  } else if (specialRange === "mtd") {
-    // MTD: show weekly within current month
-    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-    numPoints = Math.ceil(today.getDate() / 7);
-    getLabel = (i) => {
-      const d = new Date(firstDay);
-      d.setDate(d.getDate() + i * 7);
-      return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    };
-  } else {
-    switch (timeframe) {
-      case "weekly":
-        numPoints = 6;
-        getLabel = (i) => {
-          const d = new Date(today);
-          d.setDate(d.getDate() - (numPoints - 1 - i) * 7);
-          return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-        };
-        break;
-      case "monthly":
-        numPoints = 6;
-        getLabel = (i) => {
-          const d = new Date(today.getFullYear(), today.getMonth() - (numPoints - 1 - i), 1);
-          return d.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
-        };
-        break;
-      case "quarterly":
-        numPoints = 12;
-        getLabel = (i) => {
-          const q = Math.floor(today.getMonth() / 3);
-          const qOffset = numPoints - 1 - i;
-          const targetQ = q - qOffset;
-          const targetYear = today.getFullYear() + Math.floor(targetQ / 4);
-          const qNum = ((targetQ % 4) + 4) % 4 + 1;
-          return `Q${qNum} ${String(targetYear).slice(2)}`;
-        };
-        break;
-    }
-  }
-
-  // Seed a base value based on KPI
-  let base: number;
-  let variance: number;
-  const growth = isGroupB ? 0.015 : 0.025;
-
-  switch (kpi.unit) {
-    case "percent":
-      base = 30 + Math.random() * 40; // 30-70%
-      variance = 3;
-      break;
-    case "idr":
-      base = 5000000 + Math.random() * 20000000;
-      variance = base * 0.08;
-      break;
-    case "usd":
-      base = 300 + Math.random() * 1200;
-      variance = base * 0.08;
-      break;
-    case "ratio":
-      base = 2 + Math.random() * 6;
-      variance = 0.5;
-      break;
-    default:
-      base = 500 + Math.random() * 5000;
-      variance = base * 0.1;
-  }
-
-  // Deterministic seed from kpiId
-  let seed = 0;
-  for (let c = 0; c < kpiId.length; c++) seed += kpiId.charCodeAt(c);
-  if (isGroupB) seed += 1000;
-
-  const pseudoRandom = (i: number) => {
-    const x = Math.sin(seed + i * 13.37) * 10000;
-    return x - Math.floor(x);
-  };
-
-  for (let i = 0; i < numPoints; i++) {
-    const trendFactor = 1 + growth * i;
-    const noise = (pseudoRandom(i) - 0.5) * variance * 2;
-    let value = base * trendFactor + noise;
-
-    if (kpi.unit === "percent") {
-      value = Math.max(0, Math.min(100, value));
-    }
-    value = Math.round(value * 100) / 100;
-
-    points.push({ date: getLabel(i), value });
-  }
-
-  return points;
-}
-
 // ── Color palette ───────────────────────────────────────────────────
 
 const GROUP_A_COLOR = "#3b82f6";
 const GROUP_B_COLOR = "#f97316";
 
-const GROUP_A_COLORS = ["#3b82f6", "#60a5fa", "#2563eb", "#93c5fd"];
-const GROUP_B_COLORS = ["#f97316", "#fb923c", "#ea580c", "#fdba74"];
-
 // ── Page Component ──────────────────────────────────────────────────
 
 export default function QuickAnalysisPage() {
   const { isDark } = useTheme();
-  const { currency } = useCurrency();
-  const { dateParams, startDate, endDate } = useDateParams();
   const tNav = useTranslations("nav");
 
   // Cohort state
@@ -207,74 +63,6 @@ export default function QuickAnalysisPage() {
   const [spreadsheetB, setSpreadsheetB] = useState<string>("");
   const [showSpreadsheetA, setShowSpreadsheetA] = useState(false);
   const [showSpreadsheetB, setShowSpreadsheetB] = useState(false);
-
-  // ── Fetch real data for the first selected KPI that has a BQ mapping ──
-  const firstMappedKpi = selectedKpis.find((id) => KPI_TO_METRIC_KEY[id]);
-  const firstMetricKey = firstMappedKpi ? KPI_TO_METRIC_KEY[firstMappedKpi] : null;
-
-  const { data: apiMetricData } = useSWR(
-    firstMetricKey ? `/api/quick-analysis?${dateParams}&metricKey=${firstMetricKey}` : null,
-    fetcher,
-    { revalidateOnFocus: false, dedupingInterval: 300_000 },
-  );
-
-  // Chart data — use API data for the mapped KPI, mock for everything else
-  const chartData = useMemo(() => {
-    return selectedKpis.map((kpiId) => {
-      const kpi = AVAILABLE_KPIS.find((k) => k.id === kpiId)!;
-
-      // If this KPI has API data and matches the fetched metric
-      const metricKey = KPI_TO_METRIC_KEY[kpiId];
-      if (metricKey && metricKey === firstMetricKey && apiMetricData?.timeSeries?.length) {
-        const apiSeries = apiMetricData.timeSeries as { date: string; value: number }[];
-        const seriesB = generateMockTimeSeries(kpiId, kpi, timeConfig.timeframe, timeConfig.specialRange, true);
-        const merged = apiSeries.map((pt, i) => ({
-          date: pt.date,
-          groupA: pt.value,
-          groupB: seriesB[i]?.value ?? 0,
-        }));
-        return { kpi, data: merged };
-      }
-
-      // Fallback to mock
-      const seriesA = generateMockTimeSeries(kpiId, kpi, timeConfig.timeframe, timeConfig.specialRange, false);
-      const seriesB = generateMockTimeSeries(kpiId, kpi, timeConfig.timeframe, timeConfig.specialRange, true);
-
-      const merged = seriesA.map((pt, i) => ({
-        date: pt.date,
-        groupA: pt.value,
-        groupB: seriesB[i]?.value ?? 0,
-      }));
-
-      return { kpi, data: merged };
-    });
-  }, [selectedKpis, timeConfig, firstMetricKey, apiMetricData]);
-
-  const formatValue = useCallback(
-    (value: number, unit: string) => {
-      switch (unit) {
-        case "percent":
-          return formatPercent(value);
-        case "idr":
-          return formatCurrency(value, "IDR");
-        case "usd":
-          return formatCurrency(value, "USD");
-        case "ratio":
-          return value.toFixed(2);
-        default:
-          return formatNumber(value, { compact: true });
-      }
-    },
-    []
-  );
-
-  const activeACount = Object.values(groupA).reduce((s, a) => s + a.length, 0);
-  const activeBCount = Object.values(groupB).reduce((s, a) => s + a.length, 0);
-
-  const grid = isDark ? "#2D2955" : "#E8D5F0";
-  const axis = isDark ? "#6B6394" : "#9B87A8";
-  const tooltipBg = isDark ? "#1E1B3A" : "#FFFFFF";
-  const tooltipBorder = isDark ? "#2D2955" : "#E8D5F0";
 
   return (
     <div className="space-y-6">
@@ -527,153 +315,11 @@ export default function QuickAnalysisPage() {
         </div>
       </div>
 
-      {/* Charts */}
-      {selectedKpis.length === 0 ? (
-        <div
-          className={cn(
-            "rounded-xl border p-12 text-center transition-colors",
-            isDark ? "border-[var(--border)] bg-[var(--surface)]" : "border-[var(--border)] bg-[var(--surface)]"
-          )}
-        >
-          <BarChart3 className="h-10 w-10 mx-auto text-[var(--text-muted)] mb-3" />
-          <p className="text-sm text-[var(--text-muted)]">Select KPIs above to start comparing</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {chartData.map(({ kpi, data }) => {
-            const latestA = data[data.length - 1]?.groupA ?? 0;
-            const latestB = data[data.length - 1]?.groupB ?? 0;
-            const diff = latestA - latestB;
-            const diffPct =
-              latestB !== 0 ? ((diff / latestB) * 100).toFixed(1) : "—";
-
-            return (
-              <div
-                key={kpi.id}
-                className={cn(
-                  "rounded-xl border overflow-hidden transition-colors",
-                  isDark
-                    ? "border-[var(--border)] bg-[var(--surface)]"
-                    : "border-[var(--border)] bg-[var(--surface)]"
-                )}
-              >
-                {/* Chart header */}
-                <div className="flex items-start justify-between px-4 py-3 bg-[var(--surface-elevated)]/50">
-                  <div>
-                    <h4 className="text-sm font-semibold text-[var(--text-primary)]">
-                      {kpi.label}
-                    </h4>
-                    <p className="text-[10px] text-[var(--text-muted)] mt-0.5">
-                      {kpi.category} &middot;{" "}
-                      {kpi.unit === "percent"
-                        ? "Percentage"
-                        : kpi.unit === "idr"
-                          ? "IDR"
-                          : kpi.unit === "usd"
-                            ? "USD"
-                            : kpi.unit === "ratio"
-                              ? "Ratio"
-                              : "Count"}
-                    </p>
-                  </div>
-                  {/* Summary stats */}
-                  <div className="flex gap-4 text-right">
-                    <div>
-                      <p className="text-[10px] text-[var(--text-muted)]">Group A</p>
-                      <p className="text-sm font-bold" style={{ color: GROUP_A_COLOR }}>
-                        {formatValue(latestA, kpi.unit)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-[var(--text-muted)]">Group B</p>
-                      <p className="text-sm font-bold" style={{ color: GROUP_B_COLOR }}>
-                        {formatValue(latestB, kpi.unit)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-[var(--text-muted)]">Diff</p>
-                      <p
-                        className={cn(
-                          "text-sm font-bold",
-                          diff > 0
-                            ? "text-emerald-400"
-                            : diff < 0
-                              ? "text-red-400"
-                              : "text-[var(--text-muted)]"
-                        )}
-                      >
-                        {diff > 0 ? "+" : ""}
-                        {diffPct}%
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Chart */}
-                <div className="p-4">
-                  <div style={{ height: 220 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart
-                        data={data}
-                        margin={{ top: 5, right: 10, left: 10, bottom: 5 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" stroke={grid} />
-                        <XAxis
-                          dataKey="date"
-                          tick={{ fill: axis, fontSize: 10 }}
-                          axisLine={{ stroke: grid }}
-                          tickLine={false}
-                        />
-                        <YAxis
-                          tick={{ fill: axis, fontSize: 10 }}
-                          axisLine={false}
-                          tickLine={false}
-                          tickFormatter={(v) => formatValue(v as number, kpi.unit)}
-                          width={65}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: tooltipBg,
-                            border: `1px solid ${tooltipBorder}`,
-                            borderRadius: 8,
-                            fontSize: 12,
-                          }}
-                          formatter={(value, name) => [
-                            formatValue(Number(value), kpi.unit),
-                            String(name) === "groupA" ? "Group A" : "Group B",
-                          ]}
-                        />
-                        <Legend
-                          formatter={(value) =>
-                            value === "groupA" ? "Group A" : "Group B"
-                          }
-                          wrapperStyle={{ fontSize: 11 }}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="groupA"
-                          stroke={GROUP_A_COLOR}
-                          strokeWidth={2.5}
-                          dot={{ r: 3, fill: GROUP_A_COLOR }}
-                          activeDot={{ r: 5 }}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="groupB"
-                          stroke={GROUP_B_COLOR}
-                          strokeWidth={2.5}
-                          dot={{ r: 3, fill: GROUP_B_COLOR }}
-                          activeDot={{ r: 5 }}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {/* Charts replaced with banner */}
+      <SampleDataBanner
+        dataset="Various"
+        reason="Quick analysis requires real-time BigQuery access to generate custom time series"
+      />
 
       {/* Info callout */}
       <div
