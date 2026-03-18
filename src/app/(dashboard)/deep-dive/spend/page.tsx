@@ -124,9 +124,31 @@ export default function SpendPage() {
   );
 
   const spendIsLive = !!spendAnalysis?.channelBreakdown;
+  const trendIsLive = !!spendAnalysis?.weeklySpendTrend?.length;
   const channelData = spendAnalysis?.channelBreakdown ?? null;
   const declineData = spendAnalysis?.declineBreakdown ?? null;
   const qrisMerchantData = spendAnalysis?.qrisMerchantGrowth ?? null;
+
+  // Weekly spend trend data from BigQuery
+  const weeklyTrend = useMemo(() => {
+    if (!spendAnalysis?.weeklySpendTrend?.length) return null;
+    return (spendAnalysis.weeklySpendTrend as { week_start: string; eligible_count: number; transactor_count: number; total_transactions: number; total_spend_idr: number; spend_active_rate: number; online_spend_idr: number; offline_spend_idr: number; qris_spend_idr: number; avg_spend_per_txn_idr: number }[]).map(r => ({
+      date: r.week_start.replace("2025-", "").replace("2026-", "").slice(0, 5),
+      eligible: r.eligible_count,
+      transactors: r.transactor_count,
+      rate: r.spend_active_rate,
+      totalSpend: r.total_spend_idr,
+      online: r.online_spend_idr,
+      offline: r.offline_spend_idr,
+      qris: r.qris_spend_idr,
+      avgTicket: r.avg_spend_per_txn_idr,
+      txnPerUser: r.total_transactions / Math.max(r.eligible_count, 1),
+    }));
+  }, [spendAnalysis]);
+
+  // Latest KPI values from trend data
+  const latestWeek = weeklyTrend?.[weeklyTrend.length - 1];
+  const prevWeek = weeklyTrend && weeklyTrend.length >= 2 ? weeklyTrend[weeklyTrend.length - 2] : null;
 
   // Transform channel data for horizontal bar chart
   const channelBarData = useMemo(() => {
@@ -183,11 +205,173 @@ export default function SpendPage() {
     <div className="space-y-6">
       <ActiveFiltersBanner />
 
-      {/* KPI row + Trend charts — requires real spend data */}
-      <SampleDataBanner
-        dataset="mart_finexus"
-        reason="Spend trend data requires authorized_transaction (DW007) and financial_account_updates (DW004)"
-      />
+      {/* KPI row + Trend charts */}
+      {weeklyTrend && latestWeek ? (
+        <>
+          {/* KPI Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <MetricCard
+              metricKey="spend_active_rate"
+              label="Spend Active Rate"
+              value={latestWeek.rate}
+              prevValue={prevWeek?.rate ?? null}
+              unit="percent"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              target={50}
+              liveData={trendIsLive}
+            />
+            <MetricCard
+              metricKey="spend_eligible"
+              label="Eligible to Spend (Cum. EoP)"
+              value={latestWeek.eligible}
+              prevValue={prevWeek?.eligible ?? null}
+              unit="count"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              liveData={trendIsLive}
+            />
+            <MetricCard
+              metricKey="spend_total_volume"
+              label="Total Spend Volume"
+              value={latestWeek.totalSpend}
+              prevValue={prevWeek?.totalSpend ?? null}
+              unit="idr"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              liveData={trendIsLive}
+            />
+            <MetricCard
+              metricKey="spend_txn_per_eligible"
+              label="Txn per Eligible User"
+              value={Math.round(latestWeek.txnPerUser * 100) / 100}
+              prevValue={prevWeek ? Math.round(prevWeek.txnPerUser * 100) / 100 : null}
+              unit="count"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              liveData={trendIsLive}
+            />
+          </div>
+
+          {/* Spend Active Rate Trend */}
+          <ChartCard
+            title="Spend Active Rate Trend"
+            subtitle="% of cumulative eligible accounts (EoP) with at least 1 authorized transaction in period"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            liveData={trendIsLive}
+          >
+            <DashboardLineChart
+              data={weeklyTrend}
+              lines={[{ key: "rate", color: "#3b82f6", label: "SAR %" }]}
+              xAxisKey="date"
+              valueType="percent"
+              height={300}
+            />
+            <ChartInsights insights={spendActiveRateInsights} />
+          </ChartCard>
+
+          {/* Eligible vs Transactors */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <ChartCard
+              title="Eligible vs Transactors"
+              subtitle="Cumulative eligible accounts vs those transacting"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              liveData={trendIsLive}
+            >
+              <DashboardBarChart
+                data={weeklyTrend}
+                bars={[
+                  { key: "eligible", color: "#475569", label: "Eligible" },
+                  { key: "transactors", color: "#3b82f6", label: "Transactors" },
+                ]}
+                xAxisKey="date"
+                height={280}
+              />
+              <ChartInsights insights={eligibleVsTransactorsInsights} />
+            </ChartCard>
+
+            <ChartCard
+              title="Spend by Category"
+              subtitle="Online / Offline / QRIS weekly spend"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              liveData={trendIsLive}
+            >
+              <DashboardBarChart
+                data={weeklyTrend}
+                bars={[
+                  { key: "online", color: "#3b82f6", label: "Online" },
+                  { key: "offline", color: "#8b5cf6", label: "Offline" },
+                  { key: "qris", color: "#06b6d4", label: "QRIS" },
+                ]}
+                xAxisKey="date"
+                height={280}
+              />
+              <ChartInsights insights={spendByCategoryInsights} />
+            </ChartCard>
+          </div>
+
+          {/* Total Spend Volume + Avg Ticket Size */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <ChartCard
+              title="Total Spend Volume"
+              subtitle="Weekly authorized transaction volume (IDR)"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              liveData={trendIsLive}
+            >
+              <DashboardLineChart
+                data={weeklyTrend}
+                lines={[{ key: "totalSpend", color: "#8b5cf6", label: "Total Spend (IDR)" }]}
+                xAxisKey="date"
+                valueType="currency"
+                height={260}
+              />
+              <ChartInsights insights={totalSpendVolumeInsights} />
+            </ChartCard>
+
+            <ChartCard
+              title="Avg Spend per Transaction"
+              subtitle="Average ticket size (IDR) per authorized transaction"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              liveData={trendIsLive}
+            >
+              <DashboardLineChart
+                data={weeklyTrend}
+                lines={[{ key: "avgTicket", color: "#06b6d4", label: "Avg Ticket (IDR)" }]}
+                xAxisKey="date"
+                valueType="currency"
+                height={260}
+              />
+            </ChartCard>
+          </div>
+
+          {/* Txn per Eligible */}
+          <ChartCard
+            title="Transaction Frequency"
+            subtitle="Average transactions per eligible user per week"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            liveData={trendIsLive}
+          >
+            <DashboardLineChart
+              data={weeklyTrend}
+              lines={[{ key: "txnPerUser", color: "#22c55e", label: "Txn/User" }]}
+              xAxisKey="date"
+              height={260}
+            />
+            <ChartInsights insights={txnPerEligibleInsights} />
+          </ChartCard>
+        </>
+      ) : (
+        <SampleDataBanner
+          dataset="mart_finexus"
+          reason="Spend trend data requires authorized_transaction (DW007) and financial_account_updates (DW004)"
+        />
+      )}
 
       {/* ================================================================== */}
       {/* NEW SECTION 1: Transaction Channel Analysis                        */}

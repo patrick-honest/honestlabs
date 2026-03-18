@@ -4,6 +4,7 @@ import {
   getDeclineBreakdown,
   getQrisOnlyMerchantGrowth,
   getMixedMerchantQrisVolume,
+  getWeeklySpendTrend,
 } from "@/services/queries/spend-analysis";
 
 export async function GET(request: Request) {
@@ -22,12 +23,13 @@ export async function GET(request: Request) {
     const start = new Date(startDate);
     const end = new Date(endDate);
 
-    const [channelBreakdown, declineBreakdown, qrisMerchantGrowth, mixedMerchantVolume] =
+    const [channelBreakdown, declineBreakdown, qrisMerchantGrowth, mixedMerchantVolume, weeklySpendTrend] =
       await Promise.all([
         getChannelBreakdown(start, end),
         getDeclineBreakdown(start, end),
         getQrisOnlyMerchantGrowth(),
         getMixedMerchantQrisVolume(start, end),
+        getWeeklySpendTrend(start, end),
       ]);
 
     return NextResponse.json({
@@ -35,6 +37,7 @@ export async function GET(request: Request) {
       declineBreakdown,
       qrisMerchantGrowth,
       mixedMerchantVolume,
+      weeklySpendTrend,
     });
   } catch (error) {
     console.error("[spend-analysis] Query failed:", error);
