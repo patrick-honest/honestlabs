@@ -60,6 +60,8 @@ export const navigation: NavItem[] = [
     children: [
       { label: "App Health", href: "/deep-dive/app-health", icon: "Activity" },
       { label: "Customer Service", href: "/deep-dive/customer-service", icon: "MessageCircle" },
+      { label: "Users", href: "/deep-dive/users", icon: "Users" },
+      { label: "Cards", href: "/deep-dive/cards", icon: "CreditCard" },
     ],
   },
 

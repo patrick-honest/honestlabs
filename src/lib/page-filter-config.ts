@@ -98,6 +98,14 @@ export const PAGE_FILTER_CONFIG: { prefix: string; filters: FilterKey[] | null }
     prefix: "/deep-dive/points-program",
     filters: [...ACCT],
   },
+  {
+    prefix: "/deep-dive/users",
+    filters: [...ACCT],
+  },
+  {
+    prefix: "/deep-dive/cards",
+    filters: [...ACCT],
+  },
 
   // ── Top-level pages ──
   {

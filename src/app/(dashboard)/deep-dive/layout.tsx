@@ -23,6 +23,8 @@ const PAGE_LABELS: Record<string, string> = {
   "/deep-dive/repayments": "Repayments",
   "/deep-dive/app-health": "App Health",
   "/deep-dive/customer-service": "Customer Service",
+  "/deep-dive/users": "Users",
+  "/deep-dive/cards": "Cards",
 };
 
 export default function DeepDiveLayout({
