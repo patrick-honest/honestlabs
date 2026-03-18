@@ -464,6 +464,37 @@ export function Sidebar() {
           "flex items-center gap-1 px-3 py-2",
           collapsed && "flex-col px-2"
         )}>
+          {/* Language */}
+          {!collapsed ? (
+            <div className="relative">
+              <select
+                value={locale}
+                onChange={(e) => setLocale(e.target.value as Locale)}
+                className={cn(
+                  "appearance-none h-7 rounded-md border px-1.5 pr-5 text-[10px] font-medium cursor-pointer outline-none transition-colors",
+                  "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]"
+                )}
+              >
+                {(Object.entries(localeLabels) as [Locale, string][]).map(([val, label]) => (
+                  <option key={val} value={val}>{label}</option>
+                ))}
+              </select>
+              <Globe className="pointer-events-none absolute right-1 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-[var(--text-muted)]" />
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                const locales: Locale[] = ["en", "id", "ja"];
+                const next = locales[(locales.indexOf(locale) + 1) % locales.length];
+                setLocale(next);
+              }}
+              className="flex h-7 w-7 items-center justify-center rounded-md transition-colors text-[9px] font-bold bg-[var(--surface-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+              title={`Language: ${localeLabels[locale]}`}
+            >
+              {localeLabels[locale]}
+            </button>
+          )}
+
           {/* Currency */}
           <button
             onClick={toggleCurrency}
@@ -496,37 +527,6 @@ export function Sidebar() {
           >
             {isDark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
           </button>
-
-          {/* Language */}
-          {!collapsed ? (
-            <div className="relative">
-              <select
-                value={locale}
-                onChange={(e) => setLocale(e.target.value as Locale)}
-                className={cn(
-                  "appearance-none h-7 rounded-md border px-1.5 pr-5 text-[10px] font-medium cursor-pointer outline-none transition-colors",
-                  "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]"
-                )}
-              >
-                {(Object.entries(localeLabels) as [Locale, string][]).map(([val, label]) => (
-                  <option key={val} value={val}>{label}</option>
-                ))}
-              </select>
-              <Globe className="pointer-events-none absolute right-1 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-[var(--text-muted)]" />
-            </div>
-          ) : (
-            <button
-              onClick={() => {
-                const locales: Locale[] = ["en", "id", "ja"];
-                const next = locales[(locales.indexOf(locale) + 1) % locales.length];
-                setLocale(next);
-              }}
-              className="flex h-7 w-7 items-center justify-center rounded-md transition-colors text-[9px] font-bold bg-[var(--surface-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-              title={`Language: ${localeLabels[locale]}`}
-            >
-              {localeLabels[locale]}
-            </button>
-          )}
 
           {/* Collapse — right-justified */}
           <button

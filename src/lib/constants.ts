@@ -23,9 +23,18 @@ export const TXN_TYPES = {
 
 // Transaction type categories for spend analysis
 export const SPEND_CATEGORIES = {
-  online: { label: "Online", filter: "FX_DW007_TXN_TYP = 'TM'" },
-  qris: { label: "QRIS", filter: "FX_DW007_TXN_TYP = 'RA' AND fx_dw007_rte_dest = 'L'" },
-  offline: { label: "Offline (POS/Tap)", filter: "FX_DW007_TXN_TYP != 'TM' AND NOT (FX_DW007_TXN_TYP = 'RA' AND fx_dw007_rte_dest = 'L')" },
+  qris: {
+    label: "QRIS",
+    filter: "COALESCE(FX_DW007_STAT, '', ' ') IN ('', ' ') AND FX_DW007_TXN_TYP NOT IN ('PM', 'RF', 'BE') AND fx_dw007_rte_dest = 'L'",
+  },
+  offline: {
+    label: "Offline (POS/Tap)",
+    filter: "COALESCE(FX_DW007_STAT, '', ' ') IN ('', ' ') AND FX_DW007_TXN_TYP NOT IN ('PM', 'RF', 'BE', 'TM')",
+  },
+  online: {
+    label: "Online",
+    filter: "COALESCE(FX_DW007_STAT, '', ' ') IN ('', ' ') AND FX_DW007_TXN_TYP NOT IN ('PM', 'RF', 'BE') AND FX_DW007_TXN_TYP = 'TM'",
+  },
 } as const;
 
 // Excluded transaction types for valid spend
@@ -33,8 +42,8 @@ export const EXCLUDED_TXN_TYPES = ["PM", "BE", "RF"];
 
 // Valid spend filter (DW007)
 export const VALID_SPEND_FILTER = `
-  (fx_dw007_stat IS NULL OR TRIM(fx_dw007_stat) = '' OR fx_dw007_stat = ' ')
-  AND fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+  COALESCE(FX_DW007_STAT, '', ' ') IN ('', ' ')
+  AND FX_DW007_TXN_TYP NOT IN ('PM', 'RF', 'BE')
 `;
 
 // DPD buckets for aging analysis

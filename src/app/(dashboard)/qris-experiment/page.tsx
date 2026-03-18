@@ -16,7 +16,7 @@ import { useCurrency } from "@/hooks/use-currency";
 import { useLanguage } from "@/hooks/use-language";
 import { formatAmountCompact } from "@/lib/currency";
 import { getPeriodRange, scaleTrendData, scaleMetricValue } from "@/lib/period-data";
-import { applyFilterToData } from "@/lib/filter-utils";
+import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import {
   QrCode, TrendingUp, TrendingDown, Users, Zap, ArrowUpRight, ArrowDownRight,
@@ -379,6 +379,31 @@ export default function QrisExperimentPage() {
   const pProfitabilityData = useMemo(() => applyFilterToData(scaleTrendData(profitabilityData, period, "month"), filters), [period, filters]);
   const pRevenuePerUserData = useMemo(() => applyFilterToData(scaleTrendData(revenuePerUserData, period, "month"), filters), [period, filters]);
 
+  // Apply filters to comparison data (scalar values)
+  const pComparisonData = useMemo(() => ({
+    qris: {
+      ...comparisonData.qris,
+      avg_txn_count: applyFilterToMetric(comparisonData.qris.avg_txn_count, filters, false),
+      avg_total_spend_idr: applyFilterToMetric(comparisonData.qris.avg_total_spend_idr, filters, false),
+      avg_spend_per_txn: applyFilterToMetric(comparisonData.qris.avg_spend_per_txn, filters, false),
+      avg_days_active: applyFilterToMetric(comparisonData.qris.avg_days_active, filters, false),
+      pct_multi_channel: applyFilterToMetric(comparisonData.qris.pct_multi_channel, filters, true),
+      user_count: applyFilterToMetric(comparisonData.qris.user_count, filters, false),
+    },
+    nonQris: {
+      ...comparisonData.nonQris,
+      avg_txn_count: applyFilterToMetric(comparisonData.nonQris.avg_txn_count, filters, false),
+      avg_total_spend_idr: applyFilterToMetric(comparisonData.nonQris.avg_total_spend_idr, filters, false),
+      avg_spend_per_txn: applyFilterToMetric(comparisonData.nonQris.avg_spend_per_txn, filters, false),
+      avg_days_active: applyFilterToMetric(comparisonData.nonQris.avg_days_active, filters, false),
+      pct_multi_channel: applyFilterToMetric(comparisonData.nonQris.pct_multi_channel, filters, true),
+      user_count: applyFilterToMetric(comparisonData.nonQris.user_count, filters, false),
+    },
+  }), [filters]);
+
+  // Apply filters to merchant category data
+  const pMerchantCategoryData = useMemo(() => applyFilterToData(merchantCategoryData, filters), [filters]);
+
   // Print styles injection
   useEffect(() => {
     const style = document.createElement("style");
@@ -391,18 +416,18 @@ export default function QrisExperimentPage() {
     await new Promise((r) => setTimeout(r, 800));
   }, []);
 
-  const q = comparisonData.qris;
-  const nq = comparisonData.nonQris;
+  const q = pComparisonData.qris;
+  const nq = pComparisonData.nonQris;
 
   const totalQrisUsers = q.user_count;
   const totalUsers = q.user_count + nq.user_count;
-  const currentAdoptionRate = adoptionData[adoptionData.length - 1].adoption_rate;
-  const totalNewUsers = adoptionData.reduce((sum, d) => sum + d.new_users, 0);
-  const totalQrisTxns = merchantCategoryData.reduce((sum, d) => sum + d.txn_count, 0);
-  const latestProfit = profitabilityData[profitabilityData.length - 2]; // Feb (full month)
-  const qrisShareOfVolume = ((latestProfit.qris_volume / (latestProfit.qris_volume + latestProfit.card_volume)) * 100).toFixed(1);
+  const currentAdoptionRate = applyFilterToMetric(adoptionData[adoptionData.length - 1].adoption_rate, filters, true);
+  const totalNewUsers = applyFilterToMetric(adoptionData.reduce((sum, d) => sum + d.new_users, 0), filters, false);
+  const totalQrisTxns = pMerchantCategoryData.reduce((sum, d) => sum + (d.txn_count as number), 0);
+  const latestProfit = pProfitabilityData.length >= 2 ? pProfitabilityData[pProfitabilityData.length - 2] : pProfitabilityData[pProfitabilityData.length - 1]; // Feb (full month)
+  const qrisShareOfVolume = latestProfit ? ((Number(latestProfit.qris_volume) / (Number(latestProfit.qris_volume) + Number(latestProfit.card_volume))) * 100).toFixed(1) : "0";
 
-  const maxCategoryTxn = merchantCategoryData[0].txn_count;
+  const maxCategoryTxn = pMerchantCategoryData.length > 0 ? (pMerchantCategoryData[0].txn_count as number) : 1;
 
   const handleDownloadPdf = useCallback(() => {
     generateReportPdf({
@@ -585,7 +610,7 @@ export default function QrisExperimentPage() {
               <TrendingUp className="h-3 w-3" />
               <span className="text-xs font-medium">+12.4pp since launch</span>
             </div>
-            <p className="text-[10px] text-[var(--text-muted)] mt-2">{fmtCur(latestProfit.qris_volume)} in Feb 2026</p>
+            <p className="text-[10px] text-[var(--text-muted)] mt-2">{fmtCur(Number(latestProfit?.qris_volume ?? 0))} in Feb 2026</p>
           </div>
         </div>
 
@@ -708,16 +733,16 @@ export default function QrisExperimentPage() {
             {/* Summary stat boxes */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] p-4">
-                <StatBox label="QRIS Interchange (Feb)" value={fmtCur(122_000_000)} subtext="0.7% MDR" />
+                <StatBox label="QRIS Interchange (Feb)" value={fmtCur(applyFilterToMetric(122_000_000, filters, false))} subtext="0.7% MDR" />
               </div>
               <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] p-4">
-                <StatBox label="Card Interchange (Feb)" value={fmtCur(1_020_000_000)} subtext="~1.5% rate" />
+                <StatBox label="Card Interchange (Feb)" value={fmtCur(applyFilterToMetric(1_020_000_000, filters, false))} subtext="~1.5% rate" />
               </div>
               <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] p-4">
-                <StatBox label="QRIS User Total Spend" value={fmtCur(52_300_000_000)} subtext="All channels" />
+                <StatBox label="QRIS User Total Spend" value={fmtCur(applyFilterToMetric(52_300_000_000, filters, false))} subtext="All channels" />
               </div>
               <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] p-4">
-                <StatBox label="Non-QRIS User Spend" value={fmtCur(51_400_000_000)} subtext="All channels" />
+                <StatBox label="Non-QRIS User Spend" value={fmtCur(applyFilterToMetric(51_400_000_000, filters, false))} subtext="All channels" />
               </div>
             </div>
 
@@ -796,13 +821,13 @@ export default function QrisExperimentPage() {
 
           <div className="p-6">
             <div className="space-y-1">
-              {merchantCategoryData.map((cat) => (
+              {pMerchantCategoryData.map((cat) => (
                 <HorizontalBar
-                  key={cat.category}
-                  label={cat.category}
-                  value={cat.txn_count}
+                  key={cat.category as string}
+                  label={cat.category as string}
+                  value={cat.txn_count as number}
                   maxValue={maxCategoryTxn}
-                  subLabel={fmtCur(cat.spend)}
+                  subLabel={fmtCur(cat.spend as number)}
                 />
               ))}
             </div>
