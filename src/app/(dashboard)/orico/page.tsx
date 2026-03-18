@@ -14,7 +14,8 @@ import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange, scaleTrendData, scaleMetricValue } from "@/lib/period-data";
 import { cn } from "@/lib/utils";
-import { Printer, TrendingUp, TrendingDown, Minus, Lock } from "lucide-react";
+import { Download, TrendingUp, TrendingDown, Minus, Lock } from "lucide-react";
+import { generateReportPdf } from "@/lib/report-pdf";
 import { SampleDataBanner, SampleDataBadge } from "@/components/dashboard/sample-data-banner";
 import { PageGuard } from "@/components/layout/page-guard";
 import type { QueryInfo } from "@/components/query-inspector/query-inspector";
@@ -843,13 +844,27 @@ function OricoPageContent() {
   const segments = ["A", "B", "C", "D"];
   const products = ["Regular", "RP1", "AOF"];
 
-  const handlePrint = useCallback(() => {
-    setPrintMode(true);
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        window.print();
-        setPrintMode(false);
-      });
+  const handleDownloadPdf = useCallback(() => {
+    generateReportPdf({
+      id: "orico-report",
+      cycle: period,
+      periodStart: DATA_RANGE.start,
+      periodEnd: DATA_RANGE.end,
+      section: "Orico Reports",
+      title: `Orico Partner Report — ${periodLabel}`,
+      generatedAt: new Date().toISOString(),
+      kpis: [
+        { label: "Total Approved", value: scaleMetricValue(2850, period, false), unit: "count", change: 4.2 },
+        { label: "Active Portfolio", value: 18500, unit: "count", change: 2.8 },
+        { label: "ECL Provision", value: scaleMetricValue(4200000000, period, false), unit: "B", change: -3.1 },
+        { label: "RP1 Top-up Rate", value: 42.5, unit: "%", change: 1.8 },
+      ],
+      trends: [
+        "Orico portfolio growing steadily with 2.8% MoM increase in active accounts.",
+        "ECL provision declining — credit quality improving across all segments.",
+        "RP1 top-up rate reached 42.5%, driven by repeat usage campaigns.",
+        `Report covers ${periodLabel} period ending ${DATA_RANGE.end}.`,
+      ],
     });
   }, []);
 
@@ -884,12 +899,12 @@ function OricoPageContent() {
             <p className="text-xs text-[var(--text-muted)] mt-0.5">{periodLabel}</p>
           </div>
           <button
-            onClick={handlePrint}
+            onClick={handleDownloadPdf}
             className="no-print flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text-primary)] hover:bg-[var(--border)] transition-colors"
             data-print-hide
           >
-            <Printer className="w-4 h-4" />
-            Download PDF
+            <Download className="w-4 h-4" />
+            Save PDF
           </button>
         </div>
 
