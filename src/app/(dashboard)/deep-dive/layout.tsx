@@ -25,6 +25,7 @@ const PAGE_LABELS: Record<string, string> = {
   "/deep-dive/customer-service": "Customer Service",
   "/deep-dive/users": "Users",
   "/deep-dive/cards": "Cards",
+  "/deep-dive/billing-cycle": "Billing Cycle",
 };
 
 export default function DeepDiveLayout({

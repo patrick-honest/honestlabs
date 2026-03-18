@@ -36,6 +36,7 @@ export const navigation: NavItem[] = [
       { label: "Txn Auth", href: "/deep-dive/transaction-auth", icon: "ShieldCheck" },
       { label: "Points", href: "/deep-dive/points-program", icon: "Star" },
       { label: "Credit Line", href: "/deep-dive/credit-line", icon: "TrendingUp" },
+      { label: "Billing Cycle", href: "/deep-dive/billing-cycle", icon: "CalendarClock" },
     ],
   },
 

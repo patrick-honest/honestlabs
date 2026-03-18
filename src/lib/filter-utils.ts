@@ -128,6 +128,7 @@ const FILTER_LABELS: Record<keyof FilterSelections, string> = {
   cardType: "Card Type",
   productType: "Product",
   cohort: "Cohort",
+  cycleDate: "Cycle",
   transactionType: "Txn Type",
   transactionChannel: "Channel",
   transactionStatus: "Status",

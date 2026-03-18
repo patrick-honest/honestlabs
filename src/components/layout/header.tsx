@@ -11,6 +11,7 @@ import {
   CARD_TYPE_OPTIONS,
   PRODUCT_TYPE_OPTIONS,
   COHORT_OPTIONS,
+  CYCLE_DATE_OPTIONS,
   TRANSACTION_TYPE_OPTIONS,
   TRANSACTION_CHANNEL_OPTIONS,
   TRANSACTION_STATUS_OPTIONS,
@@ -44,6 +45,7 @@ const FILTER_GROUPS: FilterGroup[] = [
       { key: "cardType", label: "Card", options: CARD_TYPE_OPTIONS },
       { key: "productType", label: "Product", options: PRODUCT_TYPE_OPTIONS },
       { key: "cohort", label: "Cohort", options: COHORT_OPTIONS },
+      { key: "cycleDate", label: "Cycle", options: CYCLE_DATE_OPTIONS },
     ],
   },
   {
@@ -421,7 +423,7 @@ export function Header({ title }: HeaderProps) {
       prevPathRef.current = pathname;
       if (visibleKeys !== null) {
         const allKeys: FilterKey[] = [
-          "cardType", "productType", "cohort",
+          "cardType", "productType", "cohort", "cycleDate",
           "transactionType", "transactionChannel", "transactionStatus",
           "merchantCategory", "amountRange", "recurringType",
           "riskCategory", "decisioningModel",

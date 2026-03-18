@@ -13,6 +13,7 @@ export interface FilterSelections {
   cardType: string[];
   productType: string[];
   cohort: string[];
+  cycleDate: string[];
   // Transaction filters
   transactionType: string[];
   transactionChannel: string[];
@@ -56,6 +57,7 @@ const DEFAULT_FILTERS: FilterSelections = {
   cardType: [],
   productType: [],
   cohort: [],
+  cycleDate: [],
   transactionType: [],
   transactionChannel: [],
   transactionStatus: [],
@@ -236,6 +238,12 @@ function generateWeeklyCohorts(): { value: string; label: string }[] {
 }
 
 export const COHORT_OPTIONS = generateWeeklyCohorts();
+
+// ── Cycle Date filter (statement due day of month) ──────────────────
+export const CYCLE_DATE_OPTIONS = [
+  { value: "4", label: "Cycle 4th" },
+  { value: "26", label: "Cycle 26th" },
+] as const;
 
 const FILTERS_STORAGE_KEY = "honest_filter_prefs";
 const PRESETS_STORAGE_KEY = "honest_filter_presets";
