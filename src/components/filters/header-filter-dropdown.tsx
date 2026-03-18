@@ -4,10 +4,12 @@ import { useState, useRef, useEffect } from "react";
 import { Check, ChevronDown, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
+import { useTranslations } from "next-intl";
 
 export interface FilterOption {
   readonly value: string;
   readonly label: string;
+  readonly labelKey?: string;
   readonly group?: string;
 }
 
@@ -29,6 +31,7 @@ export function HeaderFilterDropdown({
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const { isDark } = useTheme();
+  const t = useTranslations();
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -111,7 +114,7 @@ export function HeaderFilterDropdown({
                     >
                       {isSelected && <Check className="h-3 w-3 text-white" />}
                     </div>
-                    <span>{opt.label}</span>
+                    <span>{opt.labelKey ? t(opt.labelKey) : opt.label}</span>
                   </button>
                 </div>
               );

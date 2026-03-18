@@ -365,7 +365,27 @@
     "online": "Online",
     "offline": "Offline",
     "qris": "QRIS",
-    "merchantEcosystem": "QRIS Merchant Ecosystem"
+    "merchantEcosystem": "QRIS Merchant Ecosystem",
+    "topMerchantCategories": "Top Merchant Categories",
+    "topMerchantCategoriesSub": "By transaction count · MCC from DW007"
+  },
+  "merchantCategories": {
+    "groceries": "Groceries & Supermarkets",
+    "restaurants": "Restaurants & Food Delivery",
+    "fastFood": "Fast Food",
+    "transportation": "Transportation & Ride-hailing",
+    "gasStations": "Gas Stations",
+    "entertainment": "Entertainment & Streaming",
+    "utilities": "Utilities & Bills",
+    "shopping": "Retail & Shopping",
+    "travel": "Travel & Hotels",
+    "health": "Health & Pharmacy",
+    "education": "Education",
+    "government": "Government & Tax",
+    "digitalGoods": "Digital Goods & Services",
+    "electronics": "Electronics",
+    "cosmetics": "Cosmetics & Beauty",
+    "other": "Other"
   },
   "risk": {
     "title": "Risk",

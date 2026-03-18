@@ -158,18 +158,18 @@ export const TRANSACTION_STATUS_OPTIONS = [
 ] as const;
 
 export const MERCHANT_CATEGORY_OPTIONS = [
-  { value: "groceries", label: "Groceries & Supermarkets" },
-  { value: "restaurants", label: "Restaurants & Food Delivery" },
-  { value: "transportation", label: "Transportation & Ride-hailing" },
-  { value: "entertainment", label: "Entertainment & Streaming" },
-  { value: "utilities", label: "Utilities & Bills" },
-  { value: "shopping", label: "Retail & Shopping" },
-  { value: "travel", label: "Travel & Hotels" },
-  { value: "health", label: "Health & Pharmacy" },
-  { value: "education", label: "Education" },
-  { value: "government", label: "Government & Tax" },
-  { value: "digital_goods", label: "Digital Goods & Services" },
-  { value: "other", label: "Other" },
+  { value: "groceries", label: "Groceries & Supermarkets", labelKey: "merchantCategories.groceries" },
+  { value: "restaurants", label: "Restaurants & Food Delivery", labelKey: "merchantCategories.restaurants" },
+  { value: "transportation", label: "Transportation & Ride-hailing", labelKey: "merchantCategories.transportation" },
+  { value: "entertainment", label: "Entertainment & Streaming", labelKey: "merchantCategories.entertainment" },
+  { value: "utilities", label: "Utilities & Bills", labelKey: "merchantCategories.utilities" },
+  { value: "shopping", label: "Retail & Shopping", labelKey: "merchantCategories.shopping" },
+  { value: "travel", label: "Travel & Hotels", labelKey: "merchantCategories.travel" },
+  { value: "health", label: "Health & Pharmacy", labelKey: "merchantCategories.health" },
+  { value: "education", label: "Education", labelKey: "merchantCategories.education" },
+  { value: "government", label: "Government & Tax", labelKey: "merchantCategories.government" },
+  { value: "digital_goods", label: "Digital Goods & Services", labelKey: "merchantCategories.digitalGoods" },
+  { value: "other", label: "Other", labelKey: "merchantCategories.other" },
 ] as const;
 
 export const AMOUNT_RANGE_OPTIONS = [

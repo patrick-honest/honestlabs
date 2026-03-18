@@ -365,7 +365,27 @@
     "online": "Online",
     "offline": "Offline",
     "qris": "QRIS",
-    "merchantEcosystem": "Ekosistem Merchant QRIS"
+    "merchantEcosystem": "Ekosistem Merchant QRIS",
+    "topMerchantCategories": "Kategori Merchant Teratas",
+    "topMerchantCategoriesSub": "Berdasarkan jumlah transaksi · MCC dari DW007"
+  },
+  "merchantCategories": {
+    "groceries": "Toko Kelontong & Supermarket",
+    "restaurants": "Restoran & Layanan Pesan Antar",
+    "fastFood": "Restoran Cepat Saji",
+    "transportation": "Transportasi & Layanan Antar-Jemput",
+    "gasStations": "SPBU / Pom Bensin",
+    "entertainment": "Hiburan & Streaming",
+    "utilities": "Utilitas & Tagihan",
+    "shopping": "Ritel & Belanja",
+    "travel": "Perjalanan & Hotel",
+    "health": "Kesehatan & Apotek",
+    "education": "Pendidikan",
+    "government": "Pemerintah & Pajak",
+    "digitalGoods": "Barang & Layanan Digital",
+    "electronics": "Toko Elektronik",
+    "cosmetics": "Kosmetik & Kecantikan",
+    "other": "Lainnya"
   },
   "risk": {
     "title": "Risiko",

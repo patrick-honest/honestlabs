@@ -24,7 +24,7 @@ import {
 } from "@/hooks/use-filters";
 import { HeaderFilterDropdown } from "@/components/filters/header-filter-dropdown";
 import { getVisibleFilters, isFilterVisible, type FilterKey } from "@/lib/page-filter-config";
-import { Calendar, SlidersHorizontal, ChevronDown, ChevronLeft, ChevronRight, X, Save, Bookmark, Trash2, Pencil, Check } from "lucide-react";
+import { Calendar, Filter, ChevronDown, ChevronLeft, ChevronRight, X, Save, Bookmark, Trash2, Pencil, Check } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { Cycle } from "@/types/reports";
 // Types already imported above from use-period
@@ -563,7 +563,7 @@ export function Header({ title }: HeaderProps) {
       {/* Row 2: Filter group buttons (ACCT / TXN / RISK) — each is a popup with subcategory dropdowns */}
       {hasAnyFilters && (
         <div className="flex items-center gap-1.5 px-4 pb-1.5">
-          <SlidersHorizontal className="h-3 w-3 text-[var(--text-muted)] shrink-0" />
+          <Filter className="h-3 w-3 text-[var(--text-muted)] shrink-0" />
           {visibleGroups.map((group) => {
             const groupFilterCount = group.filters.reduce(
               (sum, f) => sum + (filters[f.key]?.length ?? 0), 0

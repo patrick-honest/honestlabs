@@ -24,6 +24,8 @@ import {
   Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { HorizontalBar } from "@/components/charts/horizontal-bar";
+import { getMccDescription, localeToMccLang } from "@/data/mcc-lookup";
 
 // ── Print styles ─────────────────────────────────────────────────────────────
 const PRINT_STYLES = `
@@ -158,18 +160,18 @@ const revenuePerUserData = [
   { month: "Mar*", qris_rev_per_user: 25_300, non_qris_rev_per_user: 10_300 },
 ];
 
-// -- Merchant categories --
+// -- Merchant categories (MCC-keyed for i18n resolution) --
 const merchantCategoryData = [
-  { category: "Grocery/Supermarket", txn_count: 28_450, spend: 3_710_000_000, users: 4_120 },
-  { category: "Fast Food", txn_count: 22_300, spend: 1_340_000_000, users: 3_890 },
-  { category: "Restaurants", txn_count: 18_600, spend: 2_420_000_000, users: 3_450 },
-  { category: "Gas Stations", txn_count: 12_800, spend: 1_920_000_000, users: 2_780 },
-  { category: "Taxi/Rideshare", txn_count: 11_200, spend: 670_000_000, users: 2_340 },
-  { category: "Pharmacies", txn_count: 8_900, spend: 580_000_000, users: 2_100 },
-  { category: "Retail Stores", txn_count: 7_400, spend: 890_000_000, users: 1_800 },
-  { category: "Electronics", txn_count: 4_200, spend: 1_260_000_000, users: 1_200 },
-  { category: "Cosmetics", txn_count: 3_800, spend: 420_000_000, users: 980 },
-  { category: "Other", txn_count: 15_600, spend: 2_100_000_000, users: 3_200 },
+  { mcc: "5411", txn_count: 28_450, spend: 3_710_000_000, users: 4_120 },
+  { mcc: "5814", txn_count: 22_300, spend: 1_340_000_000, users: 3_890 },
+  { mcc: "5812", txn_count: 18_600, spend: 2_420_000_000, users: 3_450 },
+  { mcc: "5541", txn_count: 12_800, spend: 1_920_000_000, users: 2_780 },
+  { mcc: "4121", txn_count: 11_200, spend: 670_000_000, users: 2_340 },
+  { mcc: "5912", txn_count: 8_900, spend: 580_000_000, users: 2_100 },
+  { mcc: "5311", txn_count: 7_400, spend: 890_000_000, users: 1_800 },
+  { mcc: "5732", txn_count: 4_200, spend: 1_260_000_000, users: 1_200 },
+  { mcc: "5977", txn_count: 3_800, spend: 420_000_000, users: 980 },
+  { mcc: "other", txn_count: 15_600, spend: 2_100_000_000, users: 3_200 },
 ];
 
 // -- Action items --
@@ -319,44 +321,6 @@ function ComparisonRow({
   );
 }
 
-function HorizontalBar({
-  label,
-  value,
-  maxValue,
-  subLabel,
-}: {
-  label: string;
-  value: number;
-  maxValue: number;
-  subLabel: string;
-}) {
-  const pct = Math.max((value / maxValue) * 100, 2);
-  return (
-    <div className="flex items-center gap-3 py-1.5">
-      <div className="w-[160px] shrink-0 text-right">
-        <span className="text-xs text-[var(--text-primary)] font-medium">{label}</span>
-      </div>
-      <div className="flex-1 relative h-7 rounded-md bg-[var(--surface-elevated)] overflow-hidden">
-        <div
-          className="absolute inset-y-0 left-0 rounded-md"
-          style={{
-            width: `${pct}%`,
-            background: "linear-gradient(90deg, var(--accent) 0%, var(--accent-light) 100%)",
-          }}
-        />
-        <div className="absolute inset-0 flex items-center px-2">
-          <span className="text-[11px] font-semibold text-white drop-shadow-sm">
-            {fmtNum(value)}
-          </span>
-        </div>
-      </div>
-      <div className="w-[100px] shrink-0">
-        <span className="text-[11px] text-[var(--text-muted)]">{subLabel}</span>
-      </div>
-    </div>
-  );
-}
-
 // ==========================================================================
 // Main Page
 // ==========================================================================
@@ -367,7 +331,9 @@ export default function QrisExperimentPage() {
   const { isDark } = useTheme();
   const { currency } = useCurrency();
   const { locale } = useLanguage();
+  const mccLang = localeToMccLang(locale);
   const tNav = useTranslations("nav");
+  const tMcc = useTranslations("merchantCategories");
 
   // Currency-aware formatter (replaces old hardcoded fmtIDR)
   const fmtCur = useCallback((value: number) => formatAmountCompact(value, currency), [currency]);
@@ -823,8 +789,12 @@ export default function QrisExperimentPage() {
             <div className="space-y-1">
               {pMerchantCategoryData.map((cat) => (
                 <HorizontalBar
-                  key={cat.category as string}
-                  label={cat.category as string}
+                  key={cat.mcc as string}
+                  label={
+                    (cat.mcc as string) === "other"
+                      ? tMcc("other")
+                      : getMccDescription(cat.mcc as string, mccLang)
+                  }
                   value={cat.txn_count as number}
                   maxValue={maxCategoryTxn}
                   subLabel={fmtCur(cat.spend as number)}

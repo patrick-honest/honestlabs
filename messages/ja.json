@@ -365,7 +365,27 @@
     "online": "オンライン",
     "offline": "オフライン",
     "qris": "QRIS",
-    "merchantEcosystem": "QRIS加盟店エコシステム"
+    "merchantEcosystem": "QRIS加盟店エコシステム",
+    "topMerchantCategories": "上位加盟店カテゴリ",
+    "topMerchantCategoriesSub": "取引件数別 · DW007のMCC"
+  },
+  "merchantCategories": {
+    "groceries": "食料品・スーパーマーケット",
+    "restaurants": "レストラン・フードデリバリー",
+    "fastFood": "ファストフード",
+    "transportation": "交通・配車サービス",
+    "gasStations": "ガソリンスタンド",
+    "entertainment": "エンターテインメント・ストリーミング",
+    "utilities": "公共料金・各種請求",
+    "shopping": "小売・ショッピング",
+    "travel": "旅行・ホテル",
+    "health": "医療・薬局",
+    "education": "教育",
+    "government": "行政・税金",
+    "digitalGoods": "デジタル商品・サービス",
+    "electronics": "家電製品",
+    "cosmetics": "化粧品・美容",
+    "other": "その他"
   },
   "risk": {
     "title": "リスク",

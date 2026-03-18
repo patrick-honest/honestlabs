@@ -407,72 +407,85 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Learn More popup */}
-          {showHealthInfo && (
-            <div className="absolute inset-0 z-10 rounded-2xl overflow-hidden">
-              <div className={cn(
-                "absolute inset-0 rounded-2xl p-6 overflow-y-auto",
-                isDark ? "bg-[#141226]/98 backdrop-blur-sm" : "bg-white/98 backdrop-blur-sm"
-              )}>
-                <div className="flex items-start justify-between mb-4">
-                  <h3 className={cn("text-sm font-bold", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>
-                    How the Health Score Works
-                  </h3>
-                  <button onClick={() => setShowHealthInfo(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
+        </div>
 
-                <p className="text-xs text-[var(--text-secondary)] mb-4">
-                  The Health Score is a 0–100 weighted composite that summarizes portfolio performance at a glance. It combines four key dimensions into a single number.
-                </p>
+        {/* Learn More modal overlay */}
+        {showHealthInfo && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-6"
+            onClick={() => setShowHealthInfo(false)}
+          >
+            {/* Backdrop */}
+            <div className={cn("absolute inset-0", isDark ? "bg-black/60" : "bg-black/30")} />
 
-                {/* Score scale */}
-                <div className="flex items-center gap-1 mb-4 rounded-lg overflow-hidden h-3">
-                  <div className="flex-1 bg-red-500 relative"><span className="absolute inset-0 flex items-center justify-center text-[7px] font-bold text-white">0–44</span></div>
-                  <div className="flex-1 bg-amber-400 relative"><span className="absolute inset-0 flex items-center justify-center text-[7px] font-bold text-white">45–69</span></div>
-                  <div className="flex-1 bg-emerald-500 relative"><span className="absolute inset-0 flex items-center justify-center text-[7px] font-bold text-white">70–100</span></div>
-                </div>
+            {/* Modal */}
+            <div
+              className={cn(
+                "relative z-10 w-full max-w-lg rounded-2xl border p-6 shadow-2xl overflow-y-auto max-h-[80vh]",
+                isDark
+                  ? "border-[var(--border)] bg-[#141226] shadow-black/50"
+                  : "border-[var(--border)] bg-white shadow-black/10"
+              )}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between mb-4">
+                <h3 className={cn("text-sm font-bold", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>
+                  How the Health Score Works
+                </h3>
+                <button onClick={() => setShowHealthInfo(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
 
-                <div className="grid grid-cols-3 gap-3 mb-4">
-                  {[
-                    { label: "At Risk", range: "0–44", color: "text-red-500", desc: "Multiple KPIs underperforming. Immediate action needed on engagement or risk." },
-                    { label: "Monitor", range: "45–69", color: "text-amber-500", desc: "Mixed signals. Some metrics improving while others need attention." },
-                    { label: "Healthy", range: "70–100", color: "text-emerald-500", desc: "Strong performance across all dimensions. Portfolio growing sustainably." },
-                  ].map((s) => (
-                    <div key={s.label} className={cn("rounded-lg border p-2.5", isDark ? "border-[var(--border)]" : "border-[var(--border)]")}>
-                      <div className={cn("text-xs font-bold", s.color)}>{s.label}</div>
-                      <div className="text-[9px] text-[var(--text-muted)] mb-1">{s.range}</div>
-                      <p className="text-[10px] text-[var(--text-secondary)] leading-tight">{s.desc}</p>
-                    </div>
-                  ))}
-                </div>
+              <p className="text-xs text-[var(--text-secondary)] mb-4">
+                The Health Score is a 0–100 weighted composite that summarizes portfolio performance at a glance. It combines four key dimensions into a single number.
+              </p>
 
-                {/* Weight breakdown */}
-                <h4 className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-2">Score Weights</h4>
-                <div className="space-y-1.5">
-                  {[
-                    { label: "Spend Active Rate vs 50% target", weight: "30%", icon: "📊" },
-                    { label: "DPD inverse (lower DPD = higher score)", weight: "25%", icon: "🛡️" },
-                    { label: "Spend growth vs prior period", weight: "25%", icon: "📈" },
-                    { label: "Account growth vs prior period", weight: "20%", icon: "👥" },
-                  ].map((w) => (
-                    <div key={w.label} className="flex items-center gap-2">
-                      <span className="text-xs">{w.icon}</span>
-                      <div className="flex-1">
-                        <div className={cn("h-1.5 rounded-full", isDark ? "bg-[var(--surface-elevated)]" : "bg-gray-100")}>
-                          <div className={cn("h-full rounded-full", isDark ? "bg-[#5B22FF]" : "bg-[#D00083]")} style={{ width: w.weight }} />
-                        </div>
+              {/* Score scale */}
+              <div className="flex items-center gap-1 mb-4 rounded-lg overflow-hidden h-3">
+                <div className="flex-1 bg-red-500 relative"><span className="absolute inset-0 flex items-center justify-center text-[7px] font-bold text-white">0–44</span></div>
+                <div className="flex-1 bg-amber-400 relative"><span className="absolute inset-0 flex items-center justify-center text-[7px] font-bold text-white">45–69</span></div>
+                <div className="flex-1 bg-emerald-500 relative"><span className="absolute inset-0 flex items-center justify-center text-[7px] font-bold text-white">70–100</span></div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                {[
+                  { label: "At Risk", range: "0–44", color: "text-red-500", desc: "Multiple KPIs underperforming. Immediate action needed on engagement or risk." },
+                  { label: "Monitor", range: "45–69", color: "text-amber-500", desc: "Mixed signals. Some metrics improving while others need attention." },
+                  { label: "Healthy", range: "70–100", color: "text-emerald-500", desc: "Strong performance across all dimensions. Portfolio growing sustainably." },
+                ].map((s) => (
+                  <div key={s.label} className={cn("rounded-lg border p-2.5", isDark ? "border-[var(--border)]" : "border-[var(--border)]")}>
+                    <div className={cn("text-xs font-bold", s.color)}>{s.label}</div>
+                    <div className="text-[9px] text-[var(--text-muted)] mb-1">{s.range}</div>
+                    <p className="text-[10px] text-[var(--text-secondary)] leading-tight">{s.desc}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Weight breakdown */}
+              <h4 className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-2">Score Weights</h4>
+              <div className="space-y-1.5">
+                {[
+                  { label: "Spend Active Rate vs 50% target", weight: "30%", icon: "📊" },
+                  { label: "DPD inverse (lower DPD = higher score)", weight: "25%", icon: "🛡️" },
+                  { label: "Spend growth vs prior period", weight: "25%", icon: "📈" },
+                  { label: "Account growth vs prior period", weight: "20%", icon: "👥" },
+                ].map((w) => (
+                  <div key={w.label} className="flex items-center gap-2">
+                    <span className="text-xs">{w.icon}</span>
+                    <div className="flex-1">
+                      <div className={cn("h-1.5 rounded-full", isDark ? "bg-[var(--surface-elevated)]" : "bg-gray-100")}>
+                        <div className={cn("h-full rounded-full", isDark ? "bg-[#5B22FF]" : "bg-[#D00083]")} style={{ width: w.weight }} />
                       </div>
-                      <span className="text-[10px] font-medium text-[var(--text-secondary)] w-8 text-right">{w.weight}</span>
-                      <span className="text-[10px] text-[var(--text-muted)] flex-1">{w.label}</span>
                     </div>
-                  ))}
-                </div>
+                    <span className="text-[10px] font-medium text-[var(--text-secondary)] w-8 text-right">{w.weight}</span>
+                    <span className="text-[10px] text-[var(--text-muted)] flex-1">{w.label}</span>
+                  </div>
+                ))}
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* ════════════════════════════════════════════════════════════════ */}
         {/* 2. THE BIG 4 KPIs                                              */}
