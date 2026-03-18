@@ -225,11 +225,6 @@ export default function CustomerServicePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-[var(--text-primary)]">Customer Service Deep Dive</h1>
-        <p className="text-sm text-[var(--text-secondary)] mt-1">{periodLabel} &mdash; Freshworks Data</p>
-      </div>
-
       <ActiveFiltersBanner />
 
       {/* KPI row */}

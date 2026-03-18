@@ -144,14 +144,6 @@ export default function AppHealthPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-[var(--text-primary)]">App Health Deep Dive</h1>
-        <p className="text-sm text-[var(--text-secondary)] mt-1">{periodLabel}</p>
-        <p className="text-xs text-[var(--text-muted)] mt-0.5">
-          Engagement metrics from <span className="font-semibold">refined_rudderstack.tracks</span> &amp; <span className="font-semibold">screens</span> tables
-        </p>
-      </div>
-
       <ActiveFiltersBanner />
 
       {/* KPI row */}

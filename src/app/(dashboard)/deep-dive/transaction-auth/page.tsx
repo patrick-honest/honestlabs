@@ -170,12 +170,6 @@ export default function TransactionAuthPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-[var(--text-primary)]">Transaction Authorization Deep Dive</h1>
-        <p className="text-sm text-[var(--text-secondary)] mt-1">{periodLabel}</p>
-        <p className="text-xs text-[var(--text-muted)] mt-0.5">Auth metrics based on <span className="font-semibold">refined_rudderstack.transaction_authorized</span> events</p>
-      </div>
-
       <ActiveFiltersBanner />
 
       {/* KPI row */}
