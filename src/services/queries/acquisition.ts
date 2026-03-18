@@ -72,16 +72,41 @@ export async function getAcquisitionFunnel(
   startDate: Date,
   endDate: Date,
 ): Promise<AcquisitionFunnelRow[]> {
+  // True funnel: each step only counts users who completed ALL previous steps.
+  // We pivot each user's milestones into a single row, then cumulatively
+  // intersect: step N = users who completed steps 1..N.
   const stageList = FUNNEL_STAGES.map((s) => `'${s}'`).join(", ");
 
+  // Step 1: For each user, find which stages they completed in the date range
+  // Step 2: Build cumulative funnel — stage N requires stages 1..N all present
   const sql = `
-    SELECT
-      application_status AS stage,
-      COUNT(DISTINCT user_id) AS count
-    FROM ${TABLES.milestone_complete}
-    WHERE DATE(timestamp, 'Asia/Jakarta') BETWEEN @startDate AND @endDate
-      AND application_status IN (${stageList})
-    GROUP BY application_status
+    WITH user_stages AS (
+      SELECT
+        user_id,
+        application_status AS stage
+      FROM ${TABLES.milestone_complete}
+      WHERE DATE(timestamp, 'Asia/Jakarta') BETWEEN @startDate AND @endDate
+        AND application_status IN (${stageList})
+      GROUP BY user_id, application_status
+    ),
+    user_stage_flags AS (
+      SELECT
+        user_id,
+        ${FUNNEL_STAGES.map(
+          (s, i) =>
+            `MAX(CASE WHEN stage = '${s}' THEN 1 ELSE 0 END) AS s${i}`
+        ).join(",\n        ")}
+      FROM user_stages
+      GROUP BY user_id
+    ),
+    cumulative_funnel AS (
+      ${FUNNEL_STAGES.map((s, i) => {
+        // Each stage requires all previous stages (s0 AND s1 AND ... AND si)
+        const conditions = Array.from({ length: i + 1 }, (_, j) => `s${j} = 1`).join(" AND ");
+        return `SELECT '${s}' AS stage, COUNT(*) AS count FROM user_stage_flags WHERE ${conditions}`;
+      }).join("\n      UNION ALL\n      ")}
+    )
+    SELECT stage, count FROM cumulative_funnel
   `;
 
   const rows = await runQuery<{ stage: string; count: number }>(sql, {
