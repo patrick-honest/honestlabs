@@ -6,7 +6,7 @@ import { Header } from "@/components/layout/header";
 import { useTranslations } from "next-intl";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
-import { QrCode, CheckCircle2, TrendingUp, Users, CreditCard, ArrowUpRight, Star, Store } from "lucide-react";
+import { QrCode, CheckCircle2, TrendingUp, Users, CreditCard, ArrowUpRight, Star, Store, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
 import { usePeriod } from "@/hooks/use-period";
@@ -277,12 +277,44 @@ interface CohortRow {
   sar: number;
 }
 
+interface InterchangeRow {
+  grp: string;
+  cohort_size: number;
+  card_spend_idr: number;
+  qris_spend_idr: number;
+  total_spend_idr: number;
+  card_interchange_idr: number;
+  qris_issuer_revenue_idr: number;
+  total_revenue_idr: number;
+  revenue_per_user_idr: number;
+}
+
+interface QrisOnlySpendRow {
+  month: string;
+  total_txns: number;
+  qris_txns: number;
+  total_spend_idr: number;
+  qris_spend_idr: number;
+  qris_pct: number;
+}
+
+interface ApiData {
+  cohortComparison: CohortRow[];
+  merchantBreakdown?: { qris_only_merchants: number; mixed_merchants: number; non_qris_only_merchants: number };
+  merchantGrowth?: { month: string; cumulative_merchants: number; new_merchants: number }[];
+  mixedMerchantStats?: { qris_txns_at_mixed: number; qris_spend_idr_at_mixed: number; qris_spend_usd_at_mixed: number; mixed_merchant_count: number };
+  interchangeProjection?: InterchangeRow[];
+  qrisOnlyMerchantSpend?: QrisOnlySpendRow[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  cohortFinancials?: any[];
+}
+
 export default function QrisExperimentPage() {
   const { periodLabel } = usePeriod();
   const { isDark } = useTheme();
   const tNav = useTranslations("nav");
 
-  const { data: apiData, isLoading } = useSWR<{ cohortComparison: CohortRow[] }>(
+  const { data: apiData, isLoading } = useSWR<ApiData>(
     "/api/qris-experiment?startDate=2026-02-09",
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 300_000 },
@@ -309,6 +341,27 @@ export default function QrisExperimentPage() {
   const qrisSpendShare = hasData && test.total_spend_usd > 0
     ? (test.qris_spend_usd / test.total_spend_usd * 100)
     : 0;
+
+  // Interchange projection data
+  const { interchangeTest, interchangeControl } = useMemo(() => {
+    const rows = apiData?.interchangeProjection;
+    if (!rows || rows.length === 0) return { interchangeTest: null, interchangeControl: null };
+    return {
+      interchangeTest: rows.find((r) => r.grp === "Test") || null,
+      interchangeControl: rows.find((r) => r.grp === "Control") || null,
+    };
+  }, [apiData]);
+
+  // Cumulative QRIS spend at QRIS-only merchants
+  const qrisOnlySpendCumulative = useMemo(() => {
+    const rows = apiData?.qrisOnlyMerchantSpend;
+    if (!rows || rows.length === 0) return [];
+    let cum = 0;
+    return rows.map((r) => {
+      cum += r.qris_spend_idr;
+      return { ...r, cumulative_spend_idr: cum };
+    });
+  }, [apiData]);
 
   // Print styles injection
   useEffect(() => {
@@ -546,7 +599,7 @@ export default function QrisExperimentPage() {
             </div>
 
             {/* Cumulative QRIS-only merchant growth */}
-            {apiData.merchantGrowth?.length > 0 && (
+            {(apiData.merchantGrowth?.length ?? 0) > 0 && (
               <ChartCard
                 title="Cumulative QRIS-Only Merchants"
                 subtitle="Running total of merchants that have only ever processed QRIS transactions"
@@ -607,6 +660,267 @@ export default function QrisExperimentPage() {
             })()}
           </div>
         )}
+
+        {/* ============================================================ */}
+        {/* INTERCHANGE REVENUE ANALYSIS                                  */}
+        {/* ============================================================ */}
+        {interchangeTest && interchangeControl && (() => {
+          const NORM = 1000; // normalize per 1,000 users
+
+          const normVal = (val: number, cohortSize: number) =>
+            cohortSize > 0 ? (val / cohortSize) * NORM : 0;
+
+          const tCard = normVal(interchangeTest.card_spend_idr, interchangeTest.cohort_size);
+          const cCard = normVal(interchangeControl.card_spend_idr, interchangeControl.cohort_size);
+          const tQris = normVal(interchangeTest.qris_spend_idr, interchangeTest.cohort_size);
+          const cQris = normVal(interchangeControl.qris_spend_idr, interchangeControl.cohort_size);
+          const tTotal = normVal(interchangeTest.total_spend_idr, interchangeTest.cohort_size);
+          const cTotal = normVal(interchangeControl.total_spend_idr, interchangeControl.cohort_size);
+          const tCardIx = normVal(interchangeTest.card_interchange_idr, interchangeTest.cohort_size);
+          const cCardIx = normVal(interchangeControl.card_interchange_idr, interchangeControl.cohort_size);
+          const tQrisRev = normVal(interchangeTest.qris_issuer_revenue_idr, interchangeTest.cohort_size);
+          const cQrisRev = normVal(interchangeControl.qris_issuer_revenue_idr, interchangeControl.cohort_size);
+          const tTotalRev = normVal(interchangeTest.total_revenue_idr, interchangeTest.cohort_size);
+          const cTotalRev = normVal(interchangeControl.total_revenue_idr, interchangeControl.cohort_size);
+          const tRevUser = interchangeTest.revenue_per_user_idr;
+          const cRevUser = interchangeControl.revenue_per_user_idr;
+
+          const fmtIdr = (v: number) => `Rp ${(v / 1e6).toFixed(2)}M`;
+          const delta = (t: number, c: number) => c !== 0 ? ((t - c) / Math.abs(c)) * 100 : (t > 0 ? 100 : 0);
+          const deltaFmt = (t: number, c: number) => {
+            const d = delta(t, c);
+            return d > 0 ? `+${d.toFixed(1)}%` : `${d.toFixed(1)}%`;
+          };
+
+          type RowDef = { label: string; test: number; control: number; isNew?: boolean; higherIsBetter?: boolean };
+          const rows: RowDef[] = [
+            { label: "Card Spend (IDR)", test: tCard, control: cCard, higherIsBetter: true },
+            { label: "QRIS Spend (IDR)", test: tQris, control: cQris, isNew: true },
+            { label: "Total Spend (IDR)", test: tTotal, control: cTotal, higherIsBetter: true },
+            { label: "Card Interchange @ 1.6%", test: tCardIx, control: cCardIx, higherIsBetter: true },
+            { label: "QRIS Revenue @ 0.2035%", test: tQrisRev, control: cQrisRev, isNew: true },
+            { label: "Total Revenue", test: tTotalRev, control: cTotalRev, higherIsBetter: true },
+            { label: "Revenue per User (IDR)", test: tRevUser, control: cRevUser, higherIsBetter: true },
+          ];
+
+          return (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <DollarSign className={cn("h-5 w-5", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")} />
+                <h2 className="text-lg font-semibold text-[var(--text-primary)]">Interchange Revenue Analysis</h2>
+                <LiveBadge />
+              </div>
+
+              <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] overflow-hidden">
+                <div className="p-4 border-b border-[var(--border)]">
+                  <p className="text-xs text-[var(--text-muted)]">
+                    Normalized per 1,000 cohort members. Card interchange at 1.6% (blended Visa+MC, Kansas City Fed Aug 2025).
+                    QRIS issuer revenue at 0.2035% (0.55% MDR x 37% issuer share via PT ALTO, PBI No. 24/8/PBI/2022).
+                  </p>
+                </div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[var(--border)]">
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Metric</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Control</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Test</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Delta</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => {
+                      const d = delta(row.test, row.control);
+                      const isPositive = row.isNew ? true : (row.higherIsBetter ? d > 0 : d < 0);
+                      return (
+                        <tr key={row.label} className="border-b border-[var(--border)] last:border-b-0">
+                          <td className="px-4 py-3 font-medium text-[var(--text-primary)]">
+                            <span className="flex items-center gap-1.5">
+                              {row.label}
+                              <LiveBadge />
+                            </span>
+                          </td>
+                          <td className="text-right px-4 py-3 text-[var(--text-secondary)] font-mono text-xs">
+                            {row.label === "Revenue per User (IDR)" ? `Rp ${row.control.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : fmtIdr(row.control)}
+                          </td>
+                          <td className="text-right px-4 py-3 font-semibold text-[var(--text-primary)] font-mono text-xs">
+                            {row.label === "Revenue per User (IDR)" ? `Rp ${row.test.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : fmtIdr(row.test)}
+                          </td>
+                          <td className="text-right px-4 py-3">
+                            <span className={cn(
+                              "inline-flex items-center gap-1 text-xs font-semibold rounded-full px-2 py-0.5",
+                              row.isNew
+                                ? "text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-950/30"
+                                : isPositive
+                                  ? "text-emerald-600 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-950/30"
+                                  : "text-red-600 bg-red-50 dark:text-red-400 dark:bg-red-950/30",
+                            )}>
+                              {row.isNew ? "new" : (
+                                <>
+                                  <ArrowUpRight className={cn("h-3 w-3", !isPositive && "rotate-90")} />
+                                  {deltaFmt(row.test, row.control)}
+                                </>
+                              )}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Callout box */}
+              <div className={cn(
+                "rounded-xl border-l-4 p-4",
+                isDark
+                  ? "border-l-amber-500 bg-amber-950/20 border border-amber-900/30"
+                  : "border-l-amber-500 bg-amber-50 border border-amber-200",
+              )}>
+                <p className="text-sm font-semibold text-[var(--text-primary)] mb-1">Rate Differential Insight</p>
+                <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                  Card interchange is ~8x higher per IDR than QRIS issuer revenue (1.6% vs 0.2035%).
+                  However, the total spend lift from QRIS users partially offsets the rate difference.
+                  {tTotalRev > cTotalRev
+                    ? ` Net effect: Test group generates ${deltaFmt(tTotalRev, cTotalRev)} more total revenue per 1,000 users despite the lower QRIS rate.`
+                    : ` Net effect: Test group generates ${deltaFmt(tTotalRev, cTotalRev)} total revenue per 1,000 users — the lower QRIS rate outweighs the spend lift.`
+                  }
+                </p>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ============================================================ */}
+        {/* QRIS SPEND AT QRIS-ONLY MERCHANTS                            */}
+        {/* ============================================================ */}
+        {qrisOnlySpendCumulative.length > 0 && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Store className={cn("h-5 w-5", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")} />
+              <h2 className="text-lg font-semibold text-[var(--text-primary)]">QRIS Spend at QRIS-Only Merchants</h2>
+              <LiveBadge />
+            </div>
+
+            <ChartCard
+              title="Cumulative QRIS Spend at QRIS-Only Merchants"
+              subtitle="Monthly volume at merchants that have ONLY ever processed QRIS — showing new merchant reach and spend growth"
+              asOf="All Time"
+              dataRange={{ start: "", end: "" }}
+              liveData
+            >
+              <DashboardLineChart
+                data={qrisOnlySpendCumulative.map((r) => ({
+                  date: r.month,
+                  cumulative_spend: Math.round(r.cumulative_spend_idr / 1e6),
+                  monthly_spend: Math.round(r.qris_spend_idr / 1e6),
+                }))}
+                lines={[
+                  { key: "cumulative_spend", color: "#06b6d4", label: "Cumulative Spend (IDR M)" },
+                  { key: "monthly_spend", color: "#8b5cf6", label: "Monthly Spend (IDR M)" },
+                ]}
+                xAxisKey="date"
+                height={300}
+              />
+            </ChartCard>
+
+            {/* Summary stats for QRIS-only merchants */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] p-4 text-center">
+                <div className="flex items-center justify-center gap-1 mb-1">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">Total Months</p>
+                  <LiveBadge />
+                </div>
+                <p className="text-2xl font-bold text-[var(--text-primary)]">{qrisOnlySpendCumulative.length}</p>
+              </div>
+              <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] p-4 text-center">
+                <div className="flex items-center justify-center gap-1 mb-1">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">Cumulative Spend</p>
+                  <LiveBadge />
+                </div>
+                <p className="text-2xl font-bold text-[var(--text-primary)]">
+                  Rp {(qrisOnlySpendCumulative[qrisOnlySpendCumulative.length - 1]?.cumulative_spend_idr / 1e9).toFixed(2)}B
+                </p>
+              </div>
+              <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] p-4 text-center">
+                <div className="flex items-center justify-center gap-1 mb-1">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">Total Txns</p>
+                  <LiveBadge />
+                </div>
+                <p className="text-2xl font-bold text-[var(--text-primary)]">
+                  {qrisOnlySpendCumulative.reduce((sum, r) => sum + r.total_txns, 0).toLocaleString()}
+                </p>
+              </div>
+              <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] p-4 text-center">
+                <div className="flex items-center justify-center gap-1 mb-1">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">Latest Month Spend</p>
+                  <LiveBadge />
+                </div>
+                <p className="text-2xl font-bold text-[var(--text-primary)]">
+                  Rp {((qrisOnlySpendCumulative[qrisOnlySpendCumulative.length - 1]?.qris_spend_idr ?? 0) / 1e6).toFixed(1)}M
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================ */}
+        {/* COHORT FINANCIAL METRICS                                       */}
+        {/* ============================================================ */}
+        {Array.isArray(apiData?.cohortFinancials) && apiData.cohortFinancials.length > 0 && (() => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const fins: any[] = apiData.cohortFinancials;
+          const ctrl = fins.find(r => r.grp === 'Control');
+          const tst = fins.find(r => r.grp === 'Test');
+          if (!ctrl || !tst) return null;
+
+          const fmtI = (v: number) => v >= 1e9 ? `Rp ${(v/1e9).toFixed(1)}B` : v >= 1e6 ? `Rp ${(v/1e6).toFixed(0)}M` : `Rp ${v.toLocaleString()}`;
+          const normC = (v: number) => Math.round(v / ctrl.cohort_size * 1000);
+          const normT = (v: number) => Math.round(v / tst.cohort_size * 1000);
+          const dlt = (t: number, c: number) => { const d = ((t-c)/Math.abs(c||1))*100; return d > 0 ? `+${d.toFixed(1)}%` : `${d.toFixed(1)}%`; };
+
+          const rows = [
+            { label: "Utilization", c: `${ctrl.utilization_pct}%`, t: `${tst.utilization_pct}%`, d: `${(tst.utilization_pct-ctrl.utilization_pct).toFixed(1)}pp` },
+            { label: "Revolve Rate", c: `${ctrl.revolve_rate_pct}%`, t: `${tst.revolve_rate_pct}%`, d: `${(tst.revolve_rate_pct-ctrl.revolve_rate_pct).toFixed(1)}pp` },
+            { label: "Avg Balance", c: fmtI(ctrl.avg_balance_idr), t: fmtI(tst.avg_balance_idr), d: dlt(tst.avg_balance_idr, ctrl.avg_balance_idr) },
+            { label: "Admin Fees / 1K Users", c: fmtI(normC(ctrl.total_fees_idr)), t: fmtI(normT(tst.total_fees_idr)), d: dlt(normT(tst.total_fees_idr), normC(ctrl.total_fees_idr)) },
+            { label: "Charge Fees / 1K Users", c: fmtI(normC(ctrl.total_chrg_fee_idr)), t: fmtI(normT(tst.total_chrg_fee_idr)), d: dlt(normT(tst.total_chrg_fee_idr), normC(ctrl.total_chrg_fee_idr)) },
+            { label: "Total Fee Revenue / 1K", c: fmtI(normC(ctrl.total_fees_idr+ctrl.total_chrg_fee_idr)), t: fmtI(normT(tst.total_fees_idr+tst.total_chrg_fee_idr)), d: dlt(normT(tst.total_fees_idr+tst.total_chrg_fee_idr), normC(ctrl.total_fees_idr+ctrl.total_chrg_fee_idr)) },
+          ];
+
+          return (
+            <div className={cn("rounded-xl border p-5", isDark ? "border-[var(--border)] bg-[var(--surface)]" : "border-[var(--border)] bg-[var(--surface)]")}>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">
+                Cohort Financial Metrics
+                <span className={cn("ml-2 text-[9px]", isDark ? "text-[#FFD166]" : "text-amber-500")} title="Live BigQuery data">&#9733;</span>
+              </h3>
+              <p className="text-[10px] text-[var(--text-muted)] mb-4">Actual fee revenue from DW004 — normalized per 1,000 cohort members. Latest business date snapshot.</p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-[10px] text-[var(--text-muted)] border-b border-[var(--border)]">
+                      <th className="pb-2 text-left font-medium w-48">Metric</th>
+                      <th className="pb-2 text-right font-medium">Control ({ctrl.cohort_size.toLocaleString()})</th>
+                      <th className="pb-2 text-right font-medium">Test ({tst.cohort_size.toLocaleString()})</th>
+                      <th className="pb-2 text-right font-medium">Delta</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-[var(--text-secondary)]">
+                    {rows.map(r => (
+                      <tr key={r.label} className="border-b border-[var(--border)]/30">
+                        <td className="py-2 font-medium">{r.label}</td>
+                        <td className="py-2 text-right font-mono">{r.c}</td>
+                        <td className="py-2 text-right font-mono">{r.t}</td>
+                        <td className={cn("py-2 text-right font-mono font-semibold",
+                          r.d.startsWith('+') ? "text-[#06D6A0]" : r.d.startsWith('-') ? "text-[#FF6B6B]" : "text-[var(--text-muted)]"
+                        )}>{r.d}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })()}
 
         <ActionItems section="QRIS Experiment" items={actionItems} />
 

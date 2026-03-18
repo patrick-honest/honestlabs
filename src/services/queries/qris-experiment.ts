@@ -431,3 +431,270 @@ export async function getMixedMerchantQrisStats(): Promise<MixedMerchantStats> {
   const rows = await runQuery<MixedMerchantStats>(sql);
   return rows[0] ?? { qris_txns_at_mixed: 0, qris_spend_idr_at_mixed: 0, qris_spend_usd_at_mixed: 0, mixed_merchant_count: 0 };
 }
+
+// ---------------------------------------------------------------------------
+// Interchange Fee Analysis Constants
+// ---------------------------------------------------------------------------
+// Sources:
+//   Card interchange (blended Visa+MC): 1.6% — Kansas City Fed, Aug 2025
+//   QRIS MDR weighted avg: 0.55% — PBI No. 24/8/PBI/2022
+//     (UR 0.7%, URE 0.63%, UKI 0.3%, UMI 0%)
+//   QRIS issuer revenue share: 37% — via PT ALTO Network switcher
+//   Effective QRIS issuer rate: 0.55% × 37% = 0.2035%
+// ---------------------------------------------------------------------------
+
+export const INTERCHANGE_RATES = {
+  /** Blended Visa+MC card interchange rate (Kansas City Fed, Aug 2025) */
+  CARD_INTERCHANGE: 0.016,
+  /** Weighted avg QRIS MDR (PBI No. 24/8/PBI/2022) */
+  QRIS_MDR: 0.0055,
+  /** Issuer share of QRIS MDR (PT ALTO Network switcher) */
+  QRIS_ISSUER_SHARE: 0.37,
+  /** Effective QRIS issuer revenue rate: 0.55% × 37% */
+  QRIS_ISSUER_EFFECTIVE: 0.0055 * 0.37, // 0.002035
+} as const;
+
+// ---------------------------------------------------------------------------
+// Interchange Revenue Projection
+// ---------------------------------------------------------------------------
+
+export interface InterchangeProjectionRow {
+  grp: string;
+  cohort_size: number;
+  card_spend_idr: number;
+  qris_spend_idr: number;
+  total_spend_idr: number;
+  card_interchange_idr: number;
+  qris_issuer_revenue_idr: number;
+  total_revenue_idr: number;
+  revenue_per_user_idr: number;
+}
+
+/**
+ * Per-cohort interchange revenue analysis.
+ * Calculates card interchange at 1.6% and QRIS issuer revenue at 0.2035%
+ * for Test vs Control groups, normalized per cohort member.
+ */
+export async function getInterchangeProjection(
+  startDate: string = "2026-02-09",
+): Promise<InterchangeProjectionRow[]> {
+  const sql = `
+    -- CTE 1: Raw experiment cohort
+    WITH credit_qris_exp AS (
+      SELECT user_id, loc_acct, qris_test_rollout_group AS grp
+      FROM ${TABLES.qris_rollout}
+    ),
+
+    -- CTE 2: Card number lookup (DW005)
+    cards AS (
+      SELECT DISTINCT f9_dw005_loc_acct, f9_dw005_crn
+      FROM ${TABLES.principal_card_updates}
+      WHERE f9_dw005_loc_acct IS NOT NULL
+        AND f9_dw005_crn IS NOT NULL
+    ),
+
+    -- CTE 3: Contaminated Control users (had QRIS txns despite being Control)
+    contaminated AS (
+      SELECT DISTINCT c.user_id
+      FROM credit_qris_exp c
+      JOIN cards k ON c.loc_acct = k.f9_dw005_loc_acct
+      JOIN ${TABLES.authorized_transaction} t
+        ON k.f9_dw005_crn = t.f9_dw007_prin_crn
+      WHERE c.grp = 'Control'
+        AND t.fx_dw007_txn_typ = 'RA'
+        AND t.fx_dw007_rte_dest = 'L'
+        AND t.f9_dw007_dt >= @startDate
+        AND (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '' OR t.fx_dw007_stat = ' ')
+    ),
+
+    -- CTE 4: Clean cohort (contaminated users removed from both groups)
+    clean_cohort AS (
+      SELECT c.user_id, c.loc_acct, c.grp
+      FROM credit_qris_exp c
+      WHERE NOT EXISTS (
+        SELECT 1 FROM contaminated x WHERE x.user_id = c.user_id
+      )
+    ),
+
+    -- CTE 5: Authorized transactions joined back to cohort via DW005
+    -- Amounts in cents → divide by 100 for IDR
+    auth_trx AS (
+      SELECT
+        co.user_id,
+        co.grp,
+        t.f9_dw007_amt_req / 100.0 AS spend_idr,
+        CASE
+          WHEN t.fx_dw007_txn_typ = 'RA' AND t.fx_dw007_rte_dest = 'L' THEN 1
+          ELSE 0
+        END AS is_qris
+      FROM clean_cohort co
+      JOIN cards k ON co.loc_acct = k.f9_dw005_loc_acct
+      JOIN ${TABLES.authorized_transaction} t
+        ON k.f9_dw005_crn = t.f9_dw007_prin_crn
+      WHERE t.f9_dw007_dt >= @startDate
+        AND (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '' OR t.fx_dw007_stat = ' ')
+        AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+        AND t.f9_dw007_ori_amt > 0
+    )
+
+    SELECT
+      co.grp,
+      COUNT(DISTINCT co.user_id) AS cohort_size,
+      ROUND(COALESCE(SUM(CASE WHEN a.is_qris = 0 THEN a.spend_idr ELSE 0 END), 0), 2) AS card_spend_idr,
+      ROUND(COALESCE(SUM(CASE WHEN a.is_qris = 1 THEN a.spend_idr ELSE 0 END), 0), 2) AS qris_spend_idr,
+      ROUND(COALESCE(SUM(a.spend_idr), 0), 2) AS total_spend_idr,
+      -- Card interchange at 1.6% (blended Visa+MC, Kansas City Fed Aug 2025)
+      ROUND(COALESCE(SUM(CASE WHEN a.is_qris = 0 THEN a.spend_idr ELSE 0 END), 0) * 0.016, 2) AS card_interchange_idr,
+      -- QRIS issuer revenue at 0.2035% (0.55% MDR × 37% issuer share, PBI No. 24/8/PBI/2022)
+      ROUND(COALESCE(SUM(CASE WHEN a.is_qris = 1 THEN a.spend_idr ELSE 0 END), 0) * 0.002035, 2) AS qris_issuer_revenue_idr,
+      -- Total revenue
+      ROUND(
+        COALESCE(SUM(CASE WHEN a.is_qris = 0 THEN a.spend_idr ELSE 0 END), 0) * 0.016
+        + COALESCE(SUM(CASE WHEN a.is_qris = 1 THEN a.spend_idr ELSE 0 END), 0) * 0.002035,
+      2) AS total_revenue_idr,
+      -- Revenue per cohort member
+      ROUND(
+        (COALESCE(SUM(CASE WHEN a.is_qris = 0 THEN a.spend_idr ELSE 0 END), 0) * 0.016
+         + COALESCE(SUM(CASE WHEN a.is_qris = 1 THEN a.spend_idr ELSE 0 END), 0) * 0.002035)
+        / NULLIF(COUNT(DISTINCT co.user_id), 0),
+      2) AS revenue_per_user_idr
+    FROM clean_cohort co
+    LEFT JOIN auth_trx a ON co.user_id = a.user_id
+    GROUP BY co.grp
+    ORDER BY co.grp
+  `;
+
+  return runQuery<InterchangeProjectionRow>(sql, { startDate });
+}
+
+// ---------------------------------------------------------------------------
+// QRIS Spend at QRIS-Only Merchants (Monthly Trend)
+// ---------------------------------------------------------------------------
+
+export interface QrisOnlyMerchantSpendRow {
+  month: string;
+  total_txns: number;
+  qris_txns: number;
+  total_spend_idr: number;
+  qris_spend_idr: number;
+  qris_pct: number;
+}
+
+/**
+ * Monthly QRIS spend at merchants that have ONLY ever processed QRIS transactions.
+ * By definition qris_pct = 100% at these merchants, but shows volume growth over time.
+ */
+export async function getQrisOnlyMerchantSpendTrend(): Promise<QrisOnlyMerchantSpendRow[]> {
+  const sql = `
+    -- Merchants that have ONLY ever processed QRIS transactions
+    WITH qris_only_merchants AS (
+      SELECT fx_dw007_merc_name AS merchant
+      FROM ${TABLES.authorized_transaction}
+      WHERE (fx_dw007_stat IS NULL OR TRIM(fx_dw007_stat) = '')
+        AND fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+      GROUP BY merchant
+      HAVING MAX(CASE WHEN fx_dw007_rte_dest = 'L' THEN 1 ELSE 0 END) = 1
+         AND MAX(CASE WHEN fx_dw007_rte_dest != 'L' OR fx_dw007_rte_dest IS NULL THEN 1 ELSE 0 END) = 0
+    )
+    SELECT
+      FORMAT_DATE('%Y-%m', t.f9_dw007_dt) AS month,
+      COUNT(*) AS total_txns,
+      COUNT(*) AS qris_txns,
+      ROUND(SUM(CAST(t.f9_dw007_amt_req AS FLOAT64) / 100), 2) AS total_spend_idr,
+      ROUND(SUM(CAST(t.f9_dw007_amt_req AS FLOAT64) / 100), 2) AS qris_spend_idr,
+      100.0 AS qris_pct
+    FROM ${TABLES.authorized_transaction} t
+    JOIN qris_only_merchants m ON t.fx_dw007_merc_name = m.merchant
+    WHERE (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '')
+      AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+      AND t.fx_dw007_rte_dest = 'L'
+      AND t.f9_dw007_ori_amt > 0
+    GROUP BY month
+    ORDER BY month
+  `;
+  return runQuery<QrisOnlyMerchantSpendRow>(sql);
+}
+
+// ---------------------------------------------------------------------------
+// Revolve / Utilization / Fee Revenue by Cohort
+// ---------------------------------------------------------------------------
+
+export interface CohortFinancialRow {
+  grp: string;
+  cohort_size: number;
+  accounts_found: number;
+  avg_balance_idr: number;
+  avg_limit: number;
+  utilization_pct: number;
+  with_balance: number;
+  revolvers: number;
+  revolve_rate_pct: number;
+  total_fees_idr: number;
+  total_chrg_fee_idr: number;
+  avg_cycle_day: number;
+}
+
+/**
+ * Revolve rate, utilization, and fee revenue for each QRIS experiment cohort.
+ * Snapshot taken on the last available business date in DW004.
+ */
+export async function getCohortFinancials(): Promise<CohortFinancialRow[]> {
+  const sql = `
+    WITH all_users AS (
+      SELECT user_id, qris_test_rollout_group AS grp
+      FROM ${TABLES.qris_rollout}
+    ),
+    -- Dynamic exclusion: Control users who had QRIS txns
+    contaminated_ctrl AS (
+      SELECT DISTINCT u.user_id
+      FROM all_users u
+      JOIN ${TABLES.cms_line_of_credit} m ON u.user_id = m.user_id
+      JOIN ${TABLES.principal_card_updates} p ON p.f9_dw005_loc_acct = m.external_id
+      JOIN ${TABLES.authorized_transaction} t ON t.f9_dw007_prin_crn = p.f9_dw005_crn
+      WHERE u.grp = 'Control'
+        AND t.fx_dw007_rte_dest = 'L'
+        AND (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '')
+    ),
+    credit_qris_exp AS (
+      SELECT user_id, grp FROM all_users
+      WHERE NOT (grp = 'Control' AND user_id IN (SELECT user_id FROM contaminated_ctrl))
+    ),
+    acct_map AS (
+      SELECT c.user_id, c.grp, m.external_id AS loc_acct
+      FROM credit_qris_exp c
+      JOIN ${TABLES.cms_line_of_credit} m ON c.user_id = m.user_id
+    ),
+    last_date AS (
+      SELECT MAX(f9_dw004_bus_dt) AS dt
+      FROM ${TABLES.financial_account_updates}
+      WHERE f9_dw004_bus_dt <= CURRENT_DATE()
+    ),
+    cohort_size AS (
+      SELECT grp, COUNT(DISTINCT user_id) AS sz FROM credit_qris_exp GROUP BY grp
+    )
+    SELECT
+      a.grp,
+      cs.sz AS cohort_size,
+      COUNT(DISTINCT a.loc_acct) AS accounts_found,
+      ROUND(AVG(CAST(d.f9_dw004_loc_bal AS FLOAT64) / 100), 0) AS avg_balance_idr,
+      ROUND(AVG(CAST(d.f9_dw004_loc_lmt AS FLOAT64)), 0) AS avg_limit,
+      ROUND(SAFE_DIVIDE(SUM(CAST(d.f9_dw004_loc_bal AS FLOAT64)), SUM(CAST(d.f9_dw004_loc_lmt AS FLOAT64) * 100)) * 100, 2) AS utilization_pct,
+      COUNTIF(CAST(d.f9_dw004_os_bill_amt AS FLOAT64) > 0) AS with_balance,
+      COUNTIF(CAST(d.f9_dw004_os_bill_amt AS FLOAT64) > CAST(d.f9_dw004_curr_min_rpmt AS FLOAT64) AND CAST(d.f9_dw004_curr_min_rpmt AS FLOAT64) > 0) AS revolvers,
+      ROUND(SAFE_DIVIDE(
+        COUNTIF(CAST(d.f9_dw004_os_bill_amt AS FLOAT64) > CAST(d.f9_dw004_curr_min_rpmt AS FLOAT64) AND CAST(d.f9_dw004_curr_min_rpmt AS FLOAT64) > 0),
+        COUNTIF(CAST(d.f9_dw004_os_bill_amt AS FLOAT64) > 0)
+      ) * 100, 2) AS revolve_rate_pct,
+      ROUND(SUM(CAST(d.f9_dw004_bil_fee_chrg_1 AS FLOAT64) / 100), 0) AS total_fees_idr,
+      ROUND(SUM(CAST(d.f9_dw004_bil_chrg_fee AS FLOAT64) / 100), 0) AS total_chrg_fee_idr,
+      ROUND(AVG(CAST(d.f9_dw004_cycc_day AS FLOAT64)), 0) AS avg_cycle_day
+    FROM acct_map a
+    JOIN ${TABLES.financial_account_updates} d ON d.p9_dw004_loc_acct = a.loc_acct
+    CROSS JOIN last_date ld
+    JOIN cohort_size cs ON a.grp = cs.grp
+    WHERE d.f9_dw004_bus_dt = ld.dt
+    GROUP BY a.grp, cs.sz
+    ORDER BY a.grp
+  `;
+  return runQuery<CohortFinancialRow>(sql);
+}
