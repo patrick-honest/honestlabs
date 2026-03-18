@@ -116,9 +116,9 @@ export default function ActivationPage() {
     };
   }, [apiData]);
 
-  const periodActivationRate = useMemo(() => apiActivationRate ? applyFilterToData(scaleTrendData(apiActivationRate, period), filters) : null, [period, filters, apiActivationRate]);
-  const periodActivationByProduct = useMemo(() => apiActivationByProduct ? applyFilterToData(scaleTrendData(apiActivationByProduct, period, "product"), filters) : null, [period, filters, apiActivationByProduct]);
-  const periodDeliveryToActivation = useMemo(() => apiDaysToFirstTxn ? applyFilterToData(scaleTrendData(apiDaysToFirstTxn, period, "days"), filters) : null, [period, filters, apiDaysToFirstTxn]);
+  const periodActivationRate = useMemo(() => apiActivationRate?.length ? applyFilterToData(scaleTrendData(apiActivationRate, period), filters) : null, [period, filters, apiActivationRate]);
+  const periodActivationByProduct = useMemo(() => apiActivationByProduct?.length ? applyFilterToData(scaleTrendData(apiActivationByProduct, period, "product"), filters) : null, [period, filters, apiActivationByProduct]);
+  const periodDeliveryToActivation = useMemo(() => apiDaysToFirstTxn?.length ? applyFilterToData(scaleTrendData(apiDaysToFirstTxn, period, "days"), filters) : null, [period, filters, apiDaysToFirstTxn]);
 
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
 
