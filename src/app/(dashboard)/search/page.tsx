@@ -1,13 +1,12 @@
 "use client";
 
-import { useState } from "react";
 import { Header } from "@/components/layout/header";
 import { UserSearchForm } from "@/components/search/user-search-form";
 import { UserInfoCard } from "@/components/search/user-info-card";
 import { useTheme } from "@/hooks/use-theme";
+import { useSearchState } from "@/hooks/use-search-state";
 import { IS_STATIC_EXPORT } from "@/lib/static-mode";
 import { AlertCircle, SearchX, Database, Clock } from "lucide-react";
-import type { UserSearchResult, SearchField } from "@/types/search";
 
 export default function SearchPage() {
   if (IS_STATIC_EXPORT) {
@@ -28,38 +27,10 @@ export default function SearchPage() {
       </div>
     );
   }
-  const [result, setResult] = useState<UserSearchResult | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [searched, setSearched] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [meta, setMeta] = useState<{ asOf: string; cached: boolean } | null>(null);
+
+  // Search state persists across navigation via context
+  const { result, loading, searched, error, meta, search } = useSearchState();
   const { isDark } = useTheme();
-
-  const handleSearch = async (query: string, field: SearchField) => {
-    setLoading(true);
-    setSearched(true);
-    setError(null);
-    setResult(null);
-    setMeta(null);
-
-    try {
-      const params = new URLSearchParams({ field, query });
-      const res = await fetch(`/api/search?${params.toString()}`);
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error || `Search failed (${res.status})`);
-        return;
-      }
-
-      setResult(data.user);
-      setMeta({ asOf: data.asOf, cached: data.cached });
-    } catch (err) {
-      setError(`Network error: ${String(err)}`);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <div className="flex flex-col">
@@ -77,7 +48,7 @@ export default function SearchPage() {
           </div>
         </div>
 
-        <UserSearchForm onSearch={handleSearch} isLoading={loading} />
+        <UserSearchForm onSearch={search} isLoading={loading} />
 
         {loading && (
           <div className="flex flex-col items-center justify-center py-12 gap-3">
