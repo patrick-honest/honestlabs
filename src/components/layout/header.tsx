@@ -145,8 +145,8 @@ function MiniCalendar({
 // ── Unified Time Selector ──────────────────────────────────────────────────
 
 function UnifiedTimeSelector({
-  period, timeRange, dateRange, prevDateRange, comparisonMode,
-  onSelectRange, onComparisonChange, onCustomRange, isDark,
+  period, timeRange, dateRange,
+  onSelectRange, onCustomRange, isDark,
 }: {
   period: Cycle;
   timeRange: TimeRangePreset;
@@ -353,34 +353,6 @@ function UnifiedTimeSelector({
         )}
       </div>
 
-      {/* Date range display */}
-      <div className="flex items-center gap-1 text-[10px]">
-        <span className={cn("font-semibold", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>
-          {dateRange.label}
-        </span>
-        {comparisonMode !== "none" && (
-          <span className="text-[var(--text-muted)]">vs {prevDateRange.label}</span>
-        )}
-      </div>
-
-      {/* Comparison mode */}
-      <div className="relative shrink-0">
-        <select
-          value={comparisonMode}
-          onChange={(e) => onComparisonChange(e.target.value as ComparisonMode)}
-          className={cn(
-            "appearance-none rounded-md border px-1.5 py-0.5 pr-4 text-[10px] font-medium cursor-pointer outline-none transition-colors",
-            isDark
-              ? "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]"
-              : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]"
-          )}
-        >
-          {COMPARISON_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>{tTime(opt.tKey)}</option>
-          ))}
-        </select>
-        <ChevronDown className="pointer-events-none absolute right-0.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-[var(--text-muted)]" />
-      </div>
     </div>
   );
 }
@@ -461,14 +433,25 @@ export function Header({ title }: HeaderProps) {
           : "border-[var(--border)] bg-[var(--background)]/95"
       )}
     >
-      {/* Row 1: Title + Filters (left-aligned for easy access) */}
+      {/* Row 1: Title + Time dropdown + Filters */}
       <div className="flex items-center gap-2 px-4 pt-1.5 pb-0.5">
         <h1 className="text-sm font-semibold text-[var(--text-primary)] shrink-0">{title}</h1>
+
+        <UnifiedTimeSelector
+          period={period}
+          timeRange={timeRange}
+          dateRange={dateRange}
+          prevDateRange={prevDateRange}
+          comparisonMode={comparisonMode}
+          onSelectRange={setPeriodAndRange}
+          onComparisonChange={setComparisonMode}
+          onCustomRange={setCustomRange}
+          isDark={isDark}
+        />
 
         {/* Filters toggle */}
         {hasAnyFilters && (
           <>
-            <div className="h-4 w-px bg-[var(--border)] shrink-0" />
             <button
               onClick={() => setFiltersExpanded((p) => !p)}
               className={cn(
@@ -505,19 +488,30 @@ export function Header({ title }: HeaderProps) {
         )}
       </div>
 
-      {/* Row 2: Time selector + date range + comparison */}
+      {/* Row 2: Time range label + date range + comparison */}
       <div className="flex items-center gap-2 px-4 pb-1.5">
-        <UnifiedTimeSelector
-          period={period}
-          timeRange={timeRange}
-          dateRange={dateRange}
-          prevDateRange={prevDateRange}
-          comparisonMode={comparisonMode}
-          onSelectRange={setPeriodAndRange}
-          onComparisonChange={setComparisonMode}
-          onCustomRange={setCustomRange}
-          isDark={isDark}
-        />
+        <span className="text-[10px] text-[var(--text-muted)]">Time range:</span>
+        <span className={cn("text-[10px] font-semibold", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>
+          {dateRange.label}
+        </span>
+        {comparisonMode !== "none" && (
+          <span className="text-[10px] text-[var(--text-muted)]">vs {prevDateRange.label}</span>
+        )}
+        <div className="relative shrink-0">
+          <select
+            value={comparisonMode}
+            onChange={(e) => setComparisonMode(e.target.value as ComparisonMode)}
+            className={cn(
+              "appearance-none rounded-md border px-1.5 py-0.5 pr-4 text-[10px] font-medium cursor-pointer outline-none transition-colors",
+              "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]"
+            )}
+          >
+            {COMPARISON_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{tTime(opt.tKey)}</option>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-0.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-[var(--text-muted)]" />
+        </div>
       </div>
 
       {/* Expandable filter panel */}
