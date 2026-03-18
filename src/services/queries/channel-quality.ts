@@ -5,115 +5,91 @@ import { toSqlDate } from "@/lib/dates";
 // Types
 // ---------------------------------------------------------------------------
 
-export interface ChannelVolumeRow {
+export interface ChannelQualityRow {
   utm_source: string;
-  applications: number;
-  approvals: number;
+  reached_decision: number;
+  approved: number;
   approval_rate: number;
-}
-
-export interface ChannelDelinquencyRow {
-  utm_source: string;
-  total_approved: number;
-  dpd_30_plus: number;
-  dpd_rate: number;
+  dpd30_plus: number;
+  approved_with_dpd_data: number;
+  dpd30_rate: number;
 }
 
 // ---------------------------------------------------------------------------
-// 1. Channel Volume & Approval Rate
+// Combined Channel Quality — volume, approval rate, and delinquency in one query
+//
+// Joins:
+//   milestone_complete (UTM source)
+//   → decision_completed (approval outcome)
+//   → cms_line_of_credit (user_id → external_id/loc_acct bridge)
+//   → financial_account_updates (DPD at latest snapshot)
 // ---------------------------------------------------------------------------
 
-export async function getChannelVolumeAndApproval(
+export async function getChannelQuality(
   startDate: Date,
   endDate: Date,
-): Promise<ChannelVolumeRow[]> {
+): Promise<ChannelQualityRow[]> {
   const sql = `
-    WITH applications AS (
+    WITH applicants AS (
       SELECT
-        COALESCE(NULLIF(context_traits_first_utm_source, ''), 'organic') AS utm_source,
-        user_id
+        user_id,
+        COALESCE(NULLIF(context_traits_first_utm_source, ''), 'organic') AS utm_source
       FROM ${TABLES.milestone_complete}
       WHERE DATE(timestamp, 'Asia/Jakarta') BETWEEN @startDate AND @endDate
-        AND application_status = 'Application started'
-      GROUP BY utm_source, user_id
+        AND application_status = 'Decision complete'
+      GROUP BY user_id, utm_source
     ),
+
     decisions AS (
-      SELECT
-        user_id
+      SELECT user_id, decision
       FROM ${TABLES.decision_completed}
-      WHERE decision = 'APPROVED'
-        AND DATE(timestamp, 'Asia/Jakarta') BETWEEN @startDate AND @endDate
+      WHERE DATE(timestamp, 'Asia/Jakarta') BETWEEN @startDate AND @endDate
+    ),
+
+    approved_users AS (
+      SELECT DISTINCT d.user_id, a.utm_source
+      FROM decisions d
+      JOIN applicants a ON d.user_id = a.user_id
+      WHERE d.decision = 'APPROVED'
+    ),
+
+    dpd AS (
+      SELECT
+        cloc.user_id,
+        dw4.f9_dw004_curr_dpd AS dpd
+      FROM ${TABLES.financial_account_updates} dw4
+      JOIN ${TABLES.cms_line_of_credit} cloc
+        ON dw4.p9_dw004_loc_acct = cloc.external_id
+      WHERE dw4.f9_dw004_bus_dt = (
+        SELECT MAX(f9_dw004_bus_dt)
+        FROM ${TABLES.financial_account_updates}
+      )
     )
+
     SELECT
       a.utm_source,
-      COUNT(DISTINCT a.user_id) AS applications,
-      COUNT(DISTINCT d.user_id) AS approvals,
-      ROUND(SAFE_DIVIDE(COUNT(DISTINCT d.user_id), COUNT(DISTINCT a.user_id)) * 100, 2) AS approval_rate
-    FROM applications a
+      COUNT(DISTINCT a.user_id) AS reached_decision,
+      COUNT(DISTINCT CASE WHEN d.decision = 'APPROVED' THEN d.user_id END) AS approved,
+      ROUND(SAFE_DIVIDE(
+        COUNT(DISTINCT CASE WHEN d.decision = 'APPROVED' THEN d.user_id END),
+        COUNT(DISTINCT d.user_id)
+      ) * 100, 1) AS approval_rate,
+      COUNT(DISTINCT CASE WHEN dpd.dpd > 30 THEN au.user_id END) AS dpd30_plus,
+      COUNT(DISTINCT au.user_id) AS approved_with_dpd_data,
+      ROUND(SAFE_DIVIDE(
+        COUNT(DISTINCT CASE WHEN dpd.dpd > 30 THEN au.user_id END),
+        NULLIF(COUNT(DISTINCT au.user_id), 0)
+      ) * 100, 2) AS dpd30_rate
+    FROM applicants a
     LEFT JOIN decisions d ON a.user_id = d.user_id
+    LEFT JOIN approved_users au ON a.user_id = au.user_id
+    LEFT JOIN dpd ON au.user_id = dpd.user_id
     GROUP BY a.utm_source
-    ORDER BY applications DESC
+    HAVING reached_decision >= 10
+    ORDER BY reached_decision DESC
   `;
 
-  return runQuery<ChannelVolumeRow>(sql, {
-    startDate: toSqlDate(startDate),
-    endDate: toSqlDate(endDate),
-  });
-}
-
-// ---------------------------------------------------------------------------
-// 2. Channel Delinquency (30+ DPD rate per UTM source)
-// ---------------------------------------------------------------------------
-
-export async function getChannelDelinquency(
-  startDate: Date,
-  endDate: Date,
-): Promise<ChannelDelinquencyRow[]> {
-  const sql = `
-    WITH channel_users AS (
-      SELECT
-        COALESCE(NULLIF(context_traits_first_utm_source, ''), 'organic') AS utm_source,
-        user_id
-      FROM ${TABLES.milestone_complete}
-      WHERE DATE(timestamp, 'Asia/Jakarta') BETWEEN @startDate AND @endDate
-        AND application_status = 'Application started'
-      GROUP BY utm_source, user_id
-    ),
-    approved_users AS (
-      SELECT
-        cu.utm_source,
-        cu.user_id,
-        d.credit_line
-      FROM channel_users cu
-      INNER JOIN ${TABLES.decision_completed} d
-        ON cu.user_id = d.user_id
-        AND d.decision = 'APPROVED'
-    ),
-    delinquent AS (
-      SELECT
-        au.utm_source,
-        au.user_id
-      FROM approved_users au
-      INNER JOIN ${TABLES.cms_line_of_credit} cloc
-        ON au.user_id = cloc.user_id
-      INNER JOIN ${TABLES.financial_account_updates} fau
-        ON cloc.account_number = fau.account_number
-      WHERE SAFE_CAST(fau.days_past_due AS INT64) >= 30
-      GROUP BY au.utm_source, au.user_id
-    )
-    SELECT
-      au.utm_source,
-      COUNT(DISTINCT au.user_id) AS total_approved,
-      COUNT(DISTINCT del.user_id) AS dpd_30_plus,
-      ROUND(SAFE_DIVIDE(COUNT(DISTINCT del.user_id), COUNT(DISTINCT au.user_id)) * 100, 2) AS dpd_rate
-    FROM approved_users au
-    LEFT JOIN delinquent del
-      ON au.utm_source = del.utm_source AND au.user_id = del.user_id
-    GROUP BY au.utm_source
-    ORDER BY total_approved DESC
-  `;
-
-  return runQuery<ChannelDelinquencyRow>(sql, {
+  return runQuery<ChannelQualityRow>(sql, {
     startDate: toSqlDate(startDate),
     endDate: toSqlDate(endDate),
   });

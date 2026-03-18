@@ -153,6 +153,14 @@ export const TABLES = {
   new_card_application: "`storage-58f5a02c.mart_finexus.new_card_application`",
   card_history: "`storage-58f5a02c.mart_finexus.card_history`",
   financial_statement_updates: "`storage-58f5a02c.mart_finexus.financial_statement_updates`",
+  incoming_interchange: "`storage-58f5a02c.mart_finexus.incoming_interchange_posting_journal`",
+  points_summary: "`storage-58f5a02c.mart_finexus.points_summary`",
+  points_details: "`storage-58f5a02c.mart_finexus.points_details`",
+  card_memo_message: "`storage-58f5a02c.mart_finexus.card_memo_message`",
+  safe2pay_alert: "`storage-58f5a02c.mart_finexus.safe2pay_alert`",
+  safe2pay_txn_error: "`storage-58f5a02c.mart_finexus.safe2pay_transaction_error_log`",
+  card_restructure: "`storage-58f5a02c.mart_finexus.card_restructure`",
+  user_profile_updates: "`storage-58f5a02c.mart_finexus.user_profile_updates`",
 
   // Bridge table
   cms_line_of_credit: "`storage-58f5a02c.mart_growthbook.cms_line_of_credit`",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import useSWR from "swr";
 import { Header } from "@/components/layout/header";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
@@ -16,6 +17,8 @@ import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 // ==========================================================================
 // Mock Data — Acquisition Channel Quality
@@ -153,44 +156,85 @@ const actionItems: ActionItem[] = [
 // ==========================================================================
 
 export default function ChannelQualityPage() {
-  const { period } = usePeriod();
+  const { period, dateRange } = usePeriod();
   const { isDark } = useTheme();
   const { filters } = useFilters();
   const range = getPeriodRange(period);
+
+  // Fetch real data from BigQuery
+  const startStr = dateRange.start.toISOString().slice(0, 10);
+  const endStr = dateRange.end.toISOString().slice(0, 10);
+  const { data: apiData } = useSWR(
+    `/api/channel-quality?startDate=2025-01-01&endDate=${endStr}`,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 300_000 },
+  );
+
+  // Build chart data from API response or fall back to mock
+  const liveChannelData: ChannelRow[] | null = useMemo(() => {
+    if (!apiData?.channels) return null;
+    type ApiRow = { utm_source: string; reached_decision: number; approved: number; approval_rate: number; dpd30_rate: number };
+    const total = (apiData.channels as ApiRow[]).reduce((s: number, c: ApiRow) => s + c.reached_decision, 0);
+    return (apiData.channels as ApiRow[]).map((c: ApiRow) => ({
+      channel: c.utm_source,
+      applications: c.reached_decision,
+      share_pct: total > 0 ? Math.round((c.reached_decision / total) * 1000) / 10 : 0,
+      approval_rate: c.approval_rate,
+      dpd_30_rate: c.dpd30_rate,
+    }));
+  }, [apiData]);
+
+  const activeChannelData = liveChannelData ?? channelData;
+  const isLiveData = !!liveChannelData;
   const { changeAbbrev } = getPeriodInsightLabels(period);
 
   // KPI values
   const totalApplications = useMemo(() => {
-    const base = channelData.reduce((sum, c) => sum + c.applications, 0);
+    const base = activeChannelData.reduce((sum, c) => sum + c.applications, 0);
+    if (isLiveData) return base;
     return Math.round(applyFilterToMetric(scaleMetricValue(base, period, false), filters, false));
-  }, [period, filters]);
+  }, [activeChannelData, isLiveData, period, filters]);
 
   const overallApprovalRate = useMemo(() => {
-    const totalApps = channelData.reduce((sum, c) => sum + c.applications, 0);
-    const weightedApproval = channelData.reduce((sum, c) => sum + c.approval_rate * c.applications, 0);
-    return Math.round((weightedApproval / totalApps) * 100) / 100;
-  }, []);
+    const totalApps = activeChannelData.reduce((sum, c) => sum + c.applications, 0);
+    const weightedApproval = activeChannelData.reduce((sum, c) => sum + c.approval_rate * c.applications, 0);
+    return totalApps > 0 ? Math.round((weightedApproval / totalApps) * 100) / 100 : 0;
+  }, [activeChannelData]);
 
   const bestChannel = useMemo(() => {
-    const best = [...channelData].sort(
+    if (activeChannelData.length === 0) return "N/A";
+    const best = [...activeChannelData].sort(
       (a, b) => computeQualityScore(b.approval_rate, b.dpd_30_rate) - computeQualityScore(a.approval_rate, a.dpd_30_rate),
     )[0];
     return best.channel;
-  }, []);
+  }, [activeChannelData]);
 
   const worstByDelinquency = useMemo(() => {
-    const worst = [...channelData].sort((a, b) => b.dpd_30_rate - a.dpd_30_rate)[0];
+    if (activeChannelData.length === 0) return "N/A";
+    const worst = [...activeChannelData].sort((a, b) => b.dpd_30_rate - a.dpd_30_rate)[0];
     return `${worst.channel} (${worst.dpd_30_rate}%)`;
-  }, []);
+  }, [activeChannelData]);
 
-  // Chart data
+  // Chart data — use live data when available, otherwise scale mock data
   const volumeChartData = useMemo(() => {
-    const scaled = baseVolumeData.map((d) => ({
+    const src = activeChannelData.map((c) => ({ channel: c.channel, applications: c.applications }));
+    if (isLiveData) return src; // Real data doesn't need scaling
+    const scaled = src.map((d) => ({
       ...d,
       applications: Math.round(scaleMetricValue(d.applications, period, false)),
     }));
     return applyFilterToData(scaled, filters);
-  }, [period, filters]);
+  }, [activeChannelData, isLiveData, period, filters]);
+
+  const approvalRateChartData = useMemo(() =>
+    activeChannelData.map((c) => ({ channel: c.channel, approval_rate: c.approval_rate })),
+    [activeChannelData],
+  );
+
+  const delinquencyChartData = useMemo(() =>
+    activeChannelData.map((c) => ({ channel: c.channel, dpd_30_rate: c.dpd_30_rate })),
+    [activeChannelData],
+  );
 
   const qualityTrend = useMemo(
     () => applyFilterToData(scaleTrendData(baseQualityTrend, period, "date"), filters),
@@ -260,23 +304,23 @@ export default function ChannelQualityPage() {
           <MetricCard
             metricKey="best_channel"
             label="Best Channel by Quality"
-            value={computeQualityScore(
-              channelData.find((c) => c.channel === bestChannel)!.approval_rate,
-              channelData.find((c) => c.channel === bestChannel)!.dpd_30_rate,
-            )}
+            value={(() => {
+              const best = activeChannelData.find((c) => c.channel === bestChannel);
+              return best ? computeQualityScore(best.approval_rate, best.dpd_30_rate) : 0;
+            })()}
             prevValue={computeQualityScore(70, 3.5)}
             unit="count"
-            asOf={AS_OF}
+            asOf={isLiveData ? (apiData?.asOf ? new Date(apiData.asOf).toLocaleDateString() : AS_OF) : AS_OF}
             dataRange={range}
             higherIsBetter={true}
           />
           <MetricCard
             metricKey="worst_delinquency"
             label="Worst DPD 30+ Rate"
-            value={channelData.sort((a, b) => b.dpd_30_rate - a.dpd_30_rate)[0].dpd_30_rate}
+            value={activeChannelData.length > 0 ? [...activeChannelData].sort((a, b) => b.dpd_30_rate - a.dpd_30_rate)[0].dpd_30_rate : 0}
             prevValue={9.0}
             unit="percent"
-            asOf={AS_OF}
+            asOf={isLiveData ? (apiData?.asOf ? new Date(apiData.asOf).toLocaleDateString() : AS_OF) : AS_OF}
             dataRange={range}
             higherIsBetter={false}
           />
@@ -305,7 +349,7 @@ export default function ChannelQualityPage() {
                 </tr>
               </thead>
               <tbody>
-                {channelData.map((c) => {
+                {activeChannelData.map((c) => {
                   const score = computeQualityScore(c.approval_rate, c.dpd_30_rate);
                   const scoreColor = score >= 55
                     ? isDark ? "text-[#06D6A0]" : "text-[#059669]"
@@ -352,7 +396,7 @@ export default function ChannelQualityPage() {
             dataRange={range}
           >
             <DashboardBarChart
-              data={approvalRateData}
+              data={approvalRateChartData}
               bars={[{ key: "approval_rate", color: isDark ? "#06D6A0" : "#059669", label: "Approval %" }]}
               xAxisKey="channel"
               height={260}
@@ -370,7 +414,7 @@ export default function ChannelQualityPage() {
             dataRange={range}
           >
             <DashboardBarChart
-              data={delinquencyData}
+              data={delinquencyChartData}
               bars={[{ key: "dpd_30_rate", color: isDark ? "#FF6B6B" : "#DC2626", label: "DPD 30+ %" }]}
               xAxisKey="channel"
               height={260}
