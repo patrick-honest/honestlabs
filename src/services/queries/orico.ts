@@ -521,7 +521,7 @@ WITH card_acct_map AS (
   FROM \`mart_finexus.principal_card_updates\`
   WHERE f9_dw005_loc_acct IS NOT NULL AND f9_dw005_crn IS NOT NULL
 ),
--- All product types included (prepaid + opening fee no longer excluded)
+-- Product type filtering handled by UI (productType filter dimension)
 SELECT
   DATE_TRUNC(DATE(f9_dw007_dt, 'Asia/Jakarta'), MONTH) AS month_key,
   COUNT(*) AS transaction_count,

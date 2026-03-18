@@ -26,7 +26,7 @@ const executiveKpis: KpiDefinition[] = [
     unit: "count",
     section: "executive",
     queryFn: "getEligibleAndTransactors",
-    description: "Number of active accounts eligible for spend (unblocked, status G/N, DPD >= 0). Includes all product types: standard, prepaid (RP1), and opening fee.",
+    description: "Number of active accounts eligible for spend (card unblocked, account status G/N, DPD >= 0). Filterable by product type.",
     target: undefined,
     higherIsBetter: true,
   },
@@ -36,7 +36,7 @@ const executiveKpis: KpiDefinition[] = [
     unit: "count",
     section: "executive",
     queryFn: "getEligibleAndTransactors",
-    description: "Number of eligible accounts with at least one valid authorized transaction. All product types included.",
+    description: "Number of eligible accounts with at least one valid authorized transaction. Filterable by product type.",
     higherIsBetter: true,
   },
   {

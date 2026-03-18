@@ -33,6 +33,29 @@ interface FiltersContextValue {
   activeFilterCount: number;
 }
 
+/**
+ * Default filter state.
+ *
+ * productType defaults to ["regular"] so RP1 and Registration Fee
+ * users are excluded from metrics by default. Users can toggle them
+ * on via the Product filter. An empty array means "show all" for
+ * every other dimension.
+ */
+const DEFAULT_FILTERS: FilterSelections = {
+  cardType: [],
+  productType: ["regular"], // Regular only by default; RP1 + Reg Fee excluded
+  cohort: [],
+  transactionType: [],
+  transactionChannel: [],
+  transactionStatus: [],
+  merchantCategory: [],
+  amountRange: [],
+  recurringType: [],
+  riskCategory: [],
+  decisioningModel: [],
+};
+
+/** Fully empty filters (used when clearing all) */
 const EMPTY_FILTERS: FilterSelections = {
   cardType: [],
   productType: [],
@@ -66,11 +89,32 @@ export const CARD_TYPE_OPTIONS = [
   { value: "10027", label: "10027", group: "Visa" },
 ] as const;
 
+/**
+ * Product type definitions:
+ *
+ * **Regular** — Standard credit card with full credit line. The core product.
+ *   Identified by: is_prepaid_card_applicable = FALSE AND is_account_opening_fee_applicable = FALSE
+ *
+ * **RP1 (Prepaid)** — Prepaid card product where the user deposits funds upfront (credit_limit = 1).
+ *   Identified by: is_prepaid_card_applicable = TRUE (or F9_DW001_LOC_LMT = 1)
+ *   These users have no revolving credit — spend is limited to deposited amount.
+ *
+ * **Registration Fee** — Credit card with an upfront account opening fee charged at issuance.
+ *   Identified by: is_account_opening_fee_applicable = TRUE
+ *   Has a standard credit line but user paid a fee to open the account.
+ *
+ * By default, RP1 and Registration Fee are UNSELECTED so that dashboard
+ * metrics reflect the core Regular credit card portfolio. Users can toggle
+ * them on via the Product filter to see the full picture.
+ */
 export const PRODUCT_TYPE_OPTIONS = [
+  { value: "regular", label: "Regular" },
   { value: "rp1", label: "RP1 (Prepaid)" },
   { value: "registration_fee", label: "Registration Fee" },
-  { value: "regular", label: "Regular" },
 ] as const;
+
+/** Product types selected by default (Regular only — RP1 and Reg Fee excluded) */
+export const DEFAULT_PRODUCT_TYPES: string[] = ["regular"];
 
 // ── Transaction filter options ──────────────────────────────────────
 
@@ -196,7 +240,7 @@ function generateWeeklyCohorts(): { value: string; label: string }[] {
 export const COHORT_OPTIONS = generateWeeklyCohorts();
 
 export function FiltersProvider({ children }: { children: ReactNode }) {
-  const [filters, setFilters] = useState<FilterSelections>(EMPTY_FILTERS);
+  const [filters, setFilters] = useState<FilterSelections>(DEFAULT_FILTERS);
 
   const setFilter = useCallback(
     (key: keyof FilterSelections, values: string[]) => {
@@ -218,7 +262,7 @@ export function FiltersProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const clearFilters = useCallback(() => setFilters(EMPTY_FILTERS), []);
+  const clearFilters = useCallback(() => setFilters(DEFAULT_FILTERS), []);
 
   const clearFilter = useCallback(
     (key: keyof FilterSelections) => {

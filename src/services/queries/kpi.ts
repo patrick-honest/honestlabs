@@ -103,7 +103,7 @@ export async function getEligibleAndTransactors(
         AND EXTRACT(DAYOFWEEK FROM dw4.f9_dw004_bus_dt) = 1
         AND dw4.fx_dw004_loc_stat IN ('G', 'N')
         AND dw4.f9_dw004_curr_dpd >= 0
-        -- All product types included (prepaid + opening fee no longer excluded)
+        -- Product type filtering handled by UI (productType filter dimension)
       GROUP BY week_start
     ),
 
@@ -125,7 +125,7 @@ export async function getEligibleAndTransactors(
       WHERE dw7.f9_dw007_dt BETWEEN @startDate AND @endDate
         AND (dw7.fx_dw007_stat IS NULL OR TRIM(dw7.fx_dw007_stat) = '' OR dw7.fx_dw007_stat = ' ')
         AND dw7.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
-        -- All product types included (prepaid + opening fee no longer excluded)
+        -- Product type filtering handled by UI (productType filter dimension)
       GROUP BY week_start
     )
 
@@ -215,7 +215,7 @@ export async function getNewCustomerActivationRate(
         DATE(MIN(timestamp), 'Asia/Jakarta') AS approval_date
       FROM ${TABLES.decision_completed}
       WHERE decision = 'APPROVED'
-        -- All product types included (prepaid + opening fee no longer excluded)
+        -- Product type filtering handled by UI (productType filter dimension)
       GROUP BY user_id
     ),
 
