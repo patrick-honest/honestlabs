@@ -77,8 +77,29 @@ export const PAGE_FILTER_CONFIG: { prefix: string; filters: FilterKey[] | null }
     prefix: "/deep-dive/customer-service",
     filters: [...ACCT, "transactionType", "transactionChannel"],
   },
+  {
+    prefix: "/deep-dive/transaction-auth",
+    filters: ALL, // transaction-heavy — all filters apply
+  },
+  {
+    prefix: "/deep-dive/app-health",
+    filters: [...ACCT],
+  },
+  {
+    prefix: "/deep-dive/referral",
+    filters: [...ACCT],
+  },
+  {
+    prefix: "/deep-dive/credit-line",
+    filters: [...ACCT],
+  },
 
   // ── Top-level pages ──
+  { prefix: "/ab-tests", filters: [] }, // experiment-level, not account-level
+  {
+    prefix: "/channel-quality",
+    filters: [...ACCT, ...RISK],
+  },
   {
     prefix: "/orico",
     filters: [...ACCT, "riskCategory"],

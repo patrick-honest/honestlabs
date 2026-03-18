@@ -14,6 +14,10 @@ const tabs = [
   { label: "Collections", href: "/deep-dive/collections" },
   { label: "Repayments", href: "/deep-dive/repayments" },
   { label: "Customer Service", href: "/deep-dive/customer-service" },
+  { label: "Txn Auth", href: "/deep-dive/transaction-auth" },
+  { label: "App Health", href: "/deep-dive/app-health" },
+  { label: "Referrals", href: "/deep-dive/referral" },
+  { label: "Credit Line", href: "/deep-dive/credit-line" },
 ];
 
 export default function DeepDiveLayout({

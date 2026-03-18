@@ -162,6 +162,15 @@ export const TABLES = {
   milestone_complete: "`storage-58f5a02c.refined_rudderstack.milestone_complete`",
   repayment_completed: "`storage-58f5a02c.refined_rudderstack.repayment_completed`",
   rudderstack_users: "`storage-58f5a02c.refined_rudderstack.users`",
+  transaction_authorized: "`storage-58f5a02c.refined_rudderstack.transaction_authorized`",
+  experiment_viewed: "`storage-58f5a02c.refined_rudderstack.experiment_viewed`",
+  referral_application_started: "`storage-58f5a02c.refined_rudderstack.referral_application_started`",
+  referral_approved: "`storage-58f5a02c.refined_rudderstack.referral_approved`",
+  credit_line_increased: "`storage-58f5a02c.refined_rudderstack.credit_line_increased`",
+  tracks: "`storage-58f5a02c.refined_rudderstack.tracks`",
+  screens: "`storage-58f5a02c.refined_rudderstack.screens`",
+  snackbar_shown: "`storage-58f5a02c.refined_rudderstack.snackbar_shown`",
+  auto_activation_enabled: "`storage-58f5a02c.refined_rudderstack.auto_activation_enabled`",
 
   // Core API tables
   application_status: "`storage-58f5a02c.refined_core_api.application_status`",

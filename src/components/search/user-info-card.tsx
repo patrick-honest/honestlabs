@@ -1,13 +1,39 @@
 "use client";
 
-import { useState } from "react";
-import { ShieldCheck, CreditCard, Truck, Headphones, ChevronDown, ChevronUp, Banknote, AlertTriangle } from "lucide-react";
+import { useState, useCallback } from "react";
+import { ShieldCheck, CreditCard, Truck, Headphones, ChevronDown, ChevronUp, Banknote, AlertTriangle, Copy, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
 import type { UserSearchResult, FreshworksTicket } from "@/types/search";
 
 interface UserInfoCardProps {
   user: UserSearchResult;
+}
+
+function CopyButton({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(value).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }, [value]);
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="inline-flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-150 ml-1.5 shrink-0"
+      aria-label={`Copy ${value}`}
+    >
+      {copied ? (
+        <Check className="h-3.5 w-3.5 text-[var(--success)]" />
+      ) : (
+        <Copy className="h-3.5 w-3.5 text-[var(--text-muted)] hover:text-[var(--text-secondary)]" />
+      )}
+    </button>
+  );
 }
 
 function formatDate(date: string | null): string {
@@ -37,6 +63,9 @@ interface FieldProps {
 }
 
 function Field({ label, value, highlight, mono }: FieldProps) {
+  const displayValue = value ?? "--";
+  const hasCopyable = value != null && value !== "--";
+
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">
@@ -44,12 +73,13 @@ function Field({ label, value, highlight, mono }: FieldProps) {
       </span>
       <span
         className={cn(
-          "text-sm font-medium",
+          "text-sm font-medium group flex items-center",
           highlight ? "text-[var(--danger)]" : "text-[var(--text-primary)]",
           mono && "font-mono text-xs"
         )}
       >
-        {value ?? "--"}
+        {displayValue}
+        {hasCopyable && <CopyButton value={String(value)} />}
       </span>
     </div>
   );
@@ -125,7 +155,12 @@ function TicketTable({ tickets, emptyMessage }: { tickets: FreshworksTicket[]; e
         <tbody>
           {tickets.map((t, i) => (
             <tr key={`${t.ticket_id}-${i}`} className="border-b border-[var(--border)]/50">
-              <td className="py-1.5 pr-3 font-mono text-[var(--text-secondary)]">#{t.ticket_id}</td>
+              <td className="py-1.5 pr-3 font-mono text-[var(--text-secondary)]">
+                <span className="group inline-flex items-center">
+                  #{t.ticket_id}
+                  {t.ticket_id && <CopyButton value={String(t.ticket_id)} />}
+                </span>
+              </td>
               <td className="py-1.5 pr-3 text-[var(--text-primary)] max-w-[300px] truncate">{t.subject ?? "--"}</td>
               <td className="py-1.5 pr-3">
                 <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", statusColor[t.status ?? ""] ?? "bg-[var(--surface-elevated)] text-[var(--text-muted)]")}>
@@ -208,9 +243,10 @@ export function UserInfoCard({ user }: UserInfoCardProps) {
               {user.previous_urns.map((entry, i) => (
                 <span
                   key={i}
-                  className="rounded-md bg-[var(--surface-elevated)] px-2 py-1 text-xs font-mono text-[var(--text-secondary)]"
+                  className="group inline-flex items-center rounded-md bg-[var(--surface-elevated)] px-2 py-1 text-xs font-mono text-[var(--text-secondary)]"
                 >
                   {entry.urn} <span className="text-[var(--text-muted)]">({formatDate(entry.date)})</span>
+                  <CopyButton value={String(entry.urn)} />
                 </span>
               ))}
             </div>
