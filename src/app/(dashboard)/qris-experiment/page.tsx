@@ -10,6 +10,8 @@ import { DashboardAreaChart } from "@/components/charts/area-chart";
 import { usePeriod } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
 import { useTheme } from "@/hooks/use-theme";
+import { useCurrency } from "@/hooks/use-currency";
+import { formatAmountCompact } from "@/lib/currency";
 import { getPeriodRange, scaleTrendData, scaleMetricValue } from "@/lib/period-data";
 import { applyFilterToData } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
@@ -211,13 +213,7 @@ const actionItems: ActionItem[] = [
 // Utility functions
 // ==========================================================================
 
-function fmtIDR(value: number): string {
-  if (value >= 1_000_000_000_000) return `IDR ${(value / 1_000_000_000_000).toFixed(1)}T`;
-  if (value >= 1_000_000_000) return `IDR ${(value / 1_000_000_000).toFixed(1)}B`;
-  if (value >= 1_000_000) return `IDR ${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `IDR ${(value / 1_000).toFixed(1)}K`;
-  return `IDR ${value.toLocaleString()}`;
-}
+// fmtIDR replaced by currency-aware fmtCur (defined inside component via useCurrency)
 
 function fmtNum(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
@@ -260,19 +256,21 @@ function ComparisonRow({
   nonQrisValue,
   format = "number",
   higherIsBetter = true,
+  currency = "IDR" as "IDR" | "USD",
 }: {
   label: string;
   qrisValue: number;
   nonQrisValue: number;
   format?: "number" | "idr" | "percent" | "decimal";
   higherIsBetter?: boolean;
+  currency?: "IDR" | "USD";
 }) {
   const diff = pctDiff(qrisValue, nonQrisValue);
   const qrisWins = higherIsBetter ? qrisValue > nonQrisValue : qrisValue < nonQrisValue;
 
   function fmt(v: number) {
     switch (format) {
-      case "idr": return fmtIDR(v);
+      case "idr": return formatAmountCompact(v, currency);
       case "percent": return `${v}%`;
       case "decimal": return v.toFixed(1);
       default: return fmtNum(v);
@@ -364,6 +362,10 @@ export default function QrisExperimentPage() {
   const { period, periodLabel } = usePeriod();
   const { filters } = useFilters();
   const { isDark } = useTheme();
+  const { currency } = useCurrency();
+
+  // Currency-aware formatter (replaces old hardcoded fmtIDR)
+  const fmtCur = useCallback((value: number) => formatAmountCompact(value, currency), [currency]);
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
@@ -543,7 +545,7 @@ export default function QrisExperimentPage() {
               <TrendingUp className="h-3 w-3" />
               <span className="text-xs font-medium">+18% MoM</span>
             </div>
-            <p className="text-[10px] text-[var(--text-muted)] mt-2">Avg {fmtIDR(130_000)} per transaction</p>
+            <p className="text-[10px] text-[var(--text-muted)] mt-2">Avg {fmtCur(130_000)} per transaction</p>
           </div>
 
           {/* Card 4: QRIS Share of Volume */}
@@ -559,7 +561,7 @@ export default function QrisExperimentPage() {
               <TrendingUp className="h-3 w-3" />
               <span className="text-xs font-medium">+12.4pp since launch</span>
             </div>
-            <p className="text-[10px] text-[var(--text-muted)] mt-2">{fmtIDR(latestProfit.qris_volume)} in Feb 2026</p>
+            <p className="text-[10px] text-[var(--text-muted)] mt-2">{fmtCur(latestProfit.qris_volume)} in Feb 2026</p>
           </div>
         </div>
 
@@ -596,8 +598,8 @@ export default function QrisExperimentPage() {
 
             {/* Comparison rows */}
             <ComparisonRow label="Avg Transactions / Month" qrisValue={q.avg_txn_count} nonQrisValue={nq.avg_txn_count} format="decimal" />
-            <ComparisonRow label="Avg Total Spend" qrisValue={q.avg_total_spend_idr} nonQrisValue={nq.avg_total_spend_idr} format="idr" />
-            <ComparisonRow label="Avg Spend per Txn" qrisValue={q.avg_spend_per_txn} nonQrisValue={nq.avg_spend_per_txn} format="idr" higherIsBetter={false} />
+            <ComparisonRow label="Avg Total Spend" qrisValue={q.avg_total_spend_idr} nonQrisValue={nq.avg_total_spend_idr} format="idr" currency={currency} />
+            <ComparisonRow label="Avg Spend per Txn" qrisValue={q.avg_spend_per_txn} nonQrisValue={nq.avg_spend_per_txn} format="idr" currency={currency} higherIsBetter={false} />
             <ComparisonRow label="Avg Days Active" qrisValue={q.avg_days_active} nonQrisValue={nq.avg_days_active} format="decimal" />
             <ComparisonRow label="Multi-Channel Usage" qrisValue={q.pct_multi_channel} nonQrisValue={nq.pct_multi_channel} format="percent" />
 
@@ -682,16 +684,16 @@ export default function QrisExperimentPage() {
             {/* Summary stat boxes */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] p-4">
-                <StatBox label="QRIS Interchange (Feb)" value={fmtIDR(122_000_000)} subtext="0.7% MDR" />
+                <StatBox label="QRIS Interchange (Feb)" value={fmtCur(122_000_000)} subtext="0.7% MDR" />
               </div>
               <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] p-4">
-                <StatBox label="Card Interchange (Feb)" value={fmtIDR(1_020_000_000)} subtext="~1.5% rate" />
+                <StatBox label="Card Interchange (Feb)" value={fmtCur(1_020_000_000)} subtext="~1.5% rate" />
               </div>
               <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] p-4">
-                <StatBox label="QRIS User Total Spend" value={fmtIDR(52_300_000_000)} subtext="All channels" />
+                <StatBox label="QRIS User Total Spend" value={fmtCur(52_300_000_000)} subtext="All channels" />
               </div>
               <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] p-4">
-                <StatBox label="Non-QRIS User Spend" value={fmtIDR(51_400_000_000)} subtext="All channels" />
+                <StatBox label="Non-QRIS User Spend" value={fmtCur(51_400_000_000)} subtext="All channels" />
               </div>
             </div>
 
@@ -776,7 +778,7 @@ export default function QrisExperimentPage() {
                   label={cat.category}
                   value={cat.txn_count}
                   maxValue={maxCategoryTxn}
-                  subLabel={fmtIDR(cat.spend)}
+                  subLabel={fmtCur(cat.spend)}
                 />
               ))}
             </div>
