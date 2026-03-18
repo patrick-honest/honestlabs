@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState, useEffect } from "react";
 import { Header } from "@/components/layout/header";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
@@ -16,8 +16,82 @@ import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banne
 import {
   QrCode, TrendingUp, TrendingDown, Users, Zap, ArrowUpRight, ArrowDownRight,
   ShoppingCart, CreditCard, BarChart3, Target, CheckCircle2, AlertTriangle,
+  Printer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+// ── Print styles ─────────────────────────────────────────────────────────────
+const PRINT_STYLES = `
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0.5in 0.5in 0.7in 0.5in;
+    @bottom-center {
+      content: "QRIS Experiment Report — Page " counter(page) " of " counter(pages);
+      font-size: 7pt;
+      color: #888;
+    }
+  }
+
+  /* Hide UI chrome */
+  nav, header, [data-print-hide], .no-print { display: none !important; }
+
+  /* Fix layout containers */
+  html, body { height: auto !important; overflow: visible !important; }
+  body > div, main, [class*="overflow"] {
+    height: auto !important;
+    overflow: visible !important;
+    position: static !important;
+  }
+  .flex.h-screen { height: auto !important; display: block !important; }
+
+  /* Typography */
+  body {
+    background: white !important;
+    color: #1a1a1a !important;
+    font-size: 9pt;
+    line-height: 1.35;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Reset backgrounds for readability */
+  div:not([class*="recharts"]):not([style*="gradient"]),
+  main, section, article, td, th, tr, p, span, h1, h2, h3 {
+    background: white !important;
+  }
+
+  /* Keep hero gradient and colored elements */
+  [data-print-hero] {
+    background: linear-gradient(135deg, #059669 0%, #10B981 40%, #047857 100%) !important;
+    color: white !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    page-break-after: avoid;
+  }
+  [data-print-hero] * { color: white !important; }
+  [data-print-hero] .text-white\\/70, [data-print-hero] .text-white\\/80,
+  [data-print-hero] .text-white\\/60, [data-print-hero] .text-white\\/50,
+  [data-print-hero] .text-white\\/30 { opacity: 0.7 !important; }
+
+  /* Preserve chart colors */
+  svg, svg *, .recharts-surface, .recharts-surface * {
+    color: inherit !important;
+    fill: inherit !important;
+    stroke: inherit !important;
+  }
+
+  /* Page break control */
+  .chart-card-wrapper { page-break-inside: avoid; margin-bottom: 12pt; }
+  h1, h2, h3, h4 { page-break-after: avoid; }
+
+  /* Print-visible elements */
+  [data-print-only] { display: block !important; }
+}
+
+/* Hidden by default, shown only in print */
+[data-print-only] { display: none; }
+`;
 
 // ==========================================================================
 // Mock Data — tells the story: QRIS users are significantly more engaged
@@ -298,6 +372,20 @@ export default function QrisExperimentPage() {
   const pProfitabilityData = useMemo(() => applyFilterToData(scaleTrendData(profitabilityData, period, "month"), filters), [period, filters]);
   const pRevenuePerUserData = useMemo(() => applyFilterToData(scaleTrendData(revenuePerUserData, period, "month"), filters), [period, filters]);
 
+  // Print styles injection
+  useEffect(() => {
+    const style = document.createElement("style");
+    style.textContent = PRINT_STYLES;
+    document.head.appendChild(style);
+    return () => { document.head.removeChild(style); };
+  }, []);
+
+  const handlePrint = useCallback(() => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => { window.print(); });
+    });
+  }, []);
+
   const handleRefresh = useCallback(async () => {
     await new Promise((r) => setTimeout(r, 800));
   }, []);
@@ -321,12 +409,27 @@ export default function QrisExperimentPage() {
 
       <div className="flex-1 space-y-6 p-6">
 
+        {/* Print-only header with logo and metadata */}
+        <div data-print-only className="mb-4 pb-3 border-b-2 border-gray-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-lg font-bold">Honest Bank — QRIS Experiment Report</h1>
+              <p className="text-xs text-gray-500 mt-0.5">Business Reviews | {periodLabel} | Generated {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
+            </div>
+            <div className="text-right text-xs text-gray-400">
+              <p>Confidential — Internal Use Only</p>
+              <p>Data as of {AS_OF}</p>
+            </div>
+          </div>
+        </div>
+
         <ActiveFiltersBanner />
 
         {/* ============================================================ */}
         {/* SECTION A: Hero Banner */}
         {/* ============================================================ */}
         <div
+          data-print-hero
           className="relative overflow-hidden rounded-2xl p-6"
           style={{
             background: isDark
@@ -340,14 +443,24 @@ export default function QrisExperimentPage() {
 
           <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
             <div className="flex-1">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="flex items-center justify-center h-10 w-10 rounded-xl bg-white/20 backdrop-blur-sm">
-                  <QrCode className="h-5 w-5 text-white" />
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center justify-center h-10 w-10 rounded-xl bg-white/20 backdrop-blur-sm">
+                    <QrCode className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-white">QRIS Experiment Report</h2>
+                    <p className="text-sm text-white/70">Quick Response Code Indonesian Standard &middot; {periodLabel}</p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-white">QRIS Experiment Report</h2>
-                  <p className="text-sm text-white/70">Quick Response Code Indonesian Standard &middot; {periodLabel}</p>
-                </div>
+                <button
+                  onClick={handlePrint}
+                  className="no-print flex items-center gap-2 rounded-lg bg-white/20 backdrop-blur-sm px-4 py-2 text-sm font-medium text-white hover:bg-white/30 transition-colors"
+                  data-print-hide
+                >
+                  <Printer className="h-4 w-4" />
+                  Download PDF
+                </button>
               </div>
 
               <p className="text-sm text-white/80 max-w-2xl leading-relaxed mt-2">
