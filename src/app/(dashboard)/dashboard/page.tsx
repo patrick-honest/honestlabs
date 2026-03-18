@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Header } from "@/components/layout/header";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
-import { Newspaper, TrendingUp, TrendingDown, AlertTriangle, Sparkles, ArrowRight } from "lucide-react";
+import { Newspaper, TrendingUp, TrendingDown, AlertTriangle, Sparkles, ArrowRight, Info, X } from "lucide-react";
 import { usePeriod } from "@/hooks/use-period";
 import { useTheme } from "@/hooks/use-theme";
 import { useFilters } from "@/hooks/use-filters";
@@ -263,6 +263,7 @@ const NEWS = [
 export default function DashboardPage() {
   const tDash = useTranslations("dashboard");
   const tCommon = useTranslations("common");
+  const [showHealthInfo, setShowHealthInfo] = useState(false);
   const { period, periodLabel, dateRange, prevDateRange, comparisonMode, timeRangeMultiplier } = usePeriod();
   const { isDark } = useTheme();
   const { filters } = useFilters();
@@ -345,7 +346,7 @@ export default function DashboardPage() {
         {/* 1. HEALTH SCORE BANNER                                         */}
         {/* ════════════════════════════════════════════════════════════════ */}
         <div className={cn(
-          "rounded-2xl border p-6 bg-gradient-to-r",
+          "rounded-2xl border p-6 bg-gradient-to-r relative",
           isDark ? "border-[var(--border)] bg-[var(--surface)]" : "border-[var(--border)] bg-[var(--surface)] shadow-sm",
           health.score >= 70
             ? isDark ? "from-[#06D6A0]/5 to-transparent" : "from-emerald-50/80 to-white"
@@ -353,6 +354,28 @@ export default function DashboardPage() {
               ? isDark ? "from-[#FFD166]/5 to-transparent" : "from-amber-50/80 to-white"
               : isDark ? "from-[#FF6B6B]/5 to-transparent" : "from-red-50/80 to-white"
         )}>
+          {/* Title row */}
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--text-muted)]">
+                Portfolio Health Score
+              </h3>
+              <p className="text-[10px] text-[var(--text-muted)] mt-0.5">
+                Weighted composite of spend engagement, credit quality, growth, and portfolio size
+              </p>
+            </div>
+            <button
+              onClick={() => setShowHealthInfo(true)}
+              className={cn(
+                "flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium transition-colors",
+                isDark ? "text-[#7C4DFF] hover:bg-[#5B22FF]/15" : "text-[#D00083] hover:bg-[#D00083]/10"
+              )}
+            >
+              <Info className="h-3 w-3" />
+              Learn more
+            </button>
+          </div>
+
           <div className="flex items-start justify-between gap-6">
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-2">
@@ -383,6 +406,72 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
+
+          {/* Learn More popup */}
+          {showHealthInfo && (
+            <div className="absolute inset-0 z-10 rounded-2xl overflow-hidden">
+              <div className={cn(
+                "absolute inset-0 rounded-2xl p-6 overflow-y-auto",
+                isDark ? "bg-[#141226]/98 backdrop-blur-sm" : "bg-white/98 backdrop-blur-sm"
+              )}>
+                <div className="flex items-start justify-between mb-4">
+                  <h3 className={cn("text-sm font-bold", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>
+                    How the Health Score Works
+                  </h3>
+                  <button onClick={() => setShowHealthInfo(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <p className="text-xs text-[var(--text-secondary)] mb-4">
+                  The Health Score is a 0–100 weighted composite that summarizes portfolio performance at a glance. It combines four key dimensions into a single number.
+                </p>
+
+                {/* Score scale */}
+                <div className="flex items-center gap-1 mb-4 rounded-lg overflow-hidden h-3">
+                  <div className="flex-1 bg-red-500 relative"><span className="absolute inset-0 flex items-center justify-center text-[7px] font-bold text-white">0–44</span></div>
+                  <div className="flex-1 bg-amber-400 relative"><span className="absolute inset-0 flex items-center justify-center text-[7px] font-bold text-white">45–69</span></div>
+                  <div className="flex-1 bg-emerald-500 relative"><span className="absolute inset-0 flex items-center justify-center text-[7px] font-bold text-white">70–100</span></div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  {[
+                    { label: "At Risk", range: "0–44", color: "text-red-500", desc: "Multiple KPIs underperforming. Immediate action needed on engagement or risk." },
+                    { label: "Monitor", range: "45–69", color: "text-amber-500", desc: "Mixed signals. Some metrics improving while others need attention." },
+                    { label: "Healthy", range: "70–100", color: "text-emerald-500", desc: "Strong performance across all dimensions. Portfolio growing sustainably." },
+                  ].map((s) => (
+                    <div key={s.label} className={cn("rounded-lg border p-2.5", isDark ? "border-[var(--border)]" : "border-[var(--border)]")}>
+                      <div className={cn("text-xs font-bold", s.color)}>{s.label}</div>
+                      <div className="text-[9px] text-[var(--text-muted)] mb-1">{s.range}</div>
+                      <p className="text-[10px] text-[var(--text-secondary)] leading-tight">{s.desc}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Weight breakdown */}
+                <h4 className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-2">Score Weights</h4>
+                <div className="space-y-1.5">
+                  {[
+                    { label: "Spend Active Rate vs 50% target", weight: "30%", icon: "📊" },
+                    { label: "DPD inverse (lower DPD = higher score)", weight: "25%", icon: "🛡️" },
+                    { label: "Spend growth vs prior period", weight: "25%", icon: "📈" },
+                    { label: "Account growth vs prior period", weight: "20%", icon: "👥" },
+                  ].map((w) => (
+                    <div key={w.label} className="flex items-center gap-2">
+                      <span className="text-xs">{w.icon}</span>
+                      <div className="flex-1">
+                        <div className={cn("h-1.5 rounded-full", isDark ? "bg-[var(--surface-elevated)]" : "bg-gray-100")}>
+                          <div className={cn("h-full rounded-full", isDark ? "bg-[#5B22FF]" : "bg-[#D00083]")} style={{ width: w.weight }} />
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-medium text-[var(--text-secondary)] w-8 text-right">{w.weight}</span>
+                      <span className="text-[10px] text-[var(--text-muted)] flex-1">{w.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ════════════════════════════════════════════════════════════════ */}
