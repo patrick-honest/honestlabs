@@ -461,12 +461,52 @@ export function Header({ title }: HeaderProps) {
           : "border-[var(--border)] bg-[var(--background)]/95"
       )}
     >
-      {/* Main row: title + time controls + filters + settings */}
-      <div className="flex items-center gap-2 px-4 py-1.5">
-        {/* Title */}
+      {/* Row 1: Title + Filters (left-aligned for easy access) */}
+      <div className="flex items-center gap-2 px-4 pt-1.5 pb-0.5">
         <h1 className="text-sm font-semibold text-[var(--text-primary)] shrink-0">{title}</h1>
 
-        {/* ── Unified time range dropdown + date + comparison ── */}
+        {/* Filters toggle */}
+        {hasAnyFilters && (
+          <>
+            <div className="h-4 w-px bg-[var(--border)] shrink-0" />
+            <button
+              onClick={() => setFiltersExpanded((p) => !p)}
+              className={cn(
+                "flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors shrink-0",
+                totalFilters > 0
+                  ? isDark
+                    ? "bg-[#5B22FF]/15 text-[#7C4DFF] border border-[#5B22FF]/30"
+                    : "bg-[#D00083]/10 text-[#D00083] border border-[#D00083]/30"
+                  : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+              )}
+            >
+              <SlidersHorizontal className="h-3 w-3" />
+              <span>{tCommon("filters")}</span>
+              {totalFilters > 0 && (
+                <span className={cn(
+                  "flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[9px] font-bold text-white",
+                  isDark ? "bg-[#5B22FF]" : "bg-[#D00083]"
+                )}>
+                  {totalFilters}
+                </span>
+              )}
+              <ChevronDown className={cn("h-3 w-3 transition-transform", filtersExpanded && "rotate-180")} />
+            </button>
+            {totalFilters > 0 && (
+              <button
+                onClick={() => clearFilters()}
+                className="text-[var(--text-muted)] hover:text-[var(--danger)] shrink-0"
+                aria-label="Reset filters"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Row 2: Time selector + date range + comparison */}
+      <div className="flex items-center gap-2 px-4 pb-1.5">
         <UnifiedTimeSelector
           period={period}
           timeRange={timeRange}
@@ -478,49 +518,6 @@ export function Header({ title }: HeaderProps) {
           onCustomRange={setCustomRange}
           isDark={isDark}
         />
-
-        {/* Spacer */}
-        <div className="flex-1" />
-
-        <div className="h-4 w-px bg-[var(--border)] shrink-0" />
-
-        {/* Filters toggle */}
-        {hasAnyFilters && (
-          <button
-            onClick={() => setFiltersExpanded((p) => !p)}
-            className={cn(
-              "flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors shrink-0",
-              totalFilters > 0
-                ? isDark
-                  ? "bg-[#5B22FF]/15 text-[#7C4DFF] border border-[#5B22FF]/30"
-                  : "bg-[#D00083]/10 text-[#D00083] border border-[#D00083]/30"
-                : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-            )}
-          >
-            <SlidersHorizontal className="h-3 w-3" />
-            <span>{tCommon("filters")}</span>
-            {totalFilters > 0 && (
-              <span className={cn(
-                "flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[9px] font-bold text-white",
-                isDark ? "bg-[#5B22FF]" : "bg-[#D00083]"
-              )}>
-                {totalFilters}
-              </span>
-            )}
-            <ChevronDown className={cn("h-3 w-3 transition-transform", filtersExpanded && "rotate-180")} />
-          </button>
-        )}
-
-        {totalFilters > 0 && (
-          <button
-            onClick={() => clearFilters()}
-            className="text-[var(--text-muted)] hover:text-[var(--danger)] shrink-0"
-            aria-label="Reset filters"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        )}
-
       </div>
 
       {/* Expandable filter panel */}
