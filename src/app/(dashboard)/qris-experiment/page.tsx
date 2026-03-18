@@ -342,6 +342,8 @@ export default function QrisExperimentPage() {
     ? (test.qris_spend_usd / test.total_spend_usd * 100)
     : 0;
 
+  // RPU computed after interchangeTest/Control are defined (see below)
+
   // Interchange projection data
   const { interchangeTest, interchangeControl } = useMemo(() => {
     const rows = apiData?.interchangeProjection;
@@ -351,6 +353,29 @@ export default function QrisExperimentPage() {
       interchangeControl: rows.find((r) => r.grp === "Control") || null,
     };
   }, [apiData]);
+
+  // Revenue per user (interchange + fees + interest, normalized per cohort member)
+  const rpuTest = useMemo(() => {
+    if (!interchangeTest || !apiData?.cohortFinancials?.length) return null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fin = (apiData.cohortFinancials as any[]).find((r: any) => r.grp === 'Test');
+    if (!fin || !test) return null;
+    const txnRevenue = (interchangeTest.non_qris_interchange_idr || 0) + (interchangeTest.qris_interchange_idr || 0);
+    const feeRevenue = (fin.total_fees_idr || 0) + (fin.total_chrg_fee_idr || 0);
+    return Math.round((txnRevenue + feeRevenue) / test.cohort_size);
+  }, [interchangeTest, apiData, test]);
+
+  const rpuControl = useMemo(() => {
+    if (!interchangeControl || !apiData?.cohortFinancials?.length) return null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fin = (apiData.cohortFinancials as any[]).find((r: any) => r.grp === 'Control');
+    if (!fin || !control) return null;
+    const txnRevenue = (interchangeControl.non_qris_interchange_idr || 0) + (interchangeControl.qris_interchange_idr || 0);
+    const feeRevenue = (fin.total_fees_idr || 0) + (fin.total_chrg_fee_idr || 0);
+    return Math.round((txnRevenue + feeRevenue) / control.cohort_size);
+  }, [interchangeControl, apiData, control]);
+
+  const rpuDelta = rpuTest && rpuControl ? ((rpuTest - rpuControl) / rpuControl * 100) : 0;
 
   // Cumulative QRIS spend at QRIS-only merchants
   const qrisOnlySpendCumulative = useMemo(() => {
@@ -442,6 +467,17 @@ export default function QrisExperimentPage() {
                     <p className="text-[11px] font-medium uppercase tracking-wider text-white/50">SAR Lift</p>
                     <p className="text-2xl font-bold text-white">+{(test.sar - control.sar).toFixed(1)}pp</p>
                   </div>
+                  {rpuTest && rpuControl && (
+                    <div>
+                      <p className="text-[11px] font-medium uppercase tracking-wider text-white/50">RPU Delta</p>
+                      <p className={cn("text-2xl font-bold", rpuDelta >= 0 ? "text-[#06D6A0]" : "text-[#FF6B6B]")}>
+                        {rpuDelta >= 0 ? "+" : ""}{rpuDelta.toFixed(1)}%
+                      </p>
+                      <p className="text-[9px] text-white/40">
+                        Test: Rp {(rpuTest / 1000).toFixed(0)}K · Ctrl: Rp {(rpuControl / 1000).toFixed(0)}K
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
