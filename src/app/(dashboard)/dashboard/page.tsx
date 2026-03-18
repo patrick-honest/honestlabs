@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { useTranslations } from "next-intl";
 import { Header } from "@/components/layout/header";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { DashboardLineChart } from "@/components/charts/line-chart";
@@ -258,6 +259,8 @@ const NEWS = [
 // ── Page ────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
+  const tDash = useTranslations("dashboard");
+  const tCommon = useTranslations("common");
   const { period, periodLabel, dateRange, prevDateRange, comparisonMode, timeRangeMultiplier } = usePeriod();
   const { isDark } = useTheme();
   const { filters } = useFilters();
@@ -273,10 +276,10 @@ export default function DashboardPage() {
     // Map API KPIs to our Big 4 dashboard metrics
     const big4Keys = ["eligible_count", "spend_active_rate", "total_spend", "total_delinquent_rate"];
     const big4Labels: Record<string, string> = {
-      eligible_count: "Active Accounts",
-      spend_active_rate: "Spend Active Rate",
-      total_spend: "Total Spend",
-      total_delinquent_rate: "30+ DPD Rate",
+      eligible_count: tDash("activeAccounts"),
+      spend_active_rate: tDash("spendActiveRate"),
+      total_spend: tDash("totalSpend"),
+      total_delinquent_rate: tDash("dpdRate"),
     };
 
     let raw: KpiMetric[];
@@ -289,7 +292,16 @@ export default function DashboardPage() {
         return { metric: key, label: big4Labels[key] ?? key, value: 0, prevValue: null, unit: key.includes("rate") ? "percent" : "count", changePercent: null, direction: "flat" as const };
       });
     } else {
-      raw = generateMockKpis(period, timeRangeMultiplier);
+      const mockLabels: Record<string, string> = {
+        eligible_to_spend: tDash("activeAccounts"),
+        spend_active_rate: tDash("spendActiveRate"),
+        total_spend: tDash("totalSpend"),
+        dpd_30_plus_rate: tDash("dpdRate"),
+      };
+      raw = generateMockKpis(period, timeRangeMultiplier).map((k) => ({
+        ...k,
+        label: mockLabels[k.metric] ?? k.label,
+      }));
     }
 
     if (!hasActiveFilters(filters)) return raw;
@@ -315,14 +327,14 @@ export default function DashboardPage() {
   const alerts = useMemo(() => generateAlerts(kpis, period), [kpis, period]);
 
   const severityConfig = {
-    act: { icon: AlertTriangle, label: "Act Now", bg: isDark ? "bg-red-500/10 border-red-500/30" : "bg-red-50 border-red-200", text: isDark ? "text-[#FF6B6B]" : "text-red-700" },
-    watch: { icon: AlertTriangle, label: "Watch", bg: isDark ? "bg-amber-500/10 border-amber-500/30" : "bg-amber-50 border-amber-200", text: isDark ? "text-[#FFD166]" : "text-amber-700" },
-    highlight: { icon: Sparkles, label: "Highlight", bg: isDark ? "bg-emerald-500/10 border-emerald-500/30" : "bg-emerald-50 border-emerald-200", text: isDark ? "text-[#06D6A0]" : "text-emerald-700" },
+    act: { icon: AlertTriangle, label: tDash("actNow"), bg: isDark ? "bg-red-500/10 border-red-500/30" : "bg-red-50 border-red-200", text: isDark ? "text-[#FF6B6B]" : "text-red-700" },
+    watch: { icon: AlertTriangle, label: tDash("watch"), bg: isDark ? "bg-amber-500/10 border-amber-500/30" : "bg-amber-50 border-amber-200", text: isDark ? "text-[#FFD166]" : "text-amber-700" },
+    highlight: { icon: Sparkles, label: tDash("investorHighlight"), bg: isDark ? "bg-emerald-500/10 border-emerald-500/30" : "bg-emerald-50 border-emerald-200", text: isDark ? "text-[#06D6A0]" : "text-emerald-700" },
   };
 
   return (
     <div className="flex flex-col">
-      <Header title="Dashboard" />
+      <Header title={tDash("title")} />
 
       <div className="flex-1 space-y-5 p-6">
         <ActiveFiltersBanner />
@@ -440,7 +452,7 @@ export default function DashboardPage() {
             isDark ? "border-[var(--border)] bg-[var(--surface)]" : "border-[var(--border)] bg-[var(--surface)] shadow-sm"
           )}>
             <div className="flex items-center justify-between mb-1">
-              <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--text-muted)]">Growth Story</h3>
+              <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--text-muted)]">{tDash("growthStory")}</h3>
               <Link href="/deep-dive/spend" className={cn("text-[10px] font-medium flex items-center gap-0.5", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>
                 Deep dive <ArrowRight className="h-2.5 w-2.5" />
               </Link>
@@ -465,7 +477,7 @@ export default function DashboardPage() {
             isDark ? "border-[var(--border)] bg-[var(--surface)]" : "border-[var(--border)] bg-[var(--surface)] shadow-sm"
           )}>
             <div className="flex items-center justify-between mb-1">
-              <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--text-muted)]">Risk Story</h3>
+              <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--text-muted)]">{tDash("riskStory")}</h3>
               <Link href="/deep-dive/risk" className={cn("text-[10px] font-medium flex items-center gap-0.5", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>
                 Deep dive <ArrowRight className="h-2.5 w-2.5" />
               </Link>
@@ -487,7 +499,7 @@ export default function DashboardPage() {
         {/* 5. INVESTOR SNAPSHOT                                            */}
         {/* ════════════════════════════════════════════════════════════════ */}
         <div>
-          <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--text-muted)] mb-3">Investor Highlights</h3>
+          <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--text-muted)] mb-3">{tDash("investorSnapshot")}</h3>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {INVESTOR_HIGHLIGHTS.map((h, i) => (
               <div key={i} className={cn(

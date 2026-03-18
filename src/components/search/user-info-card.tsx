@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { ShieldCheck, CreditCard, Truck, Headphones, ChevronDown, ChevronUp, Banknote, AlertTriangle, Copy, Check, ExternalLink, Receipt } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
+import { useTranslations } from "next-intl";
 import type { UserSearchResult, FreshworksTicket } from "@/types/search";
 
 interface UserInfoCardProps {
@@ -63,8 +64,9 @@ interface FieldProps {
 }
 
 function Field({ label, value, highlight, mono }: FieldProps) {
+  const tCommon = useTranslations("common");
   const isEmpty = value == null || value === "" || value === "--";
-  const displayValue = isEmpty ? "Data not available" : value;
+  const displayValue = isEmpty ? tCommon("dataNotAvailable") : value;
   const hasCopyable = !isEmpty;
 
   return (
@@ -133,16 +135,18 @@ function daysBetween(from: string, to: string): number {
 }
 
 function TimelineView({ user, isDark }: { user: UserSearchResult; isDark: boolean }) {
+  const tSearch = useTranslations("search");
+  const tCommon = useTranslations("common");
   const decisionDate = user.decision_date;
 
   // Build milestones in logical onboarding order
   const milestones: TimelineMilestone[] = [
-    { label: "Decision", date: user.decision_date },
-    { label: "CMA Accepted", date: user.cma_accepted_date },
-    { label: "PIN Set", date: user.pin_set_date },
-    { label: "Videocall Verified", date: user.videocall_verified_date },
-    { label: "Card Activated", date: user.card_activation_date },
-    { label: "Card Delivered", date: user.delivery_date },
+    { label: tSearch("decisionDate"), date: user.decision_date },
+    { label: tSearch("cmaAccepted"), date: user.cma_accepted_date },
+    { label: tSearch("pinSetDate"), date: user.pin_set_date },
+    { label: tSearch("videocallVerified"), date: user.videocall_verified_date },
+    { label: tSearch("cardActivation"), date: user.card_activation_date },
+    { label: tSearch("deliveryDate"), date: user.delivery_date },
   ];
 
   // Sort by date (nulls at the end)
@@ -158,7 +162,7 @@ function TimelineView({ user, isDark }: { user: UserSearchResult; isDark: boolea
       {sorted.map((ms, i) => {
         const hasDate = ms.date != null;
         const days = hasDate && decisionDate ? daysBetween(decisionDate, ms.date!) : null;
-        const isFirst = ms.label === "Decision";
+        const isFirst = ms.label === tSearch("decisionDate");
         const isLast = i === sorted.length - 1;
         const accentColor = isDark ? "#7C4DFF" : "#D00083";
 
@@ -209,12 +213,12 @@ function TimelineView({ user, isDark }: { user: UserSearchResult; isDark: boolea
                       "text-[10px] font-medium rounded-full px-1.5 py-0.5",
                       isDark ? "bg-[#5B22FF]/10 text-[#7C4DFF]" : "bg-[#D00083]/8 text-[#D00083]"
                     )}>
-                      {days === 0 ? "same day" : `+${days}d`}
+                      {days === 0 ? tSearch("sameDay") : `+${days}d`}
                     </span>
                   )}
                 </>
               ) : (
-                <span className="text-xs italic text-[var(--text-muted)]">Data not available</span>
+                <span className="text-xs italic text-[var(--text-muted)]">{tCommon("dataNotAvailable")}</span>
               )}
             </div>
           </div>
@@ -288,6 +292,8 @@ function TicketTable({ tickets, emptyMessage }: { tickets: FreshworksTicket[]; e
 
 export function UserInfoCard({ user }: UserInfoCardProps) {
   const { isDark } = useTheme();
+  const tSearch = useTranslations("search");
+  const tCommon = useTranslations("common");
   const [showTicketHistory, setShowTicketHistory] = useState(false);
   const dpdHighlight = user.current_dpd !== null && user.current_dpd > 0;
 
@@ -315,7 +321,7 @@ export function UserInfoCard({ user }: UserInfoCardProps) {
         <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3">
           <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
           <div className="text-xs">
-            <span className="font-semibold text-red-400">Spending Blocked</span>
+            <span className="font-semibold text-red-400">{tSearch("spendingBlocked")}</span>
             <span className="text-[var(--text-secondary)] ml-2">
               {[
                 user.card_status && user.card_status !== "Verified / Active" ? `Card: ${user.card_status}` : null,
@@ -329,19 +335,19 @@ export function UserInfoCard({ user }: UserInfoCardProps) {
 
       {/* Identity Section */}
       <div className="mb-5">
-        <SectionHeader icon={<CreditCard className="h-3 w-3" />} title="Identity" />
+        <SectionHeader icon={<CreditCard className="h-3 w-3" />} title={tSearch("identity")} />
         <div className="grid grid-cols-2 gap-x-8 gap-y-4 md:grid-cols-3 lg:grid-cols-4">
-          <Field label="User ID" value={user.user_id} mono />
-          <Field label="LOC Account" value={user.loc_acct} mono />
+          <Field label={tSearch("userId")} value={user.user_id} mono />
+          <Field label={tSearch("locAcct")} value={user.loc_acct} mono />
           <Field label="CRN" value={user.prin_crn} mono />
           <Field label="Current URN" value={user.current_urn ? `${user.current_urn}${user.current_urn_date ? ` (${formatDate(user.current_urn_date)})` : ""}` : null} mono />
-          <Field label="Card Type" value={user.card_type} />
+          <Field label={tSearch("cardType")} value={user.card_type} />
           <Field label="Card Program" value={user.card_pgm} mono />
           <Field label="Product Type" value={user.product_type} />
           <Field label="Card Brand" value={user.card_brand} />
-          <Field label="Credit Limit" value={formatCurrency(user.credit_limit)} />
+          <Field label={tSearch("creditLimit")} value={formatCurrency(user.credit_limit)} />
           <div>
-            <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)] block mb-0.5">MoEngage</span>
+            <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)] block mb-0.5">{tSearch("moengageId")}</span>
             <a
               href={`https://dashboard-01.moengage.com/v4/users/${user.user_id}`}
               target="_blank"
@@ -378,41 +384,41 @@ export function UserInfoCard({ user }: UserInfoCardProps) {
 
       {/* Timeline Section — chronological with days since decision */}
       <div className="mb-5 border-t border-[var(--border)] pt-4">
-        <SectionHeader icon={null} title="Timeline" />
+        <SectionHeader icon={null} title={tSearch("timeline")} />
         <TimelineView user={user} isDark={isDark} />
       </div>
 
       {/* Account Snapshot Section */}
       <div className="mb-5 border-t border-[var(--border)] pt-4">
-        <SectionHeader icon={<Banknote className="h-3 w-3" />} title="Account Snapshot" />
+        <SectionHeader icon={<Banknote className="h-3 w-3" />} title={tSearch("accountSnapshot")} />
         <div className="grid grid-cols-2 gap-x-8 gap-y-4 md:grid-cols-3 lg:grid-cols-4">
-          <Field label="Account Status" value={user.account_status} />
-          <Field label="Cycle Date" value={formatDate(user.cycle_date)} />
+          <Field label={tSearch("accountStatus")} value={user.account_status} />
+          <Field label={tSearch("cycleDate")} value={formatDate(user.cycle_date)} />
           <Field label="Next Due Date" value={formatDate(user.next_due_date)} />
           <Field label="Current Min Due" value={formatCurrency(user.current_min_due)} />
-          <Field label="Current DPD" value={user.current_dpd !== null ? String(user.current_dpd) : null} highlight={dpdHighlight} />
-          <Field label="Collections Status" value={user.collections_status} highlight={user.collections_status !== null && user.collections_status !== "Current" && user.collections_status !== "No collections"} />
-          <Field label="Risk Category" value={user.credit_risk_category} />
-          <Field label="CMA Version" value={user.cma_app_version} mono />
-          <Field label="Savings Account" value={user.savings_account_number ?? "Not Enrolled"} mono={!!user.savings_account_number} />
+          <Field label={tSearch("currentDpd")} value={user.current_dpd !== null ? String(user.current_dpd) : null} highlight={dpdHighlight} />
+          <Field label={tSearch("collectionsStatus")} value={user.collections_status} highlight={user.collections_status !== null && user.collections_status !== "Current" && user.collections_status !== "No collections"} />
+          <Field label={tSearch("creditRiskCategory")} value={user.credit_risk_category} />
+          <Field label={tSearch("cmaVersion")} value={user.cma_app_version} mono />
+          <Field label={tSearch("savingsAccount")} value={user.savings_account_number ?? tSearch("notEnrolled")} mono={!!user.savings_account_number} />
         </div>
       </div>
 
       {/* Delivery Section */}
       {(user.awb_number || user.awb_status) && (
         <div className="mb-5 border-t border-[var(--border)] pt-4">
-          <SectionHeader icon={<Truck className="h-3 w-3" />} title="Card Delivery" />
+          <SectionHeader icon={<Truck className="h-3 w-3" />} title={tSearch("cardDelivery")} />
           <div className="grid grid-cols-2 gap-x-8 gap-y-4 md:grid-cols-3 lg:grid-cols-4">
-            <Field label="AWB Number" value={user.awb_number} mono />
+            <Field label={tSearch("awbNumber")} value={user.awb_number} mono />
             <Field label="Delivery Status" value={user.awb_status?.replace(/_/g, " ")} />
-            <Field label="Delivered" value={formatDate(user.delivery_date)} />
+            <Field label={tSearch("deliveryDate")} value={formatDate(user.delivery_date)} />
           </div>
         </div>
       )}
 
       {/* Repayment History Section */}
       <div className="mb-5 border-t border-[var(--border)] pt-4">
-        <SectionHeader icon={<Receipt className="h-3 w-3" />} title="Payment History" count={user.repayment_history?.length ?? 0} />
+        <SectionHeader icon={<Receipt className="h-3 w-3" />} title={tSearch("paymentHistory")} count={user.repayment_history?.length ?? 0} />
         {user.repayment_history && user.repayment_history.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -457,14 +463,14 @@ export function UserInfoCard({ user }: UserInfoCardProps) {
             </table>
           </div>
         ) : (
-          <p className="text-xs text-[var(--text-muted)] italic mt-2">No payment history found</p>
+          <p className="text-xs text-[var(--text-muted)] italic mt-2">{tSearch("noPaymentHistory")}</p>
         )}
       </div>
 
       {/* Freshworks Tickets Section */}
       <div className="border-t border-[var(--border)] pt-4">
-        <SectionHeader icon={<Headphones className="h-3 w-3" />} title="Open Tickets" count={user.open_tickets.length} />
-        <TicketTable tickets={user.open_tickets} emptyMessage="No open tickets" />
+        <SectionHeader icon={<Headphones className="h-3 w-3" />} title={tSearch("openTickets")} count={user.open_tickets.length} />
+        <TicketTable tickets={user.open_tickets} emptyMessage={tSearch("noOpenTickets")} />
 
         {/* Ticket history (collapsible) */}
         {user.ticket_history.length > 0 && (
@@ -473,12 +479,12 @@ export function UserInfoCard({ user }: UserInfoCardProps) {
               onClick={() => setShowTicketHistory(!showTicketHistory)}
               className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
             >
-              Past Tickets ({user.ticket_history.length})
+              {tSearch("pastTickets")} ({user.ticket_history.length})
               {showTicketHistory ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
             </button>
             {showTicketHistory && (
               <div className="mt-2">
-                <TicketTable tickets={user.ticket_history} emptyMessage="No ticket history" />
+                <TicketTable tickets={user.ticket_history} emptyMessage={tSearch("noTicketHistory")} />
               </div>
             )}
           </div>

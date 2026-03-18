@@ -4,6 +4,7 @@ import { Header } from "@/components/layout/header";
 import { UserSearchForm } from "@/components/search/user-search-form";
 import { UserInfoCard } from "@/components/search/user-info-card";
 import { useTheme } from "@/hooks/use-theme";
+import { useTranslations } from "next-intl";
 import { useSearchState } from "@/hooks/use-search-state";
 import { IS_STATIC_EXPORT } from "@/lib/static-mode";
 import { cn } from "@/lib/utils";
@@ -34,22 +35,23 @@ export default function SearchPage() {
     savedUsers, saveCurrentUser, removeSavedUser, loadSavedUser,
   } = useSearchState();
   const { isDark } = useTheme();
+  const tSearch = useTranslations("search");
 
   const isCurrentSaved = result ? savedUsers.some((u) => u.user_id === result.user_id) : false;
 
   return (
     <div className="flex flex-col">
-      <Header title="User Search" />
+      <Header title={tSearch("title")} />
 
       <div className="flex-1 space-y-6 p-6">
         <div>
-          <h2 className="text-2xl font-bold text-[var(--text-primary)]">User Search</h2>
+          <h2 className="text-2xl font-bold text-[var(--text-primary)]">{tSearch("title")}</h2>
           <p className="mt-1 text-sm text-[var(--text-muted)]">
-            Look up a cardholder by ID, URN, CRN, LOC, or application ID
+            {tSearch("subtitle")}
           </p>
           <div className="mt-2 flex items-center gap-1.5 text-[10px] text-[var(--text-muted)]">
             <AlertCircle className="h-3 w-3" />
-            <span>Phone and email can be used for search but are never stored or displayed in results (PII protection)</span>
+            <span>{tSearch("piiNote")}</span>
           </div>
         </div>
 
@@ -182,7 +184,7 @@ export default function SearchPage() {
                   )}
                 >
                   <BookmarkPlus className="h-3.5 w-3.5" />
-                  <span>Save Result</span>
+                  <span>{tSearch("saveResult")}</span>
                 </button>
               ) : (
                 <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
