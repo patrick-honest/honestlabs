@@ -459,34 +459,25 @@ export function Sidebar() {
           isDark ? "border-[var(--border)]" : "border-[var(--border)]"
         )}
       >
-        {/* Collapse toggle */}
-        <div className={cn("px-3 pt-2", collapsed && "flex justify-center px-2")}>
+        {/* Collapse + Settings toggles — all on one row, uniform h-7 */}
+        <div className={cn(
+          "flex items-center gap-1 px-3 py-2",
+          collapsed && "flex-col px-2"
+        )}>
+          {/* Collapse */}
           <button
             onClick={toggleCollapse}
             className={cn(
-              "flex items-center gap-2 rounded-lg py-1.5 text-xs font-medium text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]",
-              collapsed ? "justify-center w-9 h-9 px-0" : "w-full px-3"
+              "flex h-7 items-center justify-center rounded-md transition-colors shrink-0",
+              "text-[var(--text-muted)] hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]",
+              collapsed ? "w-7" : "w-7"
             )}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            {collapsed ? (
-              <PanelLeftOpen className="h-4 w-4 shrink-0" />
-            ) : (
-              <>
-                <PanelLeftClose className="h-4 w-4 shrink-0" />
-                <span>{tNav("collapse")}</span>
-              </>
-            )}
+            {collapsed ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
           </button>
-        </div>
 
-        {/* Settings toggles: currency, theme, language — left-justified, uniform height */}
-        <div className={cn(
-          "flex items-center gap-1 border-t py-2",
-          "border-[var(--border)]",
-          collapsed ? "flex-col px-2" : "px-3"
-        )}>
-          {/* Currency toggle */}
+          {/* Currency */}
           <button
             onClick={toggleCurrency}
             className={cn(
@@ -501,13 +492,11 @@ export function Sidebar() {
             </span>
             {!collapsed && <span className="text-[var(--border)]">/</span>}
             {!collapsed && (
-              <span className={cn(currency === "USD" && (isDark ? "text-[#7C4DFF] font-bold" : "text-[#D00083] font-bold"))}>
-                USD
-              </span>
+              <span className={cn(currency === "USD" && (isDark ? "text-[#7C4DFF] font-bold" : "text-[#D00083] font-bold"))}>USD</span>
             )}
           </button>
 
-          {/* Theme toggle */}
+          {/* Theme */}
           <button
             onClick={toggleTheme}
             className={cn(
@@ -521,7 +510,7 @@ export function Sidebar() {
             {isDark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
           </button>
 
-          {/* Language selector */}
+          {/* Language */}
           {!collapsed ? (
             <div className="relative">
               <select
@@ -545,10 +534,7 @@ export function Sidebar() {
                 const next = locales[(locales.indexOf(locale) + 1) % locales.length];
                 setLocale(next);
               }}
-              className={cn(
-                "flex h-7 w-7 items-center justify-center rounded-md transition-colors text-[9px] font-bold",
-                "bg-[var(--surface-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-              )}
+              className="flex h-7 w-7 items-center justify-center rounded-md transition-colors text-[9px] font-bold bg-[var(--surface-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               title={`Language: ${localeLabels[locale]}`}
             >
               {localeLabels[locale]}
