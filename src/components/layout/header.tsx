@@ -20,10 +20,11 @@ import {
   RISK_CATEGORY_OPTIONS,
   DECISIONING_MODEL_OPTIONS,
   type FilterSelections,
+  type SavedFilterPreset,
 } from "@/hooks/use-filters";
 import { HeaderFilterDropdown } from "@/components/filters/header-filter-dropdown";
 import { getVisibleFilters, isFilterVisible, type FilterKey } from "@/lib/page-filter-config";
-import { Sun, Moon, Calendar, SlidersHorizontal, ChevronDown, X } from "lucide-react";
+import { Sun, Moon, Calendar, SlidersHorizontal, ChevronDown, X, Save, Bookmark, Trash2, Pencil, Check } from "lucide-react";
 import type { Cycle } from "@/types/reports";
 // Types already imported above from use-period
 
@@ -223,8 +224,15 @@ export function Header({ title }: HeaderProps) {
     setPeriodAndRange, comparisonMode, setComparisonMode,
   } = usePeriod();
   const { isDark, toggleTheme } = useTheme();
-  const { filters, toggleFilterValue, clearFilter, clearFilters, activeFilterCount } = useFilters();
+  const {
+    filters, toggleFilterValue, clearFilter, clearFilters, activeFilterCount,
+    savedPresets, savePreset, loadPreset, renamePreset, deletePreset, suggestPresetName,
+  } = useFilters();
   const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [presetName, setPresetName] = useState("");
+  const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
 
   // Resolve which filters are visible on this page
   const visibleKeys = getVisibleFilters(pathname);
@@ -364,6 +372,7 @@ export function Header({ title }: HeaderProps) {
           "border-t px-4 py-2",
           isDark ? "border-[var(--border)] bg-[var(--surface)]/50" : "border-[var(--border)] bg-[var(--surface)]/50"
         )}>
+          {/* Filter dropdowns */}
           <div className="flex items-start gap-4">
             {visibleGroups.map((group, gi) => (
               <div key={group.label} className="flex items-center gap-1.5">
@@ -390,6 +399,142 @@ export function Header({ title }: HeaderProps) {
                 )}
               </div>
             ))}
+          </div>
+
+          {/* Saved filter presets bar */}
+          <div className="flex items-center gap-2 mt-2 pt-2 border-t border-[var(--border)]/50">
+            <Bookmark className={cn("h-3 w-3 shrink-0", isDark ? "text-[#7C4DFF]/50" : "text-[#D00083]/50")} />
+
+            {/* Saved preset chips */}
+            {savedPresets.map((preset) => (
+              <div key={preset.id} className="flex items-center gap-0.5">
+                {editingPresetId === preset.id ? (
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="text"
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          renamePreset(preset.id, editingName);
+                          setEditingPresetId(null);
+                        } else if (e.key === "Escape") {
+                          setEditingPresetId(null);
+                        }
+                      }}
+                      className={cn(
+                        "rounded border px-1.5 py-0.5 text-[10px] w-28 outline-none",
+                        isDark ? "border-[#5B22FF]/30 bg-[#141226] text-[var(--text-primary)]" : "border-[#D00083]/30 bg-white text-[var(--text-primary)]"
+                      )}
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => { renamePreset(preset.id, editingName); setEditingPresetId(null); }}
+                      className="text-[var(--success)] hover:opacity-80"
+                    >
+                      <Check className="h-3 w-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => loadPreset(preset.id)}
+                    className={cn(
+                      "rounded-md px-2 py-0.5 text-[10px] font-medium transition-colors",
+                      isDark
+                        ? "bg-[var(--surface-elevated)] text-[var(--text-secondary)] hover:bg-[#5B22FF]/15 hover:text-[#7C4DFF]"
+                        : "bg-[var(--surface-elevated)] text-[var(--text-secondary)] hover:bg-[#D00083]/10 hover:text-[#D00083]"
+                    )}
+                  >
+                    {preset.name}
+                  </button>
+                )}
+                {editingPresetId !== preset.id && (
+                  <>
+                    <button
+                      onClick={() => { setEditingPresetId(preset.id); setEditingName(preset.name); }}
+                      className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] opacity-0 group-hover:opacity-100"
+                      title="Rename"
+                    >
+                      <Pencil className="h-2.5 w-2.5" />
+                    </button>
+                    <button
+                      onClick={() => deletePreset(preset.id)}
+                      className="text-[var(--text-muted)] hover:text-[var(--danger)]"
+                      title="Delete preset"
+                    >
+                      <Trash2 className="h-2.5 w-2.5" />
+                    </button>
+                  </>
+                )}
+              </div>
+            ))}
+
+            {/* Save current as preset */}
+            {totalFilters > 0 && !showSaveDialog && (
+              <button
+                onClick={() => { setPresetName(suggestPresetName()); setShowSaveDialog(true); }}
+                className={cn(
+                  "flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-medium transition-colors",
+                  isDark
+                    ? "text-[#7C4DFF] hover:bg-[#5B22FF]/15 border border-dashed border-[#5B22FF]/30"
+                    : "text-[#D00083] hover:bg-[#D00083]/10 border border-dashed border-[#D00083]/30"
+                )}
+              >
+                <Save className="h-2.5 w-2.5" />
+                Save filters
+              </button>
+            )}
+
+            {/* Save dialog inline */}
+            {showSaveDialog && (
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={presetName}
+                  onChange={(e) => setPresetName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && presetName.trim()) {
+                      savePreset(presetName.trim());
+                      setShowSaveDialog(false);
+                      setPresetName("");
+                    } else if (e.key === "Escape") {
+                      setShowSaveDialog(false);
+                    }
+                  }}
+                  placeholder="Preset name…"
+                  className={cn(
+                    "rounded border px-2 py-0.5 text-[10px] w-36 outline-none",
+                    isDark ? "border-[#5B22FF]/30 bg-[#141226] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]" : "border-[#D00083]/30 bg-white text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
+                  )}
+                  autoFocus
+                />
+                <button
+                  onClick={() => {
+                    if (presetName.trim()) {
+                      savePreset(presetName.trim());
+                      setShowSaveDialog(false);
+                      setPresetName("");
+                    }
+                  }}
+                  className={cn(
+                    "rounded px-2 py-0.5 text-[10px] font-medium text-white",
+                    isDark ? "bg-[#5B22FF]" : "bg-[#D00083]"
+                  )}
+                >
+                  Save
+                </button>
+                <button
+                  onClick={() => setShowSaveDialog(false)}
+                  className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+
+            {savedPresets.length === 0 && totalFilters === 0 && (
+              <span className="text-[10px] text-[var(--text-muted)] italic">Apply filters, then save as a preset for quick recall</span>
+            )}
           </div>
         </div>
       )}

@@ -51,9 +51,10 @@ export async function GET(request: NextRequest) {
 
     // Build cache key from field + query
     const cacheKeyStr = `search:${field}:${query}`;
+    const forceRefresh = searchParams.get("refresh") === "true";
 
-    // Check cache first (2h TTL for user lookups)
-    const cached = getCached<{ user: unknown }>(cacheKeyStr);
+    // Check cache first (2h TTL for user lookups) — skip if refresh=true
+    const cached = !forceRefresh ? getCached<{ user: unknown }>(cacheKeyStr) : null;
     if (cached) {
       const response = NextResponse.json({
         user: cached.data.user,

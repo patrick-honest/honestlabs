@@ -5,7 +5,7 @@ import useSWR from "swr";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
-import { usePeriod } from "@/hooks/use-period";
+import { usePeriod, useDateParams } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
 import { useTheme } from "@/hooks/use-theme";
 import { getPeriodRange } from "@/lib/period-data";
@@ -58,13 +58,13 @@ const MOCK_AUTO_ACTIVATION = 360000;
 
 export default function CardsOverviewPage() {
   const { period, dateRange } = usePeriod();
+  const { dateParams } = useDateParams();
   const { isDark } = useTheme();
   const { filters } = useFilters();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
-  const endStr = dateRange.end.toISOString().slice(0, 10);
   const { data: apiData } = useSWR(
-    `/api/cards-overview?startDate=2025-01-01&endDate=${endStr}`,
+    `/api/cards-overview?${dateParams}`,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 300_000 },
   );

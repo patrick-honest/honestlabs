@@ -5,7 +5,7 @@ import useSWR from "swr";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
-import { usePeriod } from "@/hooks/use-period";
+import { usePeriod, useDateParams } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
 import { useTheme } from "@/hooks/use-theme";
 import { getPeriodRange } from "@/lib/period-data";
@@ -111,14 +111,14 @@ const mockIncome = [
 
 export default function UsersDeepDivePage() {
   const { period, dateRange } = usePeriod();
+  const { dateParams } = useDateParams();
   const { filters } = useFilters();
   const { isDark } = useTheme();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
-  // Fetch real data from BigQuery
-  const endStr = dateRange.end.toISOString().slice(0, 10);
+  // Fetch real data from BigQuery — dateParams changes when user adjusts time selector
   const { data: apiData } = useSWR(
-    `/api/users-overview?startDate=2025-01-01&endDate=${endStr}`,
+    `/api/users-overview?${dateParams}`,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 300_000 },
   );

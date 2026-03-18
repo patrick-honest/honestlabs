@@ -10,7 +10,7 @@ import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
-import { usePeriod } from "@/hooks/use-period";
+import { usePeriod, useDateParams } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
 import { getPeriodRange, scaleTrendData, scaleMetricValue, getPeriodInsightLabels } from "@/lib/period-data";
 import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
@@ -157,15 +157,14 @@ const actionItems: ActionItem[] = [
 
 export default function ChannelQualityPage() {
   const { period, dateRange, timeRangeMultiplier } = usePeriod();
+  const { dateParams } = useDateParams();
   const { isDark } = useTheme();
   const { filters } = useFilters();
   const range = getPeriodRange(period);
 
-  // Fetch real data from BigQuery
-  const startStr = dateRange.start.toISOString().slice(0, 10);
-  const endStr = dateRange.end.toISOString().slice(0, 10);
+  // Fetch real data from BigQuery — dateParams changes when user adjusts time selector
   const { data: apiData } = useSWR(
-    `/api/channel-quality?startDate=2025-01-01&endDate=${endStr}`,
+    `/api/channel-quality?${dateParams}`,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 300_000 },
   );

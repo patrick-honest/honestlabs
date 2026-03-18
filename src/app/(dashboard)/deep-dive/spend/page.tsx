@@ -10,7 +10,7 @@ import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { DashboardAreaChart } from "@/components/charts/area-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
-import { usePeriod } from "@/hooks/use-period";
+import { usePeriod, useDateParams } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
 import { getPeriodRange, scaleTrendData, scaleMetricValue, getPeriodInsightLabels } from "@/lib/period-data";
 import { applyFilterToData, applyFilterToMetric, hasActiveFilters } from "@/lib/filter-utils";
@@ -242,6 +242,7 @@ const sampleBnplUsageInsights: ChartInsight[] = [
 
 export default function SpendPage() {
   const { period, periodLabel, timeRangeMultiplier } = usePeriod();
+  const { dateParams } = useDateParams();
   const { filters } = useFilters();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
@@ -308,8 +309,9 @@ export default function SpendPage() {
   }, []);
 
   // --- Spend Analysis SWR (with mock fallback) ---
+  // dateParams changes when the user adjusts the time selector → triggers SWR refetch
   const { data: spendAnalysis } = useSWR(
-    "/api/spend-analysis?startDate=2025-10-01&endDate=2026-03-15",
+    `/api/spend-analysis?${dateParams}`,
     fetcher,
     { fallbackData: null, revalidateOnFocus: false },
   );

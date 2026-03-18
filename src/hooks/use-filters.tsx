@@ -24,6 +24,12 @@ export interface FilterSelections {
   decisioningModel: string[];
 }
 
+export interface SavedFilterPreset {
+  id: string;
+  name: string;
+  filters: FilterSelections;
+}
+
 interface FiltersContextValue {
   filters: FilterSelections;
   setFilter: (key: keyof FilterSelections, values: string[]) => void;
@@ -31,32 +37,21 @@ interface FiltersContextValue {
   clearFilters: () => void;
   clearFilter: (key: keyof FilterSelections) => void;
   activeFilterCount: number;
+  // Saved presets
+  savedPresets: SavedFilterPreset[];
+  savePreset: (name: string) => string; // returns id
+  loadPreset: (id: string) => void;
+  renamePreset: (id: string, name: string) => void;
+  deletePreset: (id: string) => void;
+  suggestPresetName: () => string;
 }
 
 /**
- * Default filter state.
- *
- * productType defaults to ["regular"] so RP1 and Registration Fee
- * users are excluded from metrics by default. Users can toggle them
- * on via the Product filter. An empty array means "show all" for
- * every other dimension.
+ * Default filter state — all empty (show all data).
+ * Users can apply filters via the header panel and save
+ * named filter combinations for quick recall.
  */
 const DEFAULT_FILTERS: FilterSelections = {
-  cardType: [],
-  productType: ["regular"], // Regular only by default; RP1 + Reg Fee excluded
-  cohort: [],
-  transactionType: [],
-  transactionChannel: [],
-  transactionStatus: [],
-  merchantCategory: [],
-  amountRange: [],
-  recurringType: [],
-  riskCategory: [],
-  decisioningModel: [],
-};
-
-/** Fully empty filters (used when clearing all) */
-const EMPTY_FILTERS: FilterSelections = {
   cardType: [],
   productType: [],
   cohort: [],
@@ -69,6 +64,9 @@ const EMPTY_FILTERS: FilterSelections = {
   riskCategory: [],
   decisioningModel: [],
 };
+
+/** Alias for clarity — both are the same now */
+const EMPTY_FILTERS = DEFAULT_FILTERS;
 
 const FiltersContext = createContext<FiltersContextValue | undefined>(undefined);
 
@@ -103,9 +101,8 @@ export const CARD_TYPE_OPTIONS = [
  *   Identified by: is_account_opening_fee_applicable = TRUE
  *   Has a standard credit line but user paid a fee to open the account.
  *
- * By default, RP1 and Registration Fee are UNSELECTED so that dashboard
- * metrics reflect the core Regular credit card portfolio. Users can toggle
- * them on via the Product filter to see the full picture.
+ * By default, all product types are shown (no filters applied).
+ * Users can select specific product types via the Product filter.
  */
 export const PRODUCT_TYPE_OPTIONS = [
   { value: "regular", label: "Regular" },
@@ -113,8 +110,8 @@ export const PRODUCT_TYPE_OPTIONS = [
   { value: "registration_fee", label: "Registration Fee" },
 ] as const;
 
-/** Product types selected by default (Regular only — RP1 and Reg Fee excluded) */
-export const DEFAULT_PRODUCT_TYPES: string[] = ["regular"];
+/** Product types selected by default (empty = all shown) */
+export const DEFAULT_PRODUCT_TYPES: string[] = [];
 
 // ── Transaction filter options ──────────────────────────────────────
 
@@ -240,6 +237,7 @@ function generateWeeklyCohorts(): { value: string; label: string }[] {
 export const COHORT_OPTIONS = generateWeeklyCohorts();
 
 const FILTERS_STORAGE_KEY = "honest_filter_prefs";
+const PRESETS_STORAGE_KEY = "honest_filter_presets";
 
 function loadFilterPrefs(): FilterSelections | null {
   if (typeof window === "undefined") return null;
@@ -261,9 +259,58 @@ function saveFilterPrefs(filters: FilterSelections) {
   catch { /* ignore */ }
 }
 
+function loadPresets(): SavedFilterPreset[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(PRESETS_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function savePresets(presets: SavedFilterPreset[]) {
+  if (typeof window === "undefined") return;
+  try { localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(presets)); }
+  catch { /* ignore */ }
+}
+
+/** Generate a suggested name based on the active filter selections */
+function generatePresetName(filters: FilterSelections): string {
+  const parts: string[] = [];
+  if (filters.productType.length > 0) {
+    const labels = filters.productType.map((v) => {
+      if (v === "regular") return "Regular";
+      if (v === "rp1") return "RP1";
+      if (v === "registration_fee") return "Reg Fee";
+      return v;
+    });
+    parts.push(labels.join("+"));
+  }
+  if (filters.cardType.length > 0) {
+    parts.push(`Card:${filters.cardType.length}`);
+  }
+  if (filters.riskCategory.length > 0) {
+    parts.push(`Risk:${filters.riskCategory.join(",")}`);
+  }
+  if (filters.transactionChannel.length > 0) {
+    parts.push(`Ch:${filters.transactionChannel.length}`);
+  }
+  if (filters.merchantCategory.length > 0) {
+    parts.push(`MCC:${filters.merchantCategory.length}`);
+  }
+  if (filters.cohort.length > 0) {
+    parts.push("Cohort");
+  }
+  const total = Object.values(filters).reduce((s, a) => s + a.length, 0);
+  if (parts.length === 0) return `Filter Set (${total} filters)`;
+  return parts.join(" · ");
+}
+
 export function FiltersProvider({ children }: { children: ReactNode }) {
   const [filters, setFiltersRaw] = useState<FilterSelections>(
     () => loadFilterPrefs() ?? DEFAULT_FILTERS,
+  );
+  const [savedPresets, setSavedPresetsRaw] = useState<SavedFilterPreset[]>(
+    () => loadPresets(),
   );
 
   // Wrap setFilters to persist
@@ -304,30 +351,52 @@ export function FiltersProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  // Count filters that differ from defaults (so default productType: ["regular"] doesn't count)
-  function countNonDefault(key: keyof FilterSelections): number {
-    const current = filters[key];
-    const def = DEFAULT_FILTERS[key];
-    if (current.length === def.length && current.every((v, i) => v === def[i])) return 0;
-    return current.length;
-  }
+  // Count total active filter values across all dimensions
+  const activeFilterCount = Object.values(filters).reduce(
+    (sum, arr) => sum + arr.length,
+    0,
+  );
 
-  const activeFilterCount =
-    countNonDefault("cardType") +
-    countNonDefault("productType") +
-    countNonDefault("cohort") +
-    countNonDefault("transactionType") +
-    countNonDefault("transactionChannel") +
-    countNonDefault("transactionStatus") +
-    countNonDefault("merchantCategory") +
-    countNonDefault("amountRange") +
-    countNonDefault("recurringType") +
-    countNonDefault("riskCategory") +
-    countNonDefault("decisioningModel");
+  // ── Saved presets ─────────────────────────────────────────────────
+
+  const updatePresets = useCallback((updater: (prev: SavedFilterPreset[]) => SavedFilterPreset[]) => {
+    setSavedPresetsRaw((prev) => {
+      const next = updater(prev);
+      savePresets(next);
+      return next;
+    });
+  }, []);
+
+  const savePreset = useCallback((name: string): string => {
+    const id = `preset_${Date.now()}`;
+    const preset: SavedFilterPreset = { id, name, filters: { ...filters } };
+    updatePresets((prev) => [...prev, preset]);
+    return id;
+  }, [filters, updatePresets]);
+
+  const loadPresetFn = useCallback((id: string) => {
+    const preset = savedPresets.find((p) => p.id === id);
+    if (preset) setFilters(preset.filters);
+  }, [savedPresets, setFilters]);
+
+  const renamePreset = useCallback((id: string, name: string) => {
+    updatePresets((prev) => prev.map((p) => p.id === id ? { ...p, name } : p));
+  }, [updatePresets]);
+
+  const deletePreset = useCallback((id: string) => {
+    updatePresets((prev) => prev.filter((p) => p.id !== id));
+  }, [updatePresets]);
+
+  const suggestPresetName = useCallback(() => {
+    return generatePresetName(filters);
+  }, [filters]);
 
   return (
     <FiltersContext.Provider
-      value={{ filters, setFilter, toggleFilterValue, clearFilters, clearFilter, activeFilterCount }}
+      value={{
+        filters, setFilter, toggleFilterValue, clearFilters, clearFilter, activeFilterCount,
+        savedPresets, savePreset, loadPreset: loadPresetFn, renamePreset, deletePreset, suggestPresetName,
+      }}
     >
       {children}
     </FiltersContext.Provider>

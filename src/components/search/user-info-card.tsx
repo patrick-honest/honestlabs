@@ -63,8 +63,9 @@ interface FieldProps {
 }
 
 function Field({ label, value, highlight, mono }: FieldProps) {
-  const displayValue = value ?? "--";
-  const hasCopyable = value != null && value !== "--";
+  const isEmpty = value == null || value === "" || value === "--";
+  const displayValue = isEmpty ? "Data not available" : value;
+  const hasCopyable = !isEmpty;
 
   return (
     <div className="flex flex-col gap-0.5">
@@ -74,8 +75,10 @@ function Field({ label, value, highlight, mono }: FieldProps) {
       <span
         className={cn(
           "text-sm font-medium group flex items-center",
-          highlight ? "text-[var(--danger)]" : "text-[var(--text-primary)]",
-          mono && "font-mono text-xs"
+          isEmpty
+            ? "text-[var(--text-muted)] italic text-xs"
+            : highlight ? "text-[var(--danger)]" : "text-[var(--text-primary)]",
+          mono && !isEmpty && "font-mono text-xs"
         )}
       >
         {displayValue}
@@ -113,6 +116,111 @@ function SectionHeader({ icon, title, count }: { icon: React.ReactNode; title: s
         <span className="ml-1 rounded-full bg-[var(--surface-elevated)] px-1.5 py-0.5 text-[9px]">{count}</span>
       )}
     </h4>
+  );
+}
+
+// ── Chronological Timeline ─────────────────────────────────────────────────
+
+interface TimelineMilestone {
+  label: string;
+  date: string | null;
+}
+
+function daysBetween(from: string, to: string): number {
+  const a = new Date(from + "T00:00:00");
+  const b = new Date(to + "T00:00:00");
+  return Math.round((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function TimelineView({ user, isDark }: { user: UserSearchResult; isDark: boolean }) {
+  const decisionDate = user.decision_date;
+
+  // Build milestones in logical onboarding order
+  const milestones: TimelineMilestone[] = [
+    { label: "Decision", date: user.decision_date },
+    { label: "CMA Accepted", date: user.cma_accepted_date },
+    { label: "PIN Set", date: user.pin_set_date },
+    { label: "Videocall Verified", date: user.videocall_verified_date },
+    { label: "Card Activated", date: user.card_activation_date },
+    { label: "Card Delivered", date: user.delivery_date },
+  ];
+
+  // Sort by date (nulls at the end)
+  const sorted = [...milestones].sort((a, b) => {
+    if (!a.date && !b.date) return 0;
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+    return a.date.localeCompare(b.date);
+  });
+
+  return (
+    <div className="flex flex-col gap-0">
+      {sorted.map((ms, i) => {
+        const hasDate = ms.date != null;
+        const days = hasDate && decisionDate ? daysBetween(decisionDate, ms.date!) : null;
+        const isFirst = ms.label === "Decision";
+        const isLast = i === sorted.length - 1;
+        const accentColor = isDark ? "#7C4DFF" : "#D00083";
+
+        return (
+          <div key={ms.label} className="flex items-start gap-3">
+            {/* Vertical line + dot */}
+            <div className="flex flex-col items-center shrink-0 w-4">
+              {i > 0 && (
+                <div
+                  className="w-px flex-1 min-h-[8px]"
+                  style={{ backgroundColor: hasDate ? accentColor : "var(--border)" }}
+                />
+              )}
+              <div
+                className={cn(
+                  "shrink-0 rounded-full",
+                  hasDate ? "h-2.5 w-2.5" : "h-2 w-2",
+                )}
+                style={{
+                  backgroundColor: hasDate ? accentColor : "var(--border)",
+                  opacity: hasDate ? 1 : 0.4,
+                }}
+              />
+              {!isLast && (
+                <div
+                  className="w-px flex-1 min-h-[8px]"
+                  style={{ backgroundColor: hasDate && sorted[i + 1]?.date ? accentColor : "var(--border)" }}
+                />
+              )}
+            </div>
+
+            {/* Content */}
+            <div className={cn("flex items-baseline gap-2 pb-3 -mt-0.5", !hasDate && "opacity-50")}>
+              <span className={cn(
+                "text-[10px] font-semibold uppercase tracking-wider w-28 shrink-0",
+                hasDate ? "text-[var(--text-secondary)]" : "text-[var(--text-muted)]"
+              )}>
+                {ms.label}
+              </span>
+              {hasDate ? (
+                <>
+                  <span className="text-xs font-medium text-[var(--text-primary)] group flex items-center gap-1">
+                    {formatDate(ms.date)}
+                    <CopyButton value={ms.date!} />
+                  </span>
+                  {days !== null && !isFirst && (
+                    <span className={cn(
+                      "text-[10px] font-medium rounded-full px-1.5 py-0.5",
+                      isDark ? "bg-[#5B22FF]/10 text-[#7C4DFF]" : "bg-[#D00083]/8 text-[#D00083]"
+                    )}>
+                      {days === 0 ? "same day" : `+${days}d`}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <span className="text-xs italic text-[var(--text-muted)]">Data not available</span>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -268,16 +376,10 @@ export function UserInfoCard({ user }: UserInfoCardProps) {
         )}
       </div>
 
-      {/* Timeline Section */}
+      {/* Timeline Section — chronological with days since decision */}
       <div className="mb-5 border-t border-[var(--border)] pt-4">
         <SectionHeader icon={null} title="Timeline" />
-        <div className="grid grid-cols-2 gap-x-8 gap-y-4 md:grid-cols-3 lg:grid-cols-4">
-          <Field label="Decision Date" value={formatDate(user.decision_date)} />
-          <Field label="Videocall Verified" value={formatDate(user.videocall_verified_date)} />
-          <Field label="CMA Accepted" value={formatDate(user.cma_accepted_date)} />
-          <Field label="Card Activation" value={formatDate(user.card_activation_date)} />
-          <Field label="PIN Set Date" value={formatDate(user.pin_set_date)} />
-        </div>
+        <TimelineView user={user} isDark={isDark} />
       </div>
 
       {/* Account Snapshot Section */}
@@ -309,9 +411,9 @@ export function UserInfoCard({ user }: UserInfoCardProps) {
       )}
 
       {/* Repayment History Section */}
-      {user.repayment_history && user.repayment_history.length > 0 && (
-        <div className="mb-5 border-t border-[var(--border)] pt-4">
-          <SectionHeader icon={<Receipt className="h-3 w-3" />} title="Payment History" count={user.repayment_history.length} />
+      <div className="mb-5 border-t border-[var(--border)] pt-4">
+        <SectionHeader icon={<Receipt className="h-3 w-3" />} title="Payment History" count={user.repayment_history?.length ?? 0} />
+        {user.repayment_history && user.repayment_history.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
@@ -346,7 +448,7 @@ export function UserInfoCard({ user }: UserInfoCardProps) {
                           <CopyButton value={entry.repayment_code.trim()} />
                         </span>
                       ) : (
-                        <span className="text-[var(--text-muted)]">—</span>
+                        <span className="text-[var(--text-muted)] italic text-[11px]">N/A</span>
                       )}
                     </td>
                   </tr>
@@ -354,8 +456,10 @@ export function UserInfoCard({ user }: UserInfoCardProps) {
               </tbody>
             </table>
           </div>
-        </div>
-      )}
+        ) : (
+          <p className="text-xs text-[var(--text-muted)] italic mt-2">No payment history found</p>
+        )}
+      </div>
 
       {/* Freshworks Tickets Section */}
       <div className="border-t border-[var(--border)] pt-4">

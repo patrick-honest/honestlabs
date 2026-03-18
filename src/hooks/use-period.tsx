@@ -423,3 +423,41 @@ export function usePeriod(): PeriodContextValue {
   if (!ctx) throw new Error("usePeriod must be used within PeriodProvider");
   return ctx;
 }
+
+/** Convert a Date to YYYY-MM-DD string for API query parameters. */
+export function toIsoDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/**
+ * Build a URL query string suffix with the current period's date range.
+ * Returns e.g. "startDate=2026-03-10&endDate=2026-03-16&period=weekly"
+ *
+ * Usage in SWR:
+ *   const { dateParams } = useDateParams();
+ *   useSWR(`/api/spend-analysis?${dateParams}`, fetcher);
+ *
+ * When the user changes the time selector, dateParams changes → SWR refetches.
+ */
+export function useDateParams(): {
+  dateParams: string;
+  startDate: string;
+  endDate: string;
+  prevStartDate: string;
+  prevEndDate: string;
+} {
+  const { period, dateRange, prevDateRange } = usePeriod();
+  return useMemo(() => {
+    const startDate = toIsoDate(dateRange.start);
+    const endDate = toIsoDate(dateRange.end);
+    const prevStartDate = toIsoDate(prevDateRange.start);
+    const prevEndDate = toIsoDate(prevDateRange.end);
+    return {
+      dateParams: `startDate=${startDate}&endDate=${endDate}&period=${period}`,
+      startDate,
+      endDate,
+      prevStartDate,
+      prevEndDate,
+    };
+  }, [period, dateRange, prevDateRange]);
+}
