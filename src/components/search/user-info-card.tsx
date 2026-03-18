@@ -224,6 +224,14 @@ export function UserInfoCard({ user }: UserInfoCardProps) {
         <SectionHeader icon={<CreditCard className="h-3 w-3" />} title="Identity" />
         <div className="grid grid-cols-2 gap-x-8 gap-y-4 md:grid-cols-3 lg:grid-cols-4">
           <Field label="User ID" value={user.user_id} mono />
+          <Field label="LOC Account" value={user.loc_acct} mono />
+          <Field label="CRN" value={user.prin_crn} mono />
+          <Field label="Current URN" value={user.current_urn ? `${user.current_urn}${user.current_urn_date ? ` (${formatDate(user.current_urn_date)})` : ""}` : null} mono />
+          <Field label="Card Type" value={user.card_type} />
+          <Field label="Card Program" value={user.card_pgm} mono />
+          <Field label="Product Type" value={user.product_type} />
+          <Field label="Card Brand" value={user.card_brand} />
+          <Field label="Credit Limit" value={formatCurrency(user.credit_limit)} />
           <div>
             <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)] block mb-0.5">MoEngage</span>
             <a
@@ -237,14 +245,6 @@ export function UserInfoCard({ user }: UserInfoCardProps) {
               <CopyButton value={user.user_id} />
             </a>
           </div>
-          <Field label="LOC Account" value={user.loc_acct} mono />
-          <Field label="CRN" value={user.prin_crn} mono />
-          <Field label="Current URN" value={user.current_urn ? `${user.current_urn}${user.current_urn_date ? ` (${formatDate(user.current_urn_date)})` : ""}` : null} mono />
-          <Field label="Card Type" value={user.card_type} />
-          <Field label="Card Program" value={user.card_pgm} mono />
-          <Field label="Product Type" value={user.product_type} />
-          <Field label="Card Brand" value={user.card_brand} />
-          <Field label="Credit Limit" value={formatCurrency(user.credit_limit)} />
         </div>
 
         {/* Previous URNs */}
