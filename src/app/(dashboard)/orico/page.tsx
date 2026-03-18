@@ -14,10 +14,10 @@ import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange, scaleTrendData, scaleMetricValue } from "@/lib/period-data";
 import { cn } from "@/lib/utils";
-import { Download, TrendingUp, TrendingDown, Minus, Lock } from "lucide-react";
+import { Download, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { generateReportPdf } from "@/lib/report-pdf";
 import { SampleDataBanner, SampleDataBadge } from "@/components/dashboard/sample-data-banner";
-import { PageGuard } from "@/components/layout/page-guard";
+
 import type { QueryInfo } from "@/components/query-inspector/query-inspector";
 
 const AS_OF = "Mar 15, 2026";
@@ -793,15 +793,7 @@ function BalanceSheetTable({ rows }: { rows: BalanceSheetRow[] }) {
 
 // ── Component ───────────────────────────────────────────────────────────────
 
-export default function OricoPageWrapper() {
-  return (
-    <PageGuard>
-      <OricoPageContent />
-    </PageGuard>
-  );
-}
-
-function OricoPageContent() {
+export default function OricoPageContent() {
   const { period, setPeriod, periodLabel } = usePeriod();
   const { filters } = useFilters();
 
