@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
+import useSWR from "swr";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
@@ -14,6 +15,7 @@ import { useFilters } from "@/hooks/use-filters";
 import { getPeriodRange, scaleTrendData, scaleMetricValue, getPeriodInsightLabels } from "@/lib/period-data";
 import { applyFilterToData, applyFilterToMetric, hasActiveFilters } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
+import { formatNumber } from "@/lib/utils";
 
 const AS_OF = "Mar 15, 2026";
 
@@ -71,6 +73,41 @@ const txnPerEligible = [
   { date: "Feb", txnPerUser: 4.8 },
   { date: "Mar", txnPerUser: 5.0 },
 ];
+
+// ---------------------------------------------------------------------------
+// Spend Analysis: SWR fetcher + mock fallback data
+// ---------------------------------------------------------------------------
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
+
+const mockChannelBreakdown = [
+  { channel: "Online", txn_count: 32500, spend_idr: 6200000000, unique_cards: 5800 },
+  { channel: "Offline", txn_count: 75000, spend_idr: 25500000000, unique_cards: 9200 },
+  { channel: "QRIS", txn_count: 63500, spend_idr: 18400000000, unique_cards: 8100 },
+];
+
+const mockDeclineBreakdown = [
+  { code: "D", description: "Declined by Issuer — card blocked, limit exceeded, or risk flag", cnt: 84000, amount_idr: 42000000000 },
+  { code: "C", description: "Captured / Reversed — transaction was reversed or captured for settlement", cnt: 21000, amount_idr: 10500000000 },
+  { code: "T", description: "Timeout — no response from network within time limit", cnt: 134, amount_idr: 67000000 },
+  { code: "X", description: "Expired / Invalid — card expired or invalid details", cnt: 4, amount_idr: 2000000 },
+];
+
+const mockQrisMerchantGrowth = [
+  { month: "2025-09", new_merchants: 0, cumulative_merchants: 0 },
+  { month: "2025-10", new_merchants: 5, cumulative_merchants: 5 },
+  { month: "2025-11", new_merchants: 10, cumulative_merchants: 15 },
+  { month: "2025-12", new_merchants: 7, cumulative_merchants: 22 },
+  { month: "2026-01", new_merchants: 12480, cumulative_merchants: 12502 },
+  { month: "2026-02", new_merchants: 38200, cumulative_merchants: 50702 },
+  { month: "2026-03", new_merchants: 29618, cumulative_merchants: 80320 },
+];
+
+const mockMerchantStats = {
+  qrisOnly: 80320,
+  mixed: 11684,
+  cardOnly: 1690000,
+};
 
 const actionItems: ActionItem[] = [
   {
@@ -270,6 +307,65 @@ export default function SpendPage() {
     await new Promise((r) => setTimeout(r, 800));
   }, []);
 
+  // --- Spend Analysis SWR (with mock fallback) ---
+  const { data: spendAnalysis } = useSWR(
+    "/api/spend-analysis?startDate=2025-10-01&endDate=2026-03-15",
+    fetcher,
+    { fallbackData: null, revalidateOnFocus: false },
+  );
+
+  const channelData = spendAnalysis?.channelBreakdown ?? mockChannelBreakdown;
+  const declineData = spendAnalysis?.declineBreakdown ?? mockDeclineBreakdown;
+  const qrisMerchantData = spendAnalysis?.qrisMerchantGrowth ?? mockQrisMerchantGrowth;
+
+  // Transform channel data for horizontal bar chart
+  const channelBarData = useMemo(() => {
+    return channelData.map((ch: { channel: string; txn_count: number; spend_idr: number }) => ({
+      channel: ch.channel,
+      txn_count: ch.txn_count,
+      spend_idr: ch.spend_idr,
+    }));
+  }, [channelData]);
+
+  // Transform decline data for bar chart with labels
+  const declineBarData = useMemo(() => {
+    return declineData.map((d: { code: string; description: string; cnt: number; amount_idr: number }) => ({
+      label: `${d.code} — ${d.description.split(" — ")[0]}`,
+      code: d.code,
+      count: d.cnt,
+      description: d.description,
+    }));
+  }, [declineData]);
+
+  // Transform QRIS merchant growth for line chart
+  const qrisMerchantLineData = useMemo(() => {
+    return qrisMerchantData.map((row: { month: string; cumulative_merchants: number; new_merchants: number }) => ({
+      date: row.month.replace("2025-", "").replace("2026-", "").replace("09", "Sep").replace("10", "Oct").replace("11", "Nov").replace("12", "Dec").replace("01", "Jan").replace("02", "Feb").replace("03", "Mar"),
+      cumulative: row.cumulative_merchants,
+    }));
+  }, [qrisMerchantData]);
+
+  const channelInsights: ChartInsight[] = useMemo(() => [
+    { text: "Offline leads in transaction count (75K) but QRIS is closing fast at 63.5K transactions — indicating strong QR adoption.", type: "neutral" },
+    { text: "Online has the highest spend-per-transaction at IDR 191K vs QRIS at IDR 290K, reflecting different usage patterns.", type: "neutral" },
+    { text: "QRIS accounts for 37.1% of all transactions but only 36.8% of spend, consistent with lower average ticket sizes.", type: "neutral" },
+    { text: "Bank Indonesia's QRIS expansion mandate is likely accelerating this channel shift — monitor interchange revenue impact.", type: "hypothesis" },
+  ], []);
+
+  const declineInsights: ChartInsight[] = useMemo(() => [
+    { text: "D (Declined by Issuer) dominates at 84K transactions — these are blocked cards, exceeded limits, or fraud flags. This is normal for a credit card issuer.", type: "neutral" },
+    { text: "C (Reversed) at 21K includes settlement captures and reversals — these are operational, not customer issues.", type: "neutral" },
+    { text: "T (Timeout) at only 134 indicates healthy network connectivity between Finexus and the payment networks.", type: "positive" },
+    { text: "X (Expired/Invalid) at just 4 suggests card renewal processes are working well with minimal expired-card attempts.", type: "positive" },
+  ], []);
+
+  const qrisMerchantInsights: ChartInsight[] = useMemo(() => [
+    { text: "QRIS-only merchants exploded from 22 in December 2025 to 80,320 by March 2026 — a 3,650x increase driven by BI's QRIS interoperability mandate.", type: "positive" },
+    { text: "11,684 merchants accept both card and QRIS payments, representing dual-channel acceptance that benefits cardholders.", type: "neutral" },
+    { text: "1.69M merchants remain card-only — a massive runway for QRIS expansion if Honest promotes QR payment acceptance.", type: "neutral" },
+    { text: "The rapid QRIS merchant growth curve suggests network effects are kicking in — expect continued acceleration through 2026.", type: "hypothesis" },
+  ], []);
+
   return (
     <div className="space-y-6">
       <ActiveFiltersBanner />
@@ -441,6 +537,134 @@ export default function SpendPage() {
         </div>
         <ChartInsights insights={topMerchantInsights} />
       </ChartCard>
+
+      {/* ================================================================== */}
+      {/* NEW SECTION 1: Transaction Channel Analysis                        */}
+      {/* ================================================================== */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold text-[var(--text-primary)]">Transaction Channel Analysis</h2>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {channelData.map((ch: { channel: string; txn_count: number; spend_idr: number; unique_cards: number }) => (
+            <MetricCard
+              key={ch.channel}
+              metricKey={`channel_${ch.channel.toLowerCase()}`}
+              label={`${ch.channel} Transactions`}
+              value={ch.txn_count}
+              unit="count"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+            />
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <ChartCard
+            title="Channel Split by Transaction Count"
+            subtitle="Online / Offline / QRIS authorized transactions"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+          >
+            <DashboardBarChart
+              data={channelBarData}
+              bars={[{ key: "txn_count", color: "#3b82f6", label: "Transactions" }]}
+              xAxisKey="channel"
+              height={260}
+            />
+          </ChartCard>
+
+          <ChartCard
+            title="Channel Split by Spend Volume"
+            subtitle="IDR spend by channel"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+          >
+            <DashboardBarChart
+              data={channelBarData}
+              bars={[{ key: "spend_idr", color: "#8b5cf6", label: "Spend (IDR)" }]}
+              xAxisKey="channel"
+              height={260}
+            />
+          </ChartCard>
+        </div>
+
+        <ChartInsights insights={channelInsights} />
+      </div>
+
+      {/* ================================================================== */}
+      {/* NEW SECTION 2: Transaction Declines                                */}
+      {/* ================================================================== */}
+      <ChartCard
+        title="Transaction Decline Breakdown"
+        subtitle="Non-approved transaction status codes with count and explanation"
+        asOf={AS_OF}
+        dataRange={DATA_RANGE}
+      >
+        <DashboardBarChart
+          data={declineBarData}
+          bars={[{ key: "count", color: "#ef4444", label: "Decline Count" }]}
+          xAxisKey="label"
+          height={300}
+        />
+        <div className="mt-3 space-y-2 text-sm text-[var(--text-secondary)]">
+          {declineData.map((d: { code: string; description: string; cnt: number }) => (
+            <div key={d.code} className="flex items-start gap-2">
+              <span className="font-mono font-semibold text-[var(--text-primary)] min-w-[24px]">{d.code}</span>
+              <span>{d.description}</span>
+              <span className="ml-auto font-medium text-[var(--text-primary)] whitespace-nowrap">{formatNumber(d.cnt)}</span>
+            </div>
+          ))}
+        </div>
+        <ChartInsights insights={declineInsights} />
+      </ChartCard>
+
+      {/* ================================================================== */}
+      {/* NEW SECTION 3: QRIS Merchant Analysis                              */}
+      {/* ================================================================== */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold text-[var(--text-primary)]">QRIS Merchant Ecosystem</h2>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <MetricCard
+            metricKey="qris_only_merchants"
+            label="QRIS-Only Merchants"
+            value={mockMerchantStats.qrisOnly}
+            unit="count"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+          />
+          <MetricCard
+            metricKey="mixed_merchants"
+            label="Mixed (Card + QRIS) Merchants"
+            value={mockMerchantStats.mixed}
+            unit="count"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+          />
+          <MetricCard
+            metricKey="card_only_merchants"
+            label="Card-Only Merchants"
+            value={mockMerchantStats.cardOnly}
+            unit="count"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+          />
+        </div>
+
+        <ChartCard
+          title="Cumulative QRIS-Only Merchants Over Time"
+          subtitle="Merchants that have only ever processed QRIS transactions (no card-present)"
+          asOf={AS_OF}
+          dataRange={DATA_RANGE}
+        >
+          <DashboardLineChart
+            data={qrisMerchantLineData}
+            lines={[{ key: "cumulative", color: "#06b6d4", label: "QRIS-Only Merchants" }]}
+            height={300}
+          />
+          <ChartInsights insights={qrisMerchantInsights} />
+        </ChartCard>
+      </div>
 
       <ActionItems section="Spend" items={actionItems} />
 
