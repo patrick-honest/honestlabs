@@ -352,7 +352,7 @@ export function Sidebar() {
         "relative flex h-screen shrink-0 flex-col border-r z-40",
         isDark
           ? "bg-[var(--background)] border-[var(--border)]"
-          : "bg-[var(--surface)] border-[var(--border)]",
+          : "bg-[#FAF7F2] border-[var(--border)]",
         !isDragging && "transition-[width] duration-200"
       )}
       style={{ width }}
