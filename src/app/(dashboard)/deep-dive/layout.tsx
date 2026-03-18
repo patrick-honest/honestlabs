@@ -8,6 +8,8 @@ import { generateReportPdf } from "@/lib/report-pdf";
 import { Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
+import { useCurrency } from "@/hooks/use-currency";
+import { useLanguage } from "@/hooks/use-language";
 import { useTranslations } from "next-intl";
 
 // Maps pathname to the nav translation key for each deep-dive page
@@ -38,6 +40,8 @@ export default function DeepDiveLayout({
   const pathname = usePathname();
   const { isDark } = useTheme();
   const { period, periodLabel, dateRange, timeRange } = usePeriod();
+  const { currency } = useCurrency();
+  const { locale } = useLanguage();
   const tNav = useTranslations("nav");
   const tTime = useTranslations("time");
   const tCommon = useTranslations("common");
@@ -68,8 +72,8 @@ export default function DeepDiveLayout({
         `Data range: ${dateRange.label}.`,
         "For detailed metrics and charts, refer to the webapp dashboard.",
       ],
-    });
-  }, [sectionLabel, tNav, pathname, period, periodLabel, dateRange, timeRange, timeRangeLabels]);
+    }, locale, currency);
+  }, [sectionLabel, tNav, pathname, period, periodLabel, dateRange, timeRange, timeRangeLabels, locale, currency]);
 
   return (
     <div className="flex flex-col h-full">

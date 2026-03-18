@@ -32,19 +32,22 @@ export interface ReportData {
   trends: string[];
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-GB", {
+const LOCALE_MAP: Record<string, string> = { en: "en-GB", id: "id-ID", ja: "ja-JP" };
+
+function formatDate(iso: string, locale: string = "en"): string {
+  return new Date(iso).toLocaleDateString(LOCALE_MAP[locale] ?? "en-GB", {
     day: "2-digit",
     month: "short",
     year: "numeric",
   });
 }
 
-function formatKpiValue(value: number, unit: string): string {
+function formatKpiValue(value: number, unit: string, currency: string = "IDR"): string {
   if (unit === "%") return `${value}%`;
-  if (unit === "B") return `IDR ${value}B`;
-  if (unit === "M") return `IDR ${value}M`;
-  if (value >= 1_000_000_000) return `IDR ${(value / 1_000_000_000).toFixed(1)}B`;
+  const prefix = currency === "USD" ? "$" : currency === "IDR" ? "Rp " : currency;
+  if (unit === "B") return `${prefix}${value}B`;
+  if (unit === "M") return `${prefix}${value}M`;
+  if (value >= 1_000_000_000) return `${prefix}${(value / 1_000_000_000).toFixed(1)}B`;
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
   if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
   return value.toLocaleString();
@@ -57,6 +60,8 @@ function renderSection(
   margin: number,
   contentWidth: number,
   startY: number,
+  currency: string = "IDR",
+  labels?: { metric: string; value: string; change: string; keyObs: string },
 ): number {
   let y = startY;
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -83,12 +88,12 @@ function renderSection(
         kpi.change === null || kpi.change === 0
           ? ""
           : kpi.change > 0 ? "▲" : "▼";
-      return [kpi.label, formatKpiValue(kpi.value, kpi.unit), `${direction} ${changeStr}`];
+      return [kpi.label, formatKpiValue(kpi.value, kpi.unit, currency), `${direction} ${changeStr}`];
     });
 
     autoTable(doc, {
       startY: y,
-      head: [["Metric", "Value", "Change"]],
+      head: [[labels?.metric ?? "Metric", labels?.value ?? "Value", labels?.change ?? "Change"]],
       body: kpiRows,
       margin: { left: margin, right: margin },
       theme: "grid",
@@ -116,7 +121,7 @@ function renderSection(
     doc.setFontSize(9);
     doc.setTextColor(30, 30, 30);
     doc.setFont("helvetica", "bold");
-    doc.text("Key Observations", margin, y);
+    doc.text(labels?.keyObs ?? "Key Observations", margin, y);
     y += 5;
 
     doc.setFont("helvetica", "normal");
@@ -141,7 +146,7 @@ function renderSection(
 /**
  * Generate a single-section report PDF.
  */
-export function generateReportPdf(report: ReportData, locale?: string): void {
+export function generateReportPdf(report: ReportData, locale?: string, currency?: string): void {
   generateCombinedReportPdf({
     cycle: report.cycle,
     periodStart: report.periodStart,
@@ -149,6 +154,7 @@ export function generateReportPdf(report: ReportData, locale?: string): void {
     generatedAt: report.generatedAt,
     overallTitle: report.title,
     locale,
+    currency,
     sections: [{
       title: report.section,
       kpis: report.kpis,
@@ -161,10 +167,10 @@ export function generateReportPdf(report: ReportData, locale?: string): void {
  * Generate a combined PDF with multiple sections (for past reports).
  */
 // Locale-aware PDF labels
-const PDF_LABELS: Record<string, { confidential: string; generated: string; page: string; of: string; footer: string }> = {
-  en: { confidential: "CONFIDENTIAL", generated: "Generated", page: "Page", of: "of", footer: "Honest Bank · Data sourced from BigQuery (storage-58f5a02c) · Product type: Regular (default)" },
-  id: { confidential: "RAHASIA", generated: "Dibuat", page: "Halaman", of: "dari", footer: "Honest Bank · Sumber data: BigQuery (storage-58f5a02c) · Jenis produk: Regular (default)" },
-  ja: { confidential: "機密", generated: "作成日", page: "ページ", of: "/", footer: "Honest Bank · データソース: BigQuery (storage-58f5a02c) · 商品タイプ: Regular (デフォルト)" },
+const PDF_LABELS: Record<string, { confidential: string; generated: string; page: string; of: string; footer: string; metric: string; value: string; change: string; keyObs: string }> = {
+  en: { confidential: "CONFIDENTIAL", generated: "Generated", page: "Page", of: "of", footer: "Honest Bank · Data sourced from BigQuery (storage-58f5a02c) · Product type: Regular (default)", metric: "Metric", value: "Value", change: "Change", keyObs: "Key Observations" },
+  id: { confidential: "RAHASIA", generated: "Dibuat", page: "Halaman", of: "dari", footer: "Honest Bank · Sumber data: BigQuery (storage-58f5a02c) · Jenis produk: Regular (default)", metric: "Metrik", value: "Nilai", change: "Perubahan", keyObs: "Pengamatan Utama" },
+  ja: { confidential: "機密", generated: "作成日", page: "ページ", of: "/", footer: "Honest Bank · データソース: BigQuery (storage-58f5a02c) · 商品タイプ: Regular (デフォルト)", metric: "指標", value: "値", change: "変動", keyObs: "主な観察事項" },
 };
 
 export function generateCombinedReportPdf(opts: {
@@ -175,6 +181,7 @@ export function generateCombinedReportPdf(opts: {
   overallTitle: string;
   sections: { title: string; kpis: ReportKpi[]; trends: string[] }[];
   locale?: string;
+  currency?: string;
 }): void {
   const labels = PDF_LABELS[opts.locale ?? "en"] ?? PDF_LABELS.en;
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -193,7 +200,7 @@ export function generateCombinedReportPdf(opts: {
   doc.setFont("helvetica", "normal");
   doc.text(labels.confidential, pageWidth - margin, y, { align: "right" });
   doc.text(
-    `${labels.generated}: ${formatDate(opts.generatedAt)}`,
+    `${labels.generated}: ${formatDate(opts.generatedAt, opts.locale)}`,
     pageWidth - margin,
     y + 3.5,
     { align: "right" }
@@ -211,7 +218,7 @@ export function generateCombinedReportPdf(opts: {
   doc.setTextColor(100, 100, 100);
   doc.setFont("helvetica", "normal");
   doc.text(
-    `${opts.cycle.charAt(0).toUpperCase() + opts.cycle.slice(1)} · ${formatDate(opts.periodStart)} – ${formatDate(opts.periodEnd)}`,
+    `${opts.cycle.charAt(0).toUpperCase() + opts.cycle.slice(1)} · ${formatDate(opts.periodStart, opts.locale)} – ${formatDate(opts.periodEnd, opts.locale)}`,
     margin,
     y
   );
@@ -235,7 +242,7 @@ export function generateCombinedReportPdf(opts: {
       y += 4;
     }
 
-    y = renderSection(doc, section, margin, contentWidth, y);
+    y = renderSection(doc, section, margin, contentWidth, y, opts.currency ?? "IDR", { metric: labels.metric, value: labels.value, change: labels.change, keyObs: labels.keyObs });
   }
 
   // ── Footer ──

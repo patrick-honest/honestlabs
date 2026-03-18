@@ -18,6 +18,8 @@ import { Download, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { generateReportPdf } from "@/lib/report-pdf";
 import { SampleDataBanner, SampleDataBadge } from "@/components/dashboard/sample-data-banner";
 import { useTranslations } from "next-intl";
+import { useCurrency } from "@/hooks/use-currency";
+import { useLanguage } from "@/hooks/use-language";
 
 import type { QueryInfo } from "@/components/query-inspector/query-inspector";
 
@@ -780,6 +782,8 @@ function BalanceSheetTable({ rows, columnLabels }: { rows: BalanceSheetRow[]; co
 export default function OricoPageContent() {
   const tOrico = useTranslations("orico");
   const tCommon = useTranslations("common");
+  const { currency } = useCurrency();
+  const { locale } = useLanguage();
   const kpiColumnLabels = useMemo(() => ({
     metric: tCommon("metric"),
     plan: tCommon("plan"),
@@ -855,8 +859,8 @@ export default function OricoPageContent() {
         "RP1 top-up rate reached 42.5%, driven by repeat usage campaigns.",
         `Report covers ${periodLabel} period ending ${DATA_RANGE.end}.`,
       ],
-    });
-  }, []);
+    }, locale, currency);
+  }, [locale, currency]);
 
   return (
     <div className="flex flex-col">

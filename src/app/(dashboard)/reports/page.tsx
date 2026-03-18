@@ -6,6 +6,8 @@ import { useTranslations } from "next-intl";
 import { Search, Filter, ChevronDown, ChevronRight, TrendingUp, TrendingDown, Minus, Calendar, X, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
+import { useCurrency } from "@/hooks/use-currency";
+import { useLanguage } from "@/hooks/use-language";
 import { generateCombinedReportPdf, type ReportKpi } from "@/lib/report-pdf";
 import type { Cycle } from "@/types/reports";
 
@@ -315,7 +317,7 @@ function formatShortDate(iso: string) {
 // Expandable Report Row
 // ---------------------------------------------------------------------------
 
-function ReportRow({ report, isDark }: { report: ReportEntry; isDark: boolean }) {
+function ReportRow({ report, isDark, locale, currency }: { report: ReportEntry; isDark: boolean; locale: string; currency: string }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -375,12 +377,10 @@ function ReportRow({ report, isDark }: { report: ReportEntry; isDark: boolean })
                 periodEnd: report.periodEnd,
                 generatedAt: report.generatedAt,
                 overallTitle: report.title,
+                locale,
+                currency,
                 sections: [
-                  { title: "Executive Summary", kpis: report.kpis as ReportKpi[], trends: report.trends },
-                  { title: "Spend Deep Dive", kpis: [], trends: ["Spend metrics for this period — see webapp for detailed charts."] },
-                  { title: "Risk Deep Dive", kpis: [], trends: ["Portfolio risk metrics for this period — see webapp for DPD distribution."] },
-                  { title: "Acquisition Deep Dive", kpis: [], trends: ["Funnel and approval metrics for this period."] },
-                  { title: "Activation Deep Dive", kpis: [], trends: ["Card activation and first transaction metrics."] },
+                  { title: report.section, kpis: report.kpis as ReportKpi[], trends: report.trends },
                 ],
               })}
               className={cn(
@@ -493,6 +493,8 @@ export default function ReportsPage() {
   const [cycleFilter, setCycleFilter] = useState<Cycle | "all">("all");
   const [sectionFilter, setSectionFilter] = useState("All");
   const { isDark } = useTheme();
+  const { currency } = useCurrency();
+  const { locale } = useLanguage();
   const tNav = useTranslations("nav");
 
   const filtered = BACKFILLED_REPORTS.filter((r) => {
@@ -605,7 +607,7 @@ export default function ReportsPage() {
               </thead>
               <tbody>
                 {filtered.map((report) => (
-                  <ReportRow key={report.id} report={report} isDark={isDark} />
+                  <ReportRow key={report.id} report={report} isDark={isDark} locale={locale} currency={currency} />
                 ))}
               </tbody>
             </table>

@@ -13,6 +13,7 @@ import { usePeriod } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
 import { useTheme } from "@/hooks/use-theme";
 import { useCurrency } from "@/hooks/use-currency";
+import { useLanguage } from "@/hooks/use-language";
 import { formatAmountCompact } from "@/lib/currency";
 import { getPeriodRange, scaleTrendData, scaleMetricValue } from "@/lib/period-data";
 import { applyFilterToData } from "@/lib/filter-utils";
@@ -365,6 +366,7 @@ export default function QrisExperimentPage() {
   const { filters } = useFilters();
   const { isDark } = useTheme();
   const { currency } = useCurrency();
+  const { locale } = useLanguage();
   const tNav = useTranslations("nav");
 
   // Currency-aware formatter (replaces old hardcoded fmtIDR)
@@ -424,8 +426,8 @@ export default function QrisExperimentPage() {
         `Revenue per QRIS user is 2.5x higher despite lower 0.7% MDR rate.`,
         `QRIS volume is ${qrisShareOfVolume}% of total authorized transaction volume.`,
       ],
-    });
-  }, [period, periodLabel, dateRange, currentAdoptionRate, totalQrisUsers, totalQrisTxns, qrisShareOfVolume, totalNewUsers, q, nq]);
+    }, locale, currency);
+  }, [period, periodLabel, dateRange, currentAdoptionRate, totalQrisUsers, totalQrisTxns, qrisShareOfVolume, totalNewUsers, q, nq, locale, currency]);
 
   return (
     <div className="flex flex-col">
