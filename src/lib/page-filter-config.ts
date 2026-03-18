@@ -94,6 +94,10 @@ export const PAGE_FILTER_CONFIG: { prefix: string; filters: FilterKey[] | null }
     prefix: "/deep-dive/credit-line",
     filters: [...ACCT],
   },
+  {
+    prefix: "/deep-dive/points-program",
+    filters: [...ACCT],
+  },
 
   // ── Top-level pages ──
   {

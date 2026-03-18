@@ -18,6 +18,7 @@ const tabs = [
   { label: "App Health", href: "/deep-dive/app-health" },
   { label: "Referrals", href: "/deep-dive/referral" },
   { label: "Credit Line", href: "/deep-dive/credit-line" },
+  { label: "Points", href: "/deep-dive/points-program" },
 ];
 
 export default function DeepDiveLayout({

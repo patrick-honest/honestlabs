@@ -26,6 +26,7 @@ export const navigation: NavItem[] = [
       { label: "App Health", href: "/deep-dive/app-health", icon: "Activity" },
       { label: "Referral Program", href: "/deep-dive/referral", icon: "Share2" },
       { label: "Credit Line Mgmt", href: "/deep-dive/credit-line", icon: "TrendingUp" },
+      { label: "Points Program", href: "/deep-dive/points-program", icon: "Star" },
     ],
   },
   { label: "Vintage Analysis", href: "/vintage", icon: "Layers" },
