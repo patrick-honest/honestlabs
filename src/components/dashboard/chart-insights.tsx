@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
+import { TrendingUp, TrendingDown, Info, Lightbulb } from "lucide-react";
 
 export interface ChartInsight {
   text: string;
@@ -16,33 +17,47 @@ interface ChartInsightsProps {
 export function ChartInsights({ insights, className }: ChartInsightsProps) {
   const { isDark } = useTheme();
 
-  const dotColors: Record<ChartInsight["type"], string> = {
-    positive: isDark ? "bg-[#06D6A0]" : "bg-[#059669]",
-    negative: isDark ? "bg-[#FF6B6B]" : "bg-[#DC2626]",
-    neutral: isDark ? "bg-[#7C4DFF]" : "bg-[#D00083]",
-    hypothesis: isDark ? "bg-[#FFD166]" : "bg-[#F5A623]",
-  };
-
-  const textColor: Record<ChartInsight["type"], string> = {
-    positive: isDark ? "text-[#06D6A0]" : "text-[#059669]",
-    negative: isDark ? "text-[#FF6B6B]" : "text-[#DC2626]",
-    neutral: "text-[var(--text-secondary)]",
-    hypothesis: isDark ? "text-[#FFD166]" : "text-[#D4900A]",
+  const iconConfig: Record<ChartInsight["type"], { Icon: typeof TrendingUp; color: string; bg: string }> = {
+    positive: {
+      Icon: TrendingUp,
+      color: isDark ? "text-[#06D6A0]" : "text-emerald-600",
+      bg: isDark ? "bg-[#06D6A0]/10" : "bg-emerald-50",
+    },
+    negative: {
+      Icon: TrendingDown,
+      color: isDark ? "text-[#FF6B6B]" : "text-red-600",
+      bg: isDark ? "bg-[#FF6B6B]/10" : "bg-red-50",
+    },
+    neutral: {
+      Icon: Info,
+      color: isDark ? "text-[#7C4DFF]" : "text-[#D00083]",
+      bg: isDark ? "bg-[#7C4DFF]/10" : "bg-[#D00083]/5",
+    },
+    hypothesis: {
+      Icon: Lightbulb,
+      color: isDark ? "text-[#FFD166]" : "text-amber-600",
+      bg: isDark ? "bg-[#FFD166]/10" : "bg-amber-50",
+    },
   };
 
   return (
     <div className={cn("mt-3 space-y-1.5", className)}>
-      {insights.map((insight, i) => (
-        <div key={i} className="flex items-start gap-2">
-          <span className={cn("mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full", dotColors[insight.type])} />
-          <p className={cn("text-xs leading-relaxed", textColor[insight.type])}>
-            {insight.type === "hypothesis" && (
-              <span className="font-semibold">[Hypothesis] </span>
-            )}
-            {insight.text}
-          </p>
-        </div>
-      ))}
+      {insights.map((insight, i) => {
+        const { Icon, color, bg } = iconConfig[insight.type];
+        return (
+          <div key={i} className="flex items-start gap-2">
+            <div className={cn("flex items-center justify-center shrink-0 mt-0.5 h-4 w-4 rounded", bg)}>
+              <Icon className={cn("h-2.5 w-2.5", color)} />
+            </div>
+            <p className="text-xs leading-relaxed text-[var(--text-muted)]">
+              {insight.type === "hypothesis" && (
+                <span className={cn("font-semibold", color)}>Hypothesis: </span>
+              )}
+              {insight.text}
+            </p>
+          </div>
+        );
+      })}
     </div>
   );
 }
