@@ -25,6 +25,7 @@ providers.push(
       password: { label: "Password", type: "password" },
     },
     async authorize(credentials) {
+      // Admin login
       if (
         credentials?.username === "Administrator" &&
         credentials?.password === "Honest0123"
@@ -33,6 +34,17 @@ providers.push(
           id: "admin",
           name: "Administrator",
           email: "patrick@honestbank.com",
+        };
+      }
+      // General team login
+      if (
+        credentials?.username === "Honest User" &&
+        credentials?.password === "Honest0123"
+      ) {
+        return {
+          id: "honest-user",
+          name: "Honest User",
+          email: "user@honest.co.id",
         };
       }
       return null;
