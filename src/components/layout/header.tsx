@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { useCurrency } from "@/hooks/use-currency";
 import { usePeriod, COMPARISON_OPTIONS, type TimeRangePreset, type ComparisonMode, type DateRange } from "@/hooks/use-period";
 import { useTheme } from "@/hooks/use-theme";
 import {
@@ -25,8 +24,7 @@ import {
 } from "@/hooks/use-filters";
 import { HeaderFilterDropdown } from "@/components/filters/header-filter-dropdown";
 import { getVisibleFilters, isFilterVisible, type FilterKey } from "@/lib/page-filter-config";
-import { Sun, Moon, Calendar, SlidersHorizontal, ChevronDown, ChevronLeft, ChevronRight, X, Save, Bookmark, Trash2, Pencil, Check, Globe } from "lucide-react";
-import { useLanguage, type Locale } from "@/hooks/use-language";
+import { Calendar, SlidersHorizontal, ChevronDown, ChevronLeft, ChevronRight, X, Save, Bookmark, Trash2, Pencil, Check } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { Cycle } from "@/types/reports";
 // Types already imported above from use-period
@@ -405,14 +403,12 @@ interface HeaderProps {
 
 export function Header({ title }: HeaderProps) {
   const pathname = usePathname();
-  const { currency, toggleCurrency } = useCurrency();
   const {
     period, setPeriod, dateRange, prevDateRange,
     timeRange, setTimeRange, availablePresets,
     setPeriodAndRange, comparisonMode, setComparisonMode, setCustomRange,
   } = usePeriod();
-  const { isDark, toggleTheme } = useTheme();
-  const { locale, setLocale, localeLabels } = useLanguage();
+  const { isDark } = useTheme();
   const tCommon = useTranslations("common");
   const tTime = useTranslations("time");
   const tFilters = useTranslations("filters");
@@ -535,50 +531,6 @@ export function Header({ title }: HeaderProps) {
           </button>
         )}
 
-        <div className="h-4 w-px bg-[var(--border)] shrink-0" />
-
-        {/* Currency toggle */}
-        <button
-          onClick={toggleCurrency}
-          className="flex items-center gap-0.5 rounded-md bg-[var(--surface-elevated)] px-2 py-1 text-[11px] font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] shrink-0"
-        >
-          <span className={cn(currency === "IDR" && (isDark ? "text-[#7C4DFF] font-bold" : "text-[#D00083] font-bold"))}>IDR</span>
-          <span className="text-[var(--border)]">/</span>
-          <span className={cn(currency === "USD" && (isDark ? "text-[#7C4DFF] font-bold" : "text-[#D00083] font-bold"))}>USD</span>
-        </button>
-
-        {/* Theme toggle */}
-        <button
-          onClick={toggleTheme}
-          className={cn(
-            "flex h-7 w-7 items-center justify-center rounded-md transition-colors shrink-0",
-            isDark
-              ? "bg-[var(--surface-elevated)] text-[#FFD166] hover:bg-[#2D2955]"
-              : "bg-[#F0D9F7]/50 text-[#D00083] hover:bg-[#F0D9F7]"
-          )}
-          aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-        >
-          {isDark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
-        </button>
-
-        {/* Language selector */}
-        <div className="relative shrink-0">
-          <select
-            value={locale}
-            onChange={(e) => setLocale(e.target.value as Locale)}
-            className={cn(
-              "appearance-none rounded-md border px-1.5 py-0.5 pr-5 text-[10px] font-medium cursor-pointer outline-none transition-colors",
-              isDark
-                ? "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]"
-                : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]"
-            )}
-          >
-            {(Object.entries(localeLabels) as [Locale, string][]).map(([val, label]) => (
-              <option key={val} value={val}>{label}</option>
-            ))}
-          </select>
-          <Globe className="pointer-events-none absolute right-1 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-[var(--text-muted)]" />
-        </div>
       </div>
 
       {/* Expandable filter panel */}

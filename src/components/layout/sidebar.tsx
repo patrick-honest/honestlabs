@@ -16,9 +16,12 @@ import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { navigation, type NavItem } from "@/config/navigation";
 import { useTheme } from "@/hooks/use-theme";
+import { useCurrency } from "@/hooks/use-currency";
+import { useLanguage, type Locale } from "@/hooks/use-language";
 import { useSession, signOut } from "next-auth/react";
 import { IS_STATIC_EXPORT } from "@/lib/static-mode";
 import { useTranslations } from "next-intl";
+import { Sun, Moon, Globe } from "lucide-react";
 
 const iconMap: Record<string, LucideIcon> = {
   // Top-level
@@ -299,7 +302,9 @@ function FlyoutPortal({
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { isDark } = useTheme();
+  const { isDark, toggleTheme } = useTheme();
+  const { currency, toggleCurrency } = useCurrency();
+  const { locale, setLocale, localeLabels } = useLanguage();
   const tNav = useTranslations("nav");
   const { data: session } = useSession();
   const userName = session?.user?.name || "User";
@@ -473,6 +478,84 @@ export function Sidebar() {
               </>
             )}
           </button>
+        </div>
+
+        {/* Settings toggles: currency, theme, language */}
+        <div className={cn(
+          "flex items-center gap-1.5 border-t py-2",
+          isDark ? "border-[var(--border)]" : "border-[var(--border)]",
+          collapsed ? "flex-col px-2" : "px-3"
+        )}>
+          {/* Currency toggle */}
+          <button
+            onClick={toggleCurrency}
+            className={cn(
+              "flex items-center gap-0.5 rounded-md px-2 py-1 text-[11px] font-medium transition-colors",
+              isDark
+                ? "bg-[var(--surface-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                : "bg-[var(--surface-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
+              collapsed && "px-1.5"
+            )}
+            title="Toggle currency"
+          >
+            <span className={cn(currency === "IDR" && (isDark ? "text-[#7C4DFF] font-bold" : "text-[#D00083] font-bold"))}>
+              {collapsed ? "$" : "IDR"}
+            </span>
+            {!collapsed && <span className="text-[var(--border)]">/</span>}
+            {!collapsed && (
+              <span className={cn(currency === "USD" && (isDark ? "text-[#7C4DFF] font-bold" : "text-[#D00083] font-bold"))}>
+                USD
+              </span>
+            )}
+          </button>
+
+          {/* Theme toggle */}
+          <button
+            onClick={toggleTheme}
+            className={cn(
+              "flex h-7 w-7 items-center justify-center rounded-md transition-colors shrink-0",
+              isDark
+                ? "bg-[var(--surface-elevated)] text-[#FFD166] hover:bg-[#2D2955]"
+                : "bg-[#F0D9F7]/50 text-[#D00083] hover:bg-[#F0D9F7]"
+            )}
+            aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {isDark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+          </button>
+
+          {/* Language selector */}
+          {!collapsed ? (
+            <div className="relative ml-auto">
+              <select
+                value={locale}
+                onChange={(e) => setLocale(e.target.value as Locale)}
+                className={cn(
+                  "appearance-none rounded-md border px-1.5 py-0.5 pr-5 text-[10px] font-medium cursor-pointer outline-none transition-colors",
+                  "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]"
+                )}
+              >
+                {(Object.entries(localeLabels) as [Locale, string][]).map(([val, label]) => (
+                  <option key={val} value={val}>{label}</option>
+                ))}
+              </select>
+              <Globe className="pointer-events-none absolute right-1 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-[var(--text-muted)]" />
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                const locales: Locale[] = ["en", "id", "ja"];
+                const next = locales[(locales.indexOf(locale) + 1) % locales.length];
+                setLocale(next);
+              }}
+              className={cn(
+                "flex h-7 w-7 items-center justify-center rounded-md transition-colors text-[9px] font-bold",
+                "bg-[var(--surface-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+              )}
+              title={`Language: ${localeLabels[locale]}`}
+            >
+              {localeLabels[locale]}
+            </button>
+          )}
         </div>
 
         {/* User section */}
