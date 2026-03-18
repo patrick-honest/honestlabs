@@ -698,3 +698,102 @@ export async function getCohortFinancials(): Promise<CohortFinancialRow[]> {
   `;
   return runQuery<CohortFinancialRow>(sql);
 }
+
+// ---------------------------------------------------------------------------
+// Authoritative Revenue Per User (RPU)
+// Combines: actual fees/interest from DW004 + estimated interchange from DW007
+// Rates: card interchange 1.6% blended Visa+MC, QRIS 0.2035% (0.55% MDR × 37%)
+// Sources: Kansas City Fed Aug 2025, PBI No. 24/8/PBI/2022, PT ALTO Network
+// ---------------------------------------------------------------------------
+
+export interface CohortRpuRow {
+  grp: string;
+  cohort_size: number;
+  interest_idr: number;
+  admin_fees_idr: number;
+  charge_fees_idr: number;
+  card_interchange_idr: number;
+  qris_revenue_idr: number;
+  fee_revenue_idr: number;
+  txn_revenue_idr: number;
+  total_revenue_idr: number;
+  rpu_idr: number;
+}
+
+export async function getCohortRpu(startDate: string, endDate: string): Promise<CohortRpuRow[]> {
+  const sql = `
+    WITH all_users AS (
+      SELECT user_id, qris_test_rollout_group AS grp
+      FROM ${TABLES.qris_rollout}
+    ),
+    contaminated_ctrl AS (
+      SELECT DISTINCT u.user_id
+      FROM all_users u
+      JOIN ${TABLES.cms_line_of_credit} m ON u.user_id = m.user_id
+      JOIN ${TABLES.principal_card_updates} p ON p.f9_dw005_loc_acct = m.external_id
+      JOIN ${TABLES.authorized_transaction} t ON t.f9_dw007_prin_crn = p.f9_dw005_crn
+      WHERE u.grp = 'Control'
+        AND t.fx_dw007_rte_dest = 'L'
+        AND (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '')
+    ),
+    credit_qris_exp AS (
+      SELECT user_id, grp FROM all_users
+      WHERE NOT (grp = 'Control' AND user_id IN (SELECT user_id FROM contaminated_ctrl))
+    ),
+    acct_map AS (
+      SELECT c.user_id, c.grp, m.external_id AS loc_acct
+      FROM credit_qris_exp c
+      JOIN ${TABLES.cms_line_of_credit} m ON c.user_id = m.user_id
+    ),
+    cohort_size AS (
+      SELECT grp, COUNT(DISTINCT user_id) AS sz FROM credit_qris_exp GROUP BY grp
+    ),
+    -- Actual fees + interest from DW004 snapshot on last day of period
+    financials AS (
+      SELECT a.grp,
+        SUM(CAST(d.f9_dw004_tot_int AS FLOAT64) / 100) AS interest_idr,
+        SUM(CAST(d.f9_dw004_bil_fee_chrg_1 AS FLOAT64) / 100) AS admin_fees_idr,
+        SUM(CAST(d.f9_dw004_bil_chrg_fee AS FLOAT64) / 100) AS charge_fees_idr
+      FROM acct_map a
+      JOIN ${TABLES.financial_account_updates} d ON d.p9_dw004_loc_acct = a.loc_acct
+      WHERE d.f9_dw004_bus_dt = (
+        SELECT MAX(f9_dw004_bus_dt) FROM ${TABLES.financial_account_updates}
+        WHERE f9_dw004_bus_dt <= @endDate
+      )
+      GROUP BY a.grp
+    ),
+    -- Estimated interchange from DW007 transactions in period
+    txn_revenue AS (
+      SELECT c.grp,
+        ROUND(SUM(CASE WHEN t.fx_dw007_rte_dest != 'L' OR t.fx_dw007_rte_dest IS NULL
+          THEN CAST(t.f9_dw007_amt_req AS FLOAT64) / 100 * 0.016 ELSE 0 END), 0) AS card_interchange_idr,
+        ROUND(SUM(CASE WHEN t.fx_dw007_rte_dest = 'L'
+          THEN CAST(t.f9_dw007_amt_req AS FLOAT64) / 100 * 0.002035 ELSE 0 END), 0) AS qris_revenue_idr
+      FROM ${TABLES.authorized_transaction} t
+      JOIN ${TABLES.principal_card_updates} p ON p.f9_dw005_crn = t.f9_dw007_prin_crn
+      JOIN ${TABLES.cms_line_of_credit} m ON m.external_id = p.f9_dw005_loc_acct
+      JOIN credit_qris_exp c ON c.user_id = m.user_id
+      WHERE t.f9_dw007_dt BETWEEN @startDate AND @endDate
+        AND (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '')
+        AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+      GROUP BY c.grp
+    )
+    SELECT
+      f.grp,
+      cs.sz AS cohort_size,
+      ROUND(f.interest_idr, 0) AS interest_idr,
+      ROUND(f.admin_fees_idr, 0) AS admin_fees_idr,
+      ROUND(f.charge_fees_idr, 0) AS charge_fees_idr,
+      tr.card_interchange_idr,
+      tr.qris_revenue_idr,
+      ROUND(f.interest_idr + f.admin_fees_idr + f.charge_fees_idr, 0) AS fee_revenue_idr,
+      ROUND(tr.card_interchange_idr + tr.qris_revenue_idr, 0) AS txn_revenue_idr,
+      ROUND(f.interest_idr + f.admin_fees_idr + f.charge_fees_idr + tr.card_interchange_idr + tr.qris_revenue_idr, 0) AS total_revenue_idr,
+      ROUND((f.interest_idr + f.admin_fees_idr + f.charge_fees_idr + tr.card_interchange_idr + tr.qris_revenue_idr) / cs.sz, 0) AS rpu_idr
+    FROM financials f
+    JOIN txn_revenue tr ON f.grp = tr.grp
+    JOIN cohort_size cs ON f.grp = cs.grp
+    ORDER BY f.grp
+  `;
+  return runQuery<CohortRpuRow>(sql, { startDate, endDate });
+}

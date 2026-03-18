@@ -307,6 +307,8 @@ interface ApiData {
   qrisOnlyMerchantSpend?: QrisOnlySpendRow[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   cohortFinancials?: any[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  cohortRpu?: any[];
 }
 
 export default function QrisExperimentPage() {
@@ -354,27 +356,21 @@ export default function QrisExperimentPage() {
     };
   }, [apiData]);
 
-  // Revenue per user (interchange + fees + interest, normalized per cohort member)
-  const rpuTest = useMemo(() => {
-    if (!interchangeTest || !apiData?.cohortFinancials?.length) return null;
+  // Authoritative RPU from dedicated BigQuery query
+  // Uses: 1.6% card interchange, 0.2035% QRIS issuer share, actual DW004 fees/interest
+  // DW004 snapshot on last day of period, DW007 transactions within period
+  const rpuData = useMemo(() => {
+    if (!apiData?.cohortRpu?.length) return null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const fin = (apiData.cohortFinancials as any[]).find((r: any) => r.grp === 'Test');
-    if (!fin || !test) return null;
-    const txnRevenue = (interchangeTest.non_qris_interchange_idr || 0) + (interchangeTest.qris_interchange_idr || 0);
-    const feeRevenue = (fin.total_fees_idr || 0) + (fin.total_chrg_fee_idr || 0);
-    return Math.round((txnRevenue + feeRevenue) / test.cohort_size);
-  }, [interchangeTest, apiData, test]);
+    const rows = apiData.cohortRpu as any[];
+    const c = rows.find((r: { grp: string }) => r.grp === 'Control');
+    const t = rows.find((r: { grp: string }) => r.grp === 'Test');
+    if (!c || !t) return null;
+    return { ctrl: c, tst: t };
+  }, [apiData]);
 
-  const rpuControl = useMemo(() => {
-    if (!interchangeControl || !apiData?.cohortFinancials?.length) return null;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const fin = (apiData.cohortFinancials as any[]).find((r: any) => r.grp === 'Control');
-    if (!fin || !control) return null;
-    const txnRevenue = (interchangeControl.non_qris_interchange_idr || 0) + (interchangeControl.qris_interchange_idr || 0);
-    const feeRevenue = (fin.total_fees_idr || 0) + (fin.total_chrg_fee_idr || 0);
-    return Math.round((txnRevenue + feeRevenue) / control.cohort_size);
-  }, [interchangeControl, apiData, control]);
-
+  const rpuTest = rpuData?.tst?.rpu_idr ?? null;
+  const rpuControl = rpuData?.ctrl?.rpu_idr ?? null;
   const rpuDelta = rpuTest && rpuControl ? ((rpuTest - rpuControl) / rpuControl * 100) : 0;
 
   // Cumulative QRIS spend at QRIS-only merchants
