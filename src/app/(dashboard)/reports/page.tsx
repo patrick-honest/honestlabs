@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { Header } from "@/components/layout/header";
-import { Search, Filter, ChevronDown, ChevronRight, TrendingUp, TrendingDown, Minus, Calendar, X, FileDown, Printer } from "lucide-react";
+import { Search, Filter, ChevronDown, ChevronRight, TrendingUp, TrendingDown, Minus, Calendar, X, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
 import { generateReportPdf } from "@/lib/report-pdf";
@@ -377,7 +377,7 @@ function ReportRow({ report, isDark }: { report: ReportEntry; isDark: boolean })
               )}
               title={`Download ${report.title} PDF`}
             >
-              <FileDown className="h-3 w-3" />
+              <Download className="h-3 w-3" />
               PDF
             </button>
           )}

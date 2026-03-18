@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState, useEffect } from "react";
 import { Header } from "@/components/layout/header";
 import { ChartCard } from "@/components/dashboard/chart-card";
+import { generateReportPdf } from "@/lib/report-pdf";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
@@ -18,7 +19,7 @@ import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banne
 import {
   QrCode, TrendingUp, TrendingDown, Users, Zap, ArrowUpRight, ArrowDownRight,
   ShoppingCart, CreditCard, BarChart3, Target, CheckCircle2, AlertTriangle,
-  Printer,
+  Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -359,7 +360,7 @@ function HorizontalBar({
 // ==========================================================================
 
 export default function QrisExperimentPage() {
-  const { period, periodLabel } = usePeriod();
+  const { period, periodLabel, dateRange } = usePeriod();
   const { filters } = useFilters();
   const { isDark } = useTheme();
   const { currency } = useCurrency();
@@ -382,12 +383,6 @@ export default function QrisExperimentPage() {
     return () => { document.head.removeChild(style); };
   }, []);
 
-  const handlePrint = useCallback(() => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => { window.print(); });
-    });
-  }, []);
-
   const handleRefresh = useCallback(async () => {
     await new Promise((r) => setTimeout(r, 800));
   }, []);
@@ -404,6 +399,31 @@ export default function QrisExperimentPage() {
   const qrisShareOfVolume = ((latestProfit.qris_volume / (latestProfit.qris_volume + latestProfit.card_volume)) * 100).toFixed(1);
 
   const maxCategoryTxn = merchantCategoryData[0].txn_count;
+
+  const handleDownloadPdf = useCallback(() => {
+    generateReportPdf({
+      id: "qris-experiment",
+      cycle: period,
+      periodStart: dateRange.start.toISOString().slice(0, 10),
+      periodEnd: dateRange.end.toISOString().slice(0, 10),
+      section: "QRIS Experiment",
+      title: `QRIS Experiment Report — ${periodLabel}`,
+      generatedAt: new Date().toISOString(),
+      kpis: [
+        { label: "QRIS Adoption Rate", value: currentAdoptionRate, unit: "%", change: null },
+        { label: "QRIS Users", value: totalQrisUsers, unit: "count", change: null },
+        { label: "QRIS Txn Count", value: totalQrisTxns, unit: "count", change: null },
+        { label: "QRIS Share of Volume", value: parseFloat(qrisShareOfVolume), unit: "%", change: null },
+      ],
+      trends: [
+        `QRIS adoption reached ${currentAdoptionRate}% — up from 3% six months ago.`,
+        `${fmtNum(totalNewUsers)} new QRIS users added during the experiment period.`,
+        `QRIS users transact ${q.avg_txn_count}x/month vs ${nq.avg_txn_count}x for non-QRIS (${((q.avg_txn_count / nq.avg_txn_count - 1) * 100).toFixed(0)}% higher).`,
+        `Revenue per QRIS user is 2.5x higher despite lower 0.7% MDR rate.`,
+        `QRIS volume is ${qrisShareOfVolume}% of total authorized transaction volume.`,
+      ],
+    });
+  }, [period, periodLabel, dateRange, currentAdoptionRate, totalQrisUsers, totalQrisTxns, qrisShareOfVolume, totalNewUsers, q, nq]);
 
   return (
     <div className="flex flex-col">
@@ -456,12 +476,12 @@ export default function QrisExperimentPage() {
                   </div>
                 </div>
                 <button
-                  onClick={handlePrint}
+                  onClick={handleDownloadPdf}
                   className="no-print flex items-center gap-2 rounded-lg bg-white/20 backdrop-blur-sm px-4 py-2 text-sm font-medium text-white hover:bg-white/30 transition-colors"
                   data-print-hide
                 >
-                  <Printer className="h-4 w-4" />
-                  Download PDF
+                  <Download className="h-4 w-4" />
+                  Save PDF
                 </button>
               </div>
 
