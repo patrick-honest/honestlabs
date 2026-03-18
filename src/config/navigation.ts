@@ -30,7 +30,6 @@ export const navigation: NavItem[] = [
   },
   { label: "Vintage Analysis", href: "/vintage", icon: "Layers" },
   { label: "Orico Reports", href: "/orico", icon: "Building" },
-  { label: "A/B Tests", href: "/ab-tests", icon: "FlaskConical" },
   { label: "Channel Quality", href: "/channel-quality", icon: "Target" },
   { label: "Quick Analysis", href: "/quick-analysis", icon: "GitCompareArrows" },
   { label: "QRIS Experiment", href: "/qris-experiment", icon: "QrCode" },

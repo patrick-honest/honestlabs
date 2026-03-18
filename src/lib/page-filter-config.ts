@@ -96,7 +96,6 @@ export const PAGE_FILTER_CONFIG: { prefix: string; filters: FilterKey[] | null }
   },
 
   // ── Top-level pages ──
-  { prefix: "/ab-tests", filters: [] }, // experiment-level, not account-level
   {
     prefix: "/channel-quality",
     filters: [...ACCT, ...RISK],
