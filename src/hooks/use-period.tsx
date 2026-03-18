@@ -83,10 +83,10 @@ const PRESET_ORDER: Record<Cycle, TimeRangePreset[]> = {
   yearly:    ["xtd", "last_full", "full"],
 };
 
-const COMPARISON_OPTIONS: { value: ComparisonMode; label: string }[] = [
-  { value: "prior_period", label: "vs Prior Period" },
-  { value: "prior_year",   label: "vs Prior Year" },
-  { value: "none",         label: "No Comparison" },
+const COMPARISON_OPTIONS: { value: ComparisonMode; label: string; tKey: string }[] = [
+  { value: "prior_period", label: "vs Prior Period", tKey: "vsPriorPeriod" },
+  { value: "prior_year",   label: "vs Prior Year",   tKey: "vsPriorYear" },
+  { value: "none",         label: "No Comparison",   tKey: "noComparison" },
 ];
 
 export { COMPARISON_OPTIONS };

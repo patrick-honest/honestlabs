@@ -27,6 +27,7 @@ import { HeaderFilterDropdown } from "@/components/filters/header-filter-dropdow
 import { getVisibleFilters, isFilterVisible, type FilterKey } from "@/lib/page-filter-config";
 import { Sun, Moon, Calendar, SlidersHorizontal, ChevronDown, ChevronLeft, ChevronRight, X, Save, Bookmark, Trash2, Pencil, Check, Globe } from "lucide-react";
 import { useLanguage, type Locale } from "@/hooks/use-language";
+import { useTranslations } from "next-intl";
 import type { Cycle } from "@/types/reports";
 // Types already imported above from use-period
 
@@ -39,32 +40,33 @@ interface FilterGroup {
   }[];
 }
 
-const FILTER_GROUPS: FilterGroup[] = [
+// Filter group definitions — labels are i18n keys resolved at render time
+const FILTER_GROUP_DEFS = [
   {
-    label: "Acct",
+    tKey: "acct" as const,
     filters: [
-      { key: "cardType", label: "Card", options: CARD_TYPE_OPTIONS },
-      { key: "productType", label: "Product", options: PRODUCT_TYPE_OPTIONS },
-      { key: "cohort", label: "Cohort", options: COHORT_OPTIONS },
-      { key: "cycleDate", label: "Cycle", options: CYCLE_DATE_OPTIONS },
+      { key: "cardType" as const, tKey: "card" as const, options: CARD_TYPE_OPTIONS },
+      { key: "productType" as const, tKey: "product" as const, options: PRODUCT_TYPE_OPTIONS },
+      { key: "cohort" as const, tKey: "cohort" as const, options: COHORT_OPTIONS },
+      { key: "cycleDate" as const, tKey: "cycle" as const, options: CYCLE_DATE_OPTIONS },
     ],
   },
   {
-    label: "Txn",
+    tKey: "txn" as const,
     filters: [
-      { key: "transactionType", label: "Type", options: TRANSACTION_TYPE_OPTIONS },
-      { key: "transactionChannel", label: "Channel", options: TRANSACTION_CHANNEL_OPTIONS },
-      { key: "transactionStatus", label: "Status", options: TRANSACTION_STATUS_OPTIONS },
-      { key: "merchantCategory", label: "MCC", options: MERCHANT_CATEGORY_OPTIONS },
-      { key: "amountRange", label: "Amount", options: AMOUNT_RANGE_OPTIONS },
-      { key: "recurringType", label: "Recurring", options: RECURRING_TYPE_OPTIONS },
+      { key: "transactionType" as const, tKey: "type" as const, options: TRANSACTION_TYPE_OPTIONS },
+      { key: "transactionChannel" as const, tKey: "channel" as const, options: TRANSACTION_CHANNEL_OPTIONS },
+      { key: "transactionStatus" as const, tKey: "status" as const, options: TRANSACTION_STATUS_OPTIONS },
+      { key: "merchantCategory" as const, tKey: "mcc" as const, options: MERCHANT_CATEGORY_OPTIONS },
+      { key: "amountRange" as const, tKey: "amount" as const, options: AMOUNT_RANGE_OPTIONS },
+      { key: "recurringType" as const, tKey: "recurring" as const, options: RECURRING_TYPE_OPTIONS },
     ],
   },
   {
-    label: "Risk",
+    tKey: "riskGroup" as const,
     filters: [
-      { key: "riskCategory", label: "Category", options: RISK_CATEGORY_OPTIONS },
-      { key: "decisioningModel", label: "Model", options: DECISIONING_MODEL_OPTIONS },
+      { key: "riskCategory" as const, tKey: "category" as const, options: RISK_CATEGORY_OPTIONS },
+      { key: "decisioningModel" as const, tKey: "model" as const, options: DECISIONING_MODEL_OPTIONS },
     ],
   },
 ];
@@ -78,25 +80,21 @@ interface TimeOption {
   group: string;
 }
 
-const TIME_OPTIONS: TimeOption[] = [
-  { label: "Last Full Week", period: "weekly", timeRange: "last_full", group: "Weekly" },
-  { label: "Week to Date", period: "weekly", timeRange: "xtd", group: "Weekly" },
-  { label: "Last Full Month", period: "monthly", timeRange: "last_full", group: "Monthly" },
-  { label: "Month to Date", period: "monthly", timeRange: "xtd", group: "Monthly" },
-  { label: "Last Full Quarter", period: "quarterly", timeRange: "last_full", group: "Quarterly" },
-  { label: "Quarter to Date", period: "quarterly", timeRange: "xtd", group: "Quarterly" },
-  { label: "Year to Date", period: "yearly", timeRange: "xtd", group: "Yearly" },
+// Time option definitions — labels are i18n keys resolved at render time
+const TIME_OPTION_DEFS: { tKey: string; period: Cycle; timeRange: TimeRangePreset; groupTKey: string }[] = [
+  { tKey: "lastFullWeek", period: "weekly", timeRange: "last_full", groupTKey: "weekly" },
+  { tKey: "weekToDate", period: "weekly", timeRange: "xtd", groupTKey: "weekly" },
+  { tKey: "lastFullMonth", period: "monthly", timeRange: "last_full", groupTKey: "monthly" },
+  { tKey: "monthToDate", period: "monthly", timeRange: "xtd", groupTKey: "monthly" },
+  { tKey: "lastFullQuarter", period: "quarterly", timeRange: "last_full", groupTKey: "quarterly" },
+  { tKey: "quarterToDate", period: "quarterly", timeRange: "xtd", groupTKey: "quarterly" },
+  { tKey: "yearToDate", period: "yearly", timeRange: "xtd", groupTKey: "yearly" },
 ];
-
-function getActiveLabel(period: Cycle, timeRange: TimeRangePreset): string {
-  const found = TIME_OPTIONS.find((o) => o.period === period && o.timeRange === timeRange);
-  return found?.label ?? "Custom";
-}
 
 // ── Inline Mini Calendar ────────────────────────────────────────────────────
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const DOW = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+const MONTH_KEYS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"] as const;
+const DOW_KEYS = ["mo", "tu", "we", "th", "fr", "sa", "su"] as const;
 
 function getMonthGrid(year: number, month: number): (number | null)[] {
   const firstDay = new Date(year, month, 1).getDay();
@@ -109,21 +107,22 @@ function getMonthGrid(year: number, month: number): (number | null)[] {
 }
 
 function MiniCalendar({
-  year, month, selectedStart, selectedEnd, onSelect, onPrev, onNext, isDark,
+  year, month, selectedStart, selectedEnd, onSelect, onPrev, onNext, isDark, months, dow,
 }: {
   year: number; month: number; selectedStart: Date | null; selectedEnd: Date | null;
   onSelect: (d: Date) => void; onPrev: () => void; onNext: () => void; isDark: boolean;
+  months: string[]; dow: string[];
 }) {
   const grid = getMonthGrid(year, month);
   return (
     <div className="w-[200px]">
       <div className="flex items-center justify-between mb-1.5">
         <button onClick={onPrev} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-0.5"><ChevronLeft className="h-3 w-3" /></button>
-        <span className="text-[10px] font-semibold text-[var(--text-primary)]">{MONTHS[month]} {year}</span>
+        <span className="text-[10px] font-semibold text-[var(--text-primary)]">{months[month]} {year}</span>
         <button onClick={onNext} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-0.5"><ChevronRight className="h-3 w-3" /></button>
       </div>
       <div className="grid grid-cols-7 gap-0.5 text-center">
-        {DOW.map((d) => <span key={d} className="text-[7px] font-medium text-[var(--text-muted)] py-0.5">{d}</span>)}
+        {dow.map((d) => <span key={d} className="text-[7px] font-medium text-[var(--text-muted)] py-0.5">{d}</span>)}
         {grid.map((day, i) => {
           if (day === null) return <span key={`e-${i}`} />;
           const date = new Date(year, month, day);
@@ -161,9 +160,15 @@ function UnifiedTimeSelector({
   onCustomRange: (start: Date, end: Date) => void;
   isDark: boolean;
 }) {
+  const tTime = useTranslations("time");
+  const tCommon = useTranslations("common");
   const [open, setOpen] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  // Translated month and day-of-week arrays
+  const months = MONTH_KEYS.map((k) => tCommon(`months.${k}`));
+  const dow = DOW_KEYS.map((k) => tCommon(`dow.${k}`));
 
   // Calendar state
   const now = new Date();
@@ -186,7 +191,10 @@ function UnifiedTimeSelector({
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  const activeLabel = getActiveLabel(period, timeRange);
+  const activeLabel = (() => {
+    const found = TIME_OPTION_DEFS.find((o) => o.period === period && o.timeRange === timeRange);
+    return found ? tTime(found.tKey) : tTime("custom");
+  })();
 
   const handleCalSelect = (date: Date) => {
     if (selecting === "start") {
@@ -237,8 +245,8 @@ function UnifiedTimeSelector({
               ? "border-[var(--border)] bg-[#141226] shadow-black/40"
               : "border-[var(--border)] bg-white shadow-black/10"
           )}>
-            {TIME_OPTIONS.map((opt, idx) => {
-              const showGroup = idx === 0 || TIME_OPTIONS[idx - 1].group !== opt.group;
+            {TIME_OPTION_DEFS.map((opt, idx) => {
+              const showGroup = idx === 0 || TIME_OPTION_DEFS[idx - 1].groupTKey !== opt.groupTKey;
               const isActive = opt.period === period && opt.timeRange === timeRange;
               return (
                 <div key={`${opt.period}-${opt.timeRange}`}>
@@ -248,7 +256,7 @@ function UnifiedTimeSelector({
                       idx > 0 && "border-t border-[var(--border)] mt-1",
                       "text-[var(--text-muted)]"
                     )}>
-                      {opt.group}
+                      {tTime(opt.groupTKey)}
                     </div>
                   )}
                   <button
@@ -264,7 +272,7 @@ function UnifiedTimeSelector({
                     )}
                   >
                     {isActive && <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", isDark ? "bg-[#5B22FF]" : "bg-[#D00083]")} />}
-                    <span className={isActive ? "font-medium" : ""}>{opt.label}</span>
+                    <span className={isActive ? "font-medium" : ""}>{tTime(opt.tKey)}</span>
                   </button>
                 </div>
               );
@@ -272,7 +280,7 @@ function UnifiedTimeSelector({
 
             {/* Custom range option */}
             <div className="border-t border-[var(--border)] mt-1">
-              <div className={cn("px-3 pt-2 pb-1 text-[9px] font-bold uppercase tracking-widest text-[var(--text-muted)]")}>Custom</div>
+              <div className={cn("px-3 pt-2 pb-1 text-[9px] font-bold uppercase tracking-widest text-[var(--text-muted)]")}>{tTime("custom")}</div>
               <button
                 onClick={() => {
                   setCalStart(dateRange.start);
@@ -289,7 +297,7 @@ function UnifiedTimeSelector({
               >
                 {timeRange === "custom" && <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", isDark ? "bg-[#5B22FF]" : "bg-[#D00083]")} />}
                 <Calendar className="h-3 w-3" />
-                <span className={timeRange === "custom" ? "font-medium" : ""}>Pick Date Range…</span>
+                <span className={timeRange === "custom" ? "font-medium" : ""}>{tTime("pickDateRange")}</span>
               </button>
             </div>
           </div>
@@ -310,7 +318,7 @@ function UnifiedTimeSelector({
                 onSelect={handleCalSelect}
                 onPrev={() => { if (leftMonth === 0) { setLeftMonth(11); setLeftYear(leftYear - 1); } else setLeftMonth(leftMonth - 1); }}
                 onNext={() => { if (leftMonth === 11) { setLeftMonth(0); setLeftYear(leftYear + 1); } else setLeftMonth(leftMonth + 1); }}
-                isDark={isDark}
+                isDark={isDark} months={months} dow={dow}
               />
               <div className="w-px bg-[var(--border)]" />
               <MiniCalendar
@@ -319,7 +327,7 @@ function UnifiedTimeSelector({
                 onSelect={handleCalSelect}
                 onPrev={() => { if (rightMonth === 0) { setRightMonth(11); setRightYear(rightYear - 1); } else setRightMonth(rightMonth - 1); }}
                 onNext={() => { if (rightMonth === 11) { setRightMonth(0); setRightYear(rightYear + 1); } else setRightMonth(rightMonth + 1); }}
-                isDark={isDark}
+                isDark={isDark} months={months} dow={dow}
               />
             </div>
 
@@ -328,18 +336,18 @@ function UnifiedTimeSelector({
               <div className="text-[10px] text-[var(--text-secondary)]">
                 {calStart ? (
                   <span className="font-medium">{calStart.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</span>
-                ) : <span className="text-[var(--text-muted)]">Start</span>}
+                ) : <span className="text-[var(--text-muted)]">{tCommon("start")}</span>}
                 <span className="text-[var(--text-muted)] mx-1">→</span>
                 {calEnd ? (
                   <span className="font-medium">{calEnd.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</span>
-                ) : <span className="text-[var(--text-muted)]">End</span>}
+                ) : <span className="text-[var(--text-muted)]">{tCommon("end")}</span>}
               </div>
               <div className="flex gap-1.5">
                 <button
                   onClick={() => { setShowCalendar(false); }}
                   className="rounded px-2 py-0.5 text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                 >
-                  Back
+                  {tCommon("back")}
                 </button>
                 <button
                   onClick={handleApplyCustom}
@@ -349,7 +357,7 @@ function UnifiedTimeSelector({
                     isDark ? "bg-[#5B22FF]" : "bg-[#D00083]"
                   )}
                 >
-                  Apply
+                  {tCommon("apply")}
                 </button>
               </div>
             </div>
@@ -380,7 +388,7 @@ function UnifiedTimeSelector({
           )}
         >
           {COMPARISON_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
+            <option key={opt.value} value={opt.value}>{tTime(opt.tKey)}</option>
           ))}
         </select>
         <ChevronDown className="pointer-events-none absolute right-0.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-[var(--text-muted)]" />
@@ -405,6 +413,9 @@ export function Header({ title }: HeaderProps) {
   } = usePeriod();
   const { isDark, toggleTheme } = useTheme();
   const { locale, setLocale, localeLabels } = useLanguage();
+  const tCommon = useTranslations("common");
+  const tTime = useTranslations("time");
+  const tFilters = useTranslations("filters");
   const {
     filters, toggleFilterValue, clearFilter, clearFilters, activeFilterCount,
     savedPresets, savePreset, loadPreset, renamePreset, deletePreset, suggestPresetName,
@@ -445,10 +456,13 @@ export function Header({ title }: HeaderProps) {
 
   const hasAnyFilters = visibleKeys === null || visibleKeys.length > 0;
 
-  const visibleGroups = FILTER_GROUPS
+  const visibleGroups = FILTER_GROUP_DEFS
     .map((group) => ({
       ...group,
-      filters: group.filters.filter((f) => isFilterVisible(f.key, visibleKeys)),
+      label: tFilters(group.tKey),
+      filters: group.filters
+        .filter((f) => isFilterVisible(f.key, visibleKeys))
+        .map((f) => ({ ...f, label: tFilters(f.tKey) })),
     }))
     .filter((group) => group.filters.length > 0);
 
@@ -498,7 +512,7 @@ export function Header({ title }: HeaderProps) {
             )}
           >
             <SlidersHorizontal className="h-3 w-3" />
-            <span>Filters</span>
+            <span>{tCommon("filters")}</span>
             {totalFilters > 0 && (
               <span className={cn(
                 "flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[9px] font-bold text-white",
@@ -682,7 +696,7 @@ export function Header({ title }: HeaderProps) {
                 )}
               >
                 <Save className="h-2.5 w-2.5" />
-                Save filters
+                {tCommon("saveFilters")}
               </button>
             )}
 
@@ -702,7 +716,7 @@ export function Header({ title }: HeaderProps) {
                       setShowSaveDialog(false);
                     }
                   }}
-                  placeholder="Preset name…"
+                  placeholder={tCommon("presetName")}
                   className={cn(
                     "rounded border px-2 py-0.5 text-[10px] w-36 outline-none",
                     isDark ? "border-[#5B22FF]/30 bg-[#141226] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]" : "border-[#D00083]/30 bg-white text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
@@ -722,7 +736,7 @@ export function Header({ title }: HeaderProps) {
                     isDark ? "bg-[#5B22FF]" : "bg-[#D00083]"
                   )}
                 >
-                  Save
+                  {tCommon("save")}
                 </button>
                 <button
                   onClick={() => setShowSaveDialog(false)}
@@ -734,7 +748,7 @@ export function Header({ title }: HeaderProps) {
             )}
 
             {savedPresets.length === 0 && totalFilters === 0 && (
-              <span className="text-[10px] text-[var(--text-muted)] italic">Apply filters, then save as a preset for quick recall</span>
+              <span className="text-[10px] text-[var(--text-muted)] italic">{tCommon("noFiltersHint")}</span>
             )}
           </div>
         </div>
