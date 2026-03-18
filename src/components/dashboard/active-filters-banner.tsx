@@ -24,7 +24,7 @@ export function ActiveFiltersBanner() {
       <Filter className="h-3.5 w-3.5 shrink-0 text-[var(--text-muted)]" />
       <span className="text-[var(--text-secondary)]">
         <span className="font-medium text-[var(--text-primary)]">{activeFilterCount} {activeFilterCount !== 1 ? tBanner("filters") : tBanner("filter")}</span>
-        {" "}{tBanner("active", { pct })}
+        {" "}{tBanner("activeShowing", { pct: String(pct) })}
       </span>
       <span className="text-[var(--text-muted)]">·</span>
       <span className="text-[var(--text-muted)] truncate">{summary}</span>
