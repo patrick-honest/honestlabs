@@ -521,12 +521,7 @@ WITH card_acct_map AS (
   FROM \`mart_finexus.principal_card_updates\`
   WHERE f9_dw005_loc_acct IS NOT NULL AND f9_dw005_crn IS NOT NULL
 ),
-excluded_users AS (
-  SELECT DISTINCT cms.external_id AS loc_acct
-  FROM \`refined_rudderstack.decision_completed\` d
-  JOIN \`mart_growthbook.cms_line_of_credit\` cms ON d.user_id = cms.user_id
-  WHERE d.is_prepaid_card_applicable = TRUE OR d.is_account_opening_fee_applicable = TRUE
-)
+-- All product types included (prepaid + opening fee no longer excluded)
 SELECT
   DATE_TRUNC(DATE(f9_dw007_dt, 'Asia/Jakarta'), MONTH) AS month_key,
   COUNT(*) AS transaction_count,
@@ -534,11 +529,9 @@ SELECT
   COUNT(DISTINCT m.loc_acct) AS transactors
 FROM \`mart_finexus.authorized_transaction\` t
 JOIN card_acct_map m ON t.f9_dw007_prin_crn = m.crn
-LEFT JOIN excluded_users e ON m.loc_acct = e.loc_acct
 WHERE (fx_dw007_stat IS NULL OR TRIM(fx_dw007_stat) = '')
   AND fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
   AND f9_dw007_ori_amt > 0
-  AND e.loc_acct IS NULL
 GROUP BY 1
 ORDER BY 1
 `;
