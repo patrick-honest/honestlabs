@@ -292,7 +292,7 @@ export function UserInfoCard({ user }: UserInfoCardProps) {
           <Field label="Collections Status" value={user.collections_status} highlight={user.collections_status !== null && user.collections_status !== "Current" && user.collections_status !== "No collections"} />
           <Field label="Risk Category" value={user.credit_risk_category} />
           <Field label="CMA Version" value={user.cma_app_version} mono />
-          <Field label="Savings Account" value={user.savings_account_number} mono />
+          <Field label="Savings Account" value={user.savings_account_number ?? "Not Enrolled"} mono={!!user.savings_account_number} />
         </div>
       </div>
 
