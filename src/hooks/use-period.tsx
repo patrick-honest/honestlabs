@@ -19,8 +19,9 @@ export interface DateRange {
  *  xtd         — "to date" (WTD / MTD / QTD / YTD)  ← default on load
  *  last_full   — Last full fiscal period (Last FW / Last FM / Last FQ / Last FY)
  *  full        — Full current period
+ *  custom      — User-defined date range via calendar picker
  */
-export type TimeRangePreset = "xtd" | "last_full" | "full";
+export type TimeRangePreset = "xtd" | "last_full" | "full" | "custom";
 
 /**
  * Comparison modes.
@@ -47,6 +48,8 @@ interface PeriodContextValue {
   /** Comparison mode */
   comparisonMode: ComparisonMode;
   setComparisonMode: (m: ComparisonMode) => void;
+  /** Set a custom date range (switches timeRange to "custom") */
+  setCustomRange: (start: Date, end: Date) => void;
   /**
    * Multiplier (0-1) representing what fraction of the full period
    * is covered by the current time range. Use to scale mock data.
@@ -62,15 +65,16 @@ export const TODAY = new Date(2026, 2, 16); // Mar 16, 2026 (Monday)
 
 /** User-friendly preset labels per period type */
 const PRESET_LABELS: Record<Cycle, Record<TimeRangePreset, string>> = {
-  weekly:    { xtd: "WTD",  last_full: "Last FW", full: "Full Week" },
-  monthly:   { xtd: "MTD",  last_full: "Last FM", full: "Full Month" },
-  quarterly: { xtd: "QTD",  last_full: "Last FQ", full: "Full Quarter" },
-  yearly:    { xtd: "YTD",  last_full: "Last FY", full: "Full Year" },
+  weekly:    { xtd: "WTD",  last_full: "Last FW", full: "Full Week", custom: "Custom" },
+  monthly:   { xtd: "MTD",  last_full: "Last FM", full: "Full Month", custom: "Custom" },
+  quarterly: { xtd: "QTD",  last_full: "Last FQ", full: "Full Quarter", custom: "Custom" },
+  yearly:    { xtd: "YTD",  last_full: "Last FY", full: "Full Year", custom: "Custom" },
 };
 
 /**
  * Ordered preset list per period.
  * Weekly puts "Last FW" first per user request.
+ * "custom" is not listed here — it's handled by the calendar picker in the UI.
  */
 const PRESET_ORDER: Record<Cycle, TimeRangePreset[]> = {
   weekly:    ["last_full", "xtd", "full"],
@@ -304,7 +308,15 @@ const PeriodContext = createContext<PeriodContextValue | undefined>(undefined);
 
 const PERIOD_STORAGE_KEY = "honest_period_prefs";
 
-function loadPeriodPrefs(): { period: Cycle; timeRange: TimeRangePreset; comparisonMode: ComparisonMode } | null {
+interface PeriodPrefs {
+  period: Cycle;
+  timeRange: TimeRangePreset;
+  comparisonMode: ComparisonMode;
+  customStart?: string; // ISO date for custom range
+  customEnd?: string;
+}
+
+function loadPeriodPrefs(): PeriodPrefs | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(PERIOD_STORAGE_KEY);
@@ -312,9 +324,9 @@ function loadPeriodPrefs(): { period: Cycle; timeRange: TimeRangePreset; compari
   } catch { return null; }
 }
 
-function savePeriodPrefs(period: Cycle, timeRange: TimeRangePreset, comparisonMode: ComparisonMode) {
+function savePeriodPrefs(period: Cycle, timeRange: TimeRangePreset, comparisonMode: ComparisonMode, customStart?: string, customEnd?: string) {
   if (typeof window === "undefined") return;
-  try { localStorage.setItem(PERIOD_STORAGE_KEY, JSON.stringify({ period, timeRange, comparisonMode })); }
+  try { localStorage.setItem(PERIOD_STORAGE_KEY, JSON.stringify({ period, timeRange, comparisonMode, customStart, customEnd })); }
   catch { /* ignore */ }
 }
 
@@ -323,6 +335,12 @@ export function PeriodProvider({ children }: { children: ReactNode }) {
   const [period, setPeriodRaw] = useState<Cycle>(saved?.period ?? "weekly");
   const [timeRange, setTimeRangeRaw] = useState<TimeRangePreset>(saved?.timeRange ?? "last_full");
   const [comparisonMode, setComparisonModeRaw] = useState<ComparisonMode>(saved?.comparisonMode ?? "prior_period");
+  const [customStart, setCustomStart] = useState<Date | null>(
+    saved?.customStart ? new Date(saved.customStart + "T00:00:00") : null,
+  );
+  const [customEnd, setCustomEnd] = useState<Date | null>(
+    saved?.customEnd ? new Date(saved.customEnd + "T00:00:00") : null,
+  );
 
   // Persist selections to localStorage
   const setTimeRange = useCallback((tr: TimeRangePreset) => {
@@ -332,8 +350,8 @@ export function PeriodProvider({ children }: { children: ReactNode }) {
 
   const setComparisonMode = useCallback((cm: ComparisonMode) => {
     setComparisonModeRaw(cm);
-    savePeriodPrefs(period, timeRange, cm);
-  }, [period, timeRange]);
+    savePeriodPrefs(period, timeRange, cm, customStart ? toIsoDate(customStart) : undefined, customEnd ? toIsoDate(customEnd) : undefined);
+  }, [period, timeRange, customStart, customEnd]);
 
   // When switching period alone, default to last_full
   const setPeriod = useCallback((p: Cycle) => {
@@ -349,10 +367,28 @@ export function PeriodProvider({ children }: { children: ReactNode }) {
     savePeriodPrefs(p, tr, comparisonMode);
   }, [comparisonMode]);
 
-  const { current, previous } = useMemo(
-    () => computeRanges(period, timeRange, comparisonMode),
-    [period, timeRange, comparisonMode],
-  );
+  // Set a custom date range
+  const setCustomRange = useCallback((start: Date, end: Date) => {
+    setCustomStart(start);
+    setCustomEnd(end);
+    setTimeRangeRaw("custom");
+    // Keep period as-is for labeling purposes
+    savePeriodPrefs(period, "custom", comparisonMode, toIsoDate(start), toIsoDate(end));
+  }, [period, comparisonMode]);
+
+  const { current, previous } = useMemo(() => {
+    // For custom range, build the date range directly
+    if (timeRange === "custom" && customStart && customEnd) {
+      const currentRange = makeDateRange(customStart, customEnd);
+      // For comparison, shift back by the same span
+      const spanMs = customEnd.getTime() - customStart.getTime();
+      const prevStart = new Date(customStart.getTime() - spanMs - 86400000); // -1 day gap
+      const prevEnd = new Date(customStart.getTime() - 86400000);
+      const previousRange = makeDateRange(prevStart, prevEnd);
+      return { current: currentRange, previous: previousRange };
+    }
+    return computeRanges(period, timeRange, comparisonMode);
+  }, [period, timeRange, comparisonMode, customStart, customEnd]);
 
   const periodLabel = PERIOD_LABELS[period];
 
@@ -366,6 +402,7 @@ export function PeriodProvider({ children }: { children: ReactNode }) {
 
   // Compute what fraction of a full period the current range covers
   const timeRangeMultiplier = useMemo(() => {
+    if (timeRange === "custom") return 1; // Custom ranges are treated as full
     if (timeRange === "full" || timeRange === "last_full") return 1;
     // "xtd" — fraction of period elapsed
     const today = TODAY;
@@ -410,6 +447,7 @@ export function PeriodProvider({ children }: { children: ReactNode }) {
         setPeriodAndRange,
         comparisonMode,
         setComparisonMode,
+        setCustomRange,
         timeRangeMultiplier,
       }}
     >

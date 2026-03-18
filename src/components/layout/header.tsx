@@ -24,7 +24,7 @@ import {
 } from "@/hooks/use-filters";
 import { HeaderFilterDropdown } from "@/components/filters/header-filter-dropdown";
 import { getVisibleFilters, isFilterVisible, type FilterKey } from "@/lib/page-filter-config";
-import { Sun, Moon, Calendar, SlidersHorizontal, ChevronDown, X, Save, Bookmark, Trash2, Pencil, Check } from "lucide-react";
+import { Sun, Moon, Calendar, SlidersHorizontal, ChevronDown, ChevronLeft, ChevronRight, X, Save, Bookmark, Trash2, Pencil, Check } from "lucide-react";
 import type { Cycle } from "@/types/reports";
 // Types already imported above from use-period
 
@@ -90,9 +90,63 @@ function getActiveLabel(period: Cycle, timeRange: TimeRangePreset): string {
   return found?.label ?? "Custom";
 }
 
+// ── Inline Mini Calendar ────────────────────────────────────────────────────
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const DOW = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+
+function getMonthGrid(year: number, month: number): (number | null)[] {
+  const firstDay = new Date(year, month, 1).getDay();
+  const mondayOffset = firstDay === 0 ? 6 : firstDay - 1;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const grid: (number | null)[] = [];
+  for (let i = 0; i < mondayOffset; i++) grid.push(null);
+  for (let i = 1; i <= daysInMonth; i++) grid.push(i);
+  return grid;
+}
+
+function MiniCalendar({
+  year, month, selectedStart, selectedEnd, onSelect, onPrev, onNext, isDark,
+}: {
+  year: number; month: number; selectedStart: Date | null; selectedEnd: Date | null;
+  onSelect: (d: Date) => void; onPrev: () => void; onNext: () => void; isDark: boolean;
+}) {
+  const grid = getMonthGrid(year, month);
+  return (
+    <div className="w-[200px]">
+      <div className="flex items-center justify-between mb-1.5">
+        <button onClick={onPrev} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-0.5"><ChevronLeft className="h-3 w-3" /></button>
+        <span className="text-[10px] font-semibold text-[var(--text-primary)]">{MONTHS[month]} {year}</span>
+        <button onClick={onNext} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-0.5"><ChevronRight className="h-3 w-3" /></button>
+      </div>
+      <div className="grid grid-cols-7 gap-0.5 text-center">
+        {DOW.map((d) => <span key={d} className="text-[7px] font-medium text-[var(--text-muted)] py-0.5">{d}</span>)}
+        {grid.map((day, i) => {
+          if (day === null) return <span key={`e-${i}`} />;
+          const date = new Date(year, month, day);
+          const isStart = selectedStart && date.getTime() === selectedStart.getTime();
+          const isEnd = selectedEnd && date.getTime() === selectedEnd.getTime();
+          const isInRange = selectedStart && selectedEnd && date > selectedStart && date < selectedEnd;
+          const isSelected = isStart || isEnd;
+          return (
+            <button key={day} onClick={() => onSelect(date)} className={cn(
+              "h-5 w-5 mx-auto rounded text-[9px] font-medium transition-colors",
+              isSelected ? (isDark ? "bg-[#5B22FF] text-white" : "bg-[#D00083] text-white")
+                : isInRange ? (isDark ? "bg-[#5B22FF]/15 text-[#7C4DFF]" : "bg-[#D00083]/10 text-[#D00083]")
+                : "text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
+            )}>{day}</button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Unified Time Selector ──────────────────────────────────────────────────
+
 function UnifiedTimeSelector({
   period, timeRange, dateRange, prevDateRange, comparisonMode,
-  onSelectRange, onComparisonChange, isDark,
+  onSelectRange, onComparisonChange, onCustomRange, isDark,
 }: {
   period: Cycle;
   timeRange: TimeRangePreset;
@@ -101,14 +155,29 @@ function UnifiedTimeSelector({
   comparisonMode: ComparisonMode;
   onSelectRange: (period: Cycle, timeRange: TimeRangePreset) => void;
   onComparisonChange: (mode: ComparisonMode) => void;
+  onCustomRange: (start: Date, end: Date) => void;
   isDark: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  // Calendar state
+  const now = new Date();
+  const [leftYear, setLeftYear] = useState(now.getFullYear());
+  const [leftMonth, setLeftMonth] = useState(now.getMonth() - 1 < 0 ? 11 : now.getMonth() - 1);
+  const [rightYear, setRightYear] = useState(now.getFullYear());
+  const [rightMonth, setRightMonth] = useState(now.getMonth());
+  const [calStart, setCalStart] = useState<Date | null>(null);
+  const [calEnd, setCalEnd] = useState<Date | null>(null);
+  const [selecting, setSelecting] = useState<"start" | "end">("start");
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setShowCalendar(false);
+      }
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
@@ -116,12 +185,36 @@ function UnifiedTimeSelector({
 
   const activeLabel = getActiveLabel(period, timeRange);
 
+  const handleCalSelect = (date: Date) => {
+    if (selecting === "start") {
+      setCalStart(date);
+      if (calEnd && date > calEnd) setCalEnd(date);
+      setSelecting("end");
+    } else {
+      if (date < (calStart ?? date)) {
+        setCalStart(date);
+        setSelecting("end");
+      } else {
+        setCalEnd(date);
+        setSelecting("start");
+      }
+    }
+  };
+
+  const handleApplyCustom = () => {
+    if (calStart && calEnd) {
+      onCustomRange(calStart, calEnd);
+      setShowCalendar(false);
+      setOpen(false);
+    }
+  };
+
   return (
     <div className="flex items-center gap-2 shrink-0">
       {/* Unified range dropdown */}
       <div ref={ref} className="relative">
         <button
-          onClick={() => setOpen(!open)}
+          onClick={() => { setOpen(!open); setShowCalendar(false); }}
           className={cn(
             "flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors",
             isDark
@@ -134,7 +227,7 @@ function UnifiedTimeSelector({
           <ChevronDown className={cn("h-3 w-3 transition-transform", open && "rotate-180")} />
         </button>
 
-        {open && (
+        {open && !showCalendar && (
           <div className={cn(
             "absolute left-0 top-full z-[80] mt-1 w-56 rounded-xl border shadow-2xl py-1",
             isDark
@@ -173,6 +266,90 @@ function UnifiedTimeSelector({
                 </div>
               );
             })}
+
+            {/* Custom range option */}
+            <div className="border-t border-[var(--border)] mt-1">
+              <div className={cn("px-3 pt-2 pb-1 text-[9px] font-bold uppercase tracking-widest text-[var(--text-muted)]")}>Custom</div>
+              <button
+                onClick={() => {
+                  setCalStart(dateRange.start);
+                  setCalEnd(dateRange.end);
+                  setSelecting("start");
+                  setShowCalendar(true);
+                }}
+                className={cn(
+                  "flex w-full items-center gap-2 px-3 py-2 text-xs transition-colors",
+                  timeRange === "custom"
+                    ? isDark ? "text-[#7C4DFF] bg-[#5B22FF]/10" : "text-[#D00083] bg-[#D00083]/5"
+                    : "text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
+                )}
+              >
+                {timeRange === "custom" && <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", isDark ? "bg-[#5B22FF]" : "bg-[#D00083]")} />}
+                <Calendar className="h-3 w-3" />
+                <span className={timeRange === "custom" ? "font-medium" : ""}>Pick Date Range…</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Calendar picker popup */}
+        {open && showCalendar && (
+          <div className={cn(
+            "absolute left-0 top-full z-[80] mt-1 rounded-xl border shadow-2xl p-3",
+            isDark
+              ? "border-[var(--border)] bg-[#141226] shadow-black/40"
+              : "border-[var(--border)] bg-white shadow-black/10"
+          )}>
+            <div className="flex gap-3">
+              <MiniCalendar
+                year={leftYear} month={leftMonth}
+                selectedStart={calStart} selectedEnd={calEnd}
+                onSelect={handleCalSelect}
+                onPrev={() => { if (leftMonth === 0) { setLeftMonth(11); setLeftYear(leftYear - 1); } else setLeftMonth(leftMonth - 1); }}
+                onNext={() => { if (leftMonth === 11) { setLeftMonth(0); setLeftYear(leftYear + 1); } else setLeftMonth(leftMonth + 1); }}
+                isDark={isDark}
+              />
+              <div className="w-px bg-[var(--border)]" />
+              <MiniCalendar
+                year={rightYear} month={rightMonth}
+                selectedStart={calStart} selectedEnd={calEnd}
+                onSelect={handleCalSelect}
+                onPrev={() => { if (rightMonth === 0) { setRightMonth(11); setRightYear(rightYear - 1); } else setRightMonth(rightMonth - 1); }}
+                onNext={() => { if (rightMonth === 11) { setRightMonth(0); setRightYear(rightYear + 1); } else setRightMonth(rightMonth + 1); }}
+                isDark={isDark}
+              />
+            </div>
+
+            {/* Selected range + actions */}
+            <div className="flex items-center justify-between mt-2.5 pt-2.5 border-t border-[var(--border)]">
+              <div className="text-[10px] text-[var(--text-secondary)]">
+                {calStart ? (
+                  <span className="font-medium">{calStart.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</span>
+                ) : <span className="text-[var(--text-muted)]">Start</span>}
+                <span className="text-[var(--text-muted)] mx-1">→</span>
+                {calEnd ? (
+                  <span className="font-medium">{calEnd.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</span>
+                ) : <span className="text-[var(--text-muted)]">End</span>}
+              </div>
+              <div className="flex gap-1.5">
+                <button
+                  onClick={() => { setShowCalendar(false); }}
+                  className="rounded px-2 py-0.5 text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={handleApplyCustom}
+                  disabled={!calStart || !calEnd}
+                  className={cn(
+                    "rounded px-2.5 py-0.5 text-[10px] font-medium text-white disabled:opacity-40",
+                    isDark ? "bg-[#5B22FF]" : "bg-[#D00083]"
+                  )}
+                >
+                  Apply
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -221,7 +398,7 @@ export function Header({ title }: HeaderProps) {
   const {
     period, setPeriod, dateRange, prevDateRange,
     timeRange, setTimeRange, availablePresets,
-    setPeriodAndRange, comparisonMode, setComparisonMode,
+    setPeriodAndRange, comparisonMode, setComparisonMode, setCustomRange,
   } = usePeriod();
   const { isDark, toggleTheme } = useTheme();
   const {
@@ -294,6 +471,7 @@ export function Header({ title }: HeaderProps) {
           comparisonMode={comparisonMode}
           onSelectRange={setPeriodAndRange}
           onComparisonChange={setComparisonMode}
+          onCustomRange={setCustomRange}
           isDark={isDark}
         />
 
