@@ -266,9 +266,32 @@ export default function DashboardPage() {
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
-  // KPIs with filter scaling
+  // KPIs: extract the Big 4 from API data, or fall back to mock
   const kpis = useMemo(() => {
-    const raw = (apiData?.kpis as KpiMetric[]) ?? generateMockKpis(period, timeRangeMultiplier);
+    const apiKpis = apiData?.kpis as KpiMetric[] | undefined;
+
+    // Map API KPIs to our Big 4 dashboard metrics
+    const big4Keys = ["eligible_count", "spend_active_rate", "total_spend", "total_delinquent_rate"];
+    const big4Labels: Record<string, string> = {
+      eligible_count: "Active Accounts",
+      spend_active_rate: "Spend Active Rate",
+      total_spend: "Total Spend",
+      total_delinquent_rate: "30+ DPD Rate",
+    };
+
+    let raw: KpiMetric[];
+    if (apiKpis && apiKpis.length > 0) {
+      // Use real BQ data — pick the Big 4
+      raw = big4Keys.map((key) => {
+        const found = apiKpis.find((k) => k.metric === key);
+        if (found) return { ...found, label: big4Labels[key] ?? found.label };
+        // Fallback for missing metrics
+        return { metric: key, label: big4Labels[key] ?? key, value: 0, prevValue: null, unit: key.includes("rate") ? "percent" : "count", changePercent: null, direction: "flat" as const };
+      });
+    } else {
+      raw = generateMockKpis(period, timeRangeMultiplier);
+    }
+
     if (!hasActiveFilters(filters)) return raw;
     return raw.map((k) => ({
       ...k,

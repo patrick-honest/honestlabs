@@ -35,8 +35,9 @@ const DEFAULT_OPTIONS: SWRConfiguration = {
 };
 
 /**
- * Cached KPI fetch. Returns data from SWR cache instantly if available,
- * then revalidates in the background.
+ * Cached KPI fetch with auto-refresh.
+ * If GET returns 404 (cache miss), automatically triggers a POST refresh
+ * to populate the cache from BigQuery, then retries.
  */
 export function useKpis(cycle: string) {
   return useSWR<{
@@ -49,8 +50,27 @@ export function useKpis(cycle: string) {
     `/api/kpis?cycle=${cycle}`,
     {
       ...DEFAULT_OPTIONS,
-      // KPI data is updated by cron, so we can keep stale data for 10 min
       dedupingInterval: 10 * 60 * 1000,
+      fetcher: async (url: string) => {
+        // Try GET first (cached data)
+        const res = await fetch(url);
+        if (res.ok) return res.json();
+
+        // On 404 (cache miss), trigger a refresh from BigQuery
+        if (res.status === 404) {
+          const refreshRes = await fetch("/api/kpis/refresh", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ cycle }),
+          });
+          if (refreshRes.ok) return refreshRes.json();
+        }
+
+        // Other errors — throw to trigger SWR error state
+        const error = new Error("Fetch failed");
+        (error as unknown as Record<string, unknown>).status = res.status;
+        throw error;
+      },
     },
   );
 }
