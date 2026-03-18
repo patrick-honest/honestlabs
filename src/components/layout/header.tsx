@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useCurrency } from "@/hooks/use-currency";
-import { usePeriod, COMPARISON_OPTIONS, type ComparisonMode } from "@/hooks/use-period";
+import { usePeriod, COMPARISON_OPTIONS, type TimeRangePreset, type ComparisonMode, type DateRange } from "@/hooks/use-period";
 import { useTheme } from "@/hooks/use-theme";
 import {
   useFilters,
@@ -24,15 +24,8 @@ import {
 import { HeaderFilterDropdown } from "@/components/filters/header-filter-dropdown";
 import { getVisibleFilters, isFilterVisible, type FilterKey } from "@/lib/page-filter-config";
 import { Sun, Moon, Calendar, SlidersHorizontal, ChevronDown, X } from "lucide-react";
-import { DateRangePicker } from "@/components/layout/date-range-picker";
 import type { Cycle } from "@/types/reports";
-
-const CYCLES: { value: Cycle; label: string }[] = [
-  { value: "weekly", label: "W" },
-  { value: "monthly", label: "M" },
-  { value: "quarterly", label: "Q" },
-  { value: "yearly", label: "Y" },
-];
+// Types already imported above from use-period
 
 interface FilterGroup {
   label: string;
@@ -72,6 +65,151 @@ const FILTER_GROUPS: FilterGroup[] = [
   },
 ];
 
+// ── Unified Time Range Selector ──────────────────────────────────────────────
+
+interface TimeOption {
+  label: string;
+  period: Cycle;
+  timeRange: TimeRangePreset;
+  group: string;
+}
+
+const TIME_OPTIONS: TimeOption[] = [
+  { label: "Last Full Week", period: "weekly", timeRange: "last_full", group: "Weekly" },
+  { label: "Week to Date", period: "weekly", timeRange: "xtd", group: "Weekly" },
+  { label: "Last Full Month", period: "monthly", timeRange: "last_full", group: "Monthly" },
+  { label: "Month to Date", period: "monthly", timeRange: "xtd", group: "Monthly" },
+  { label: "Last Full Quarter", period: "quarterly", timeRange: "last_full", group: "Quarterly" },
+  { label: "Quarter to Date", period: "quarterly", timeRange: "xtd", group: "Quarterly" },
+  { label: "Year to Date", period: "yearly", timeRange: "xtd", group: "Yearly" },
+];
+
+function getActiveLabel(period: Cycle, timeRange: TimeRangePreset): string {
+  const found = TIME_OPTIONS.find((o) => o.period === period && o.timeRange === timeRange);
+  return found?.label ?? "Custom";
+}
+
+function UnifiedTimeSelector({
+  period, timeRange, dateRange, prevDateRange, comparisonMode,
+  onSelectRange, onComparisonChange, isDark,
+}: {
+  period: Cycle;
+  timeRange: TimeRangePreset;
+  dateRange: DateRange;
+  prevDateRange: DateRange;
+  comparisonMode: ComparisonMode;
+  onSelectRange: (period: Cycle, timeRange: TimeRangePreset) => void;
+  onComparisonChange: (mode: ComparisonMode) => void;
+  isDark: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const activeLabel = getActiveLabel(period, timeRange);
+
+  return (
+    <div className="flex items-center gap-2 shrink-0">
+      {/* Unified range dropdown */}
+      <div ref={ref} className="relative">
+        <button
+          onClick={() => setOpen(!open)}
+          className={cn(
+            "flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors",
+            isDark
+              ? "border-[#5B22FF]/40 bg-[#5B22FF]/10 text-[#7C4DFF]"
+              : "border-[#D00083]/30 bg-[#D00083]/5 text-[#D00083]"
+          )}
+        >
+          <Calendar className="h-3 w-3" />
+          <span>{activeLabel}</span>
+          <ChevronDown className={cn("h-3 w-3 transition-transform", open && "rotate-180")} />
+        </button>
+
+        {open && (
+          <div className={cn(
+            "absolute left-0 top-full z-[80] mt-1 w-56 rounded-xl border shadow-2xl py-1",
+            isDark
+              ? "border-[var(--border)] bg-[#141226] shadow-black/40"
+              : "border-[var(--border)] bg-white shadow-black/10"
+          )}>
+            {TIME_OPTIONS.map((opt, idx) => {
+              const showGroup = idx === 0 || TIME_OPTIONS[idx - 1].group !== opt.group;
+              const isActive = opt.period === period && opt.timeRange === timeRange;
+              return (
+                <div key={`${opt.period}-${opt.timeRange}`}>
+                  {showGroup && (
+                    <div className={cn(
+                      "px-3 pt-2 pb-1 text-[9px] font-bold uppercase tracking-widest",
+                      idx > 0 && "border-t border-[var(--border)] mt-1",
+                      "text-[var(--text-muted)]"
+                    )}>
+                      {opt.group}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => {
+                      onSelectRange(opt.period, opt.timeRange);
+                      setOpen(false);
+                    }}
+                    className={cn(
+                      "flex w-full items-center gap-2 px-3 py-2 text-xs transition-colors",
+                      isActive
+                        ? isDark ? "text-[#7C4DFF] bg-[#5B22FF]/10" : "text-[#D00083] bg-[#D00083]/5"
+                        : "text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
+                    )}
+                  >
+                    {isActive && <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", isDark ? "bg-[#5B22FF]" : "bg-[#D00083]")} />}
+                    <span className={isActive ? "font-medium" : ""}>{opt.label}</span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Date range display */}
+      <div className="flex items-center gap-1 text-[10px]">
+        <span className={cn("font-semibold", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>
+          {dateRange.label}
+        </span>
+        {comparisonMode !== "none" && (
+          <span className="text-[var(--text-muted)]">vs {prevDateRange.label}</span>
+        )}
+      </div>
+
+      {/* Comparison mode */}
+      <div className="relative shrink-0">
+        <select
+          value={comparisonMode}
+          onChange={(e) => onComparisonChange(e.target.value as ComparisonMode)}
+          className={cn(
+            "appearance-none rounded-md border px-1.5 py-0.5 pr-4 text-[10px] font-medium cursor-pointer outline-none transition-colors",
+            isDark
+              ? "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]"
+              : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]"
+          )}
+        >
+          {COMPARISON_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+        <ChevronDown className="pointer-events-none absolute right-0.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-[var(--text-muted)]" />
+      </div>
+    </div>
+  );
+}
+
+// ── Header ──────────────────────────────────────────────────────────────────
+
 interface HeaderProps {
   title: string;
 }
@@ -82,7 +220,7 @@ export function Header({ title }: HeaderProps) {
   const {
     period, setPeriod, dateRange, prevDateRange,
     timeRange, setTimeRange, availablePresets,
-    comparisonMode, setComparisonMode,
+    setPeriodAndRange, comparisonMode, setComparisonMode,
   } = usePeriod();
   const { isDark, toggleTheme } = useTheme();
   const { filters, toggleFilterValue, clearFilter, clearFilters, activeFilterCount } = useFilters();
@@ -139,91 +277,17 @@ export function Header({ title }: HeaderProps) {
         {/* Title */}
         <h1 className="text-sm font-semibold text-[var(--text-primary)] shrink-0">{title}</h1>
 
-        {/* ── Time controls group ── */}
-        <div className={cn(
-          "flex items-center gap-1.5 rounded-lg border px-2 py-1 shrink-0",
-          isDark ? "border-[var(--border)]/50 bg-[var(--surface)]/50" : "border-[var(--border)]/50 bg-[var(--surface)]/30"
-        )}>
-          {/* Period toggle (W/M/Q/Y) */}
-          <div className="flex rounded-md bg-[var(--surface-elevated)] p-0.5">
-            {CYCLES.map((c) => (
-              <button
-                key={c.value}
-                onClick={() => setPeriod(c.value)}
-                className={cn(
-                  "rounded px-1.5 py-0.5 text-[10px] font-semibold transition-colors",
-                  period === c.value
-                    ? isDark ? "bg-[#5B22FF] text-white" : "bg-[#D00083] text-white"
-                    : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-                )}
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="h-3.5 w-px bg-[var(--border)] shrink-0" />
-
-          {/* Time range pills */}
-          <div className="flex rounded-md bg-[var(--surface-elevated)] p-0.5">
-            {availablePresets.map((preset) => (
-              <button
-                key={preset.value}
-                onClick={() => setTimeRange(preset.value)}
-                className={cn(
-                  "rounded px-1.5 py-0.5 text-[10px] font-semibold transition-colors",
-                  timeRange === preset.value
-                    ? isDark ? "bg-[#5B22FF] text-white" : "bg-[#D00083] text-white"
-                    : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-                )}
-              >
-                {preset.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="h-3.5 w-px bg-[var(--border)] shrink-0" />
-
-          {/* Date range chip — clickable for calendar picker */}
-          <DateRangePicker
-            startDate={dateRange.start}
-            endDate={dateRange.end}
-            onApply={(start, end) => {
-              // For now, clicking apply doesn't override the period system
-              // but the calendar provides visual date context
-              console.log("Date range selected:", start, end);
-            }}
-          >
-            <Calendar className={cn("h-3 w-3", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")} />
-            <span className={cn("text-[10px] font-semibold", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>
-              {dateRange.label}
-            </span>
-            {comparisonMode !== "none" && (
-              <span className="text-[9px] text-[var(--text-muted)]">vs {prevDateRange.label}</span>
-            )}
-          </DateRangePicker>
-
-          <div className="h-3.5 w-px bg-[var(--border)] shrink-0" />
-
-          {/* Comparison selector */}
-          <div className="relative">
-            <select
-              value={comparisonMode}
-              onChange={(e) => setComparisonMode(e.target.value as ComparisonMode)}
-              className={cn(
-                "appearance-none rounded-md border px-1.5 py-0.5 pr-4 text-[10px] font-medium cursor-pointer outline-none transition-colors",
-                isDark
-                  ? "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]"
-                  : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]"
-              )}
-            >
-              {COMPARISON_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-0.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-[var(--text-muted)]" />
-          </div>
-        </div>
+        {/* ── Unified time range dropdown + date + comparison ── */}
+        <UnifiedTimeSelector
+          period={period}
+          timeRange={timeRange}
+          dateRange={dateRange}
+          prevDateRange={prevDateRange}
+          comparisonMode={comparisonMode}
+          onSelectRange={setPeriodAndRange}
+          onComparisonChange={setComparisonMode}
+          isDark={isDark}
+        />
 
         {/* Spacer */}
         <div className="flex-1" />

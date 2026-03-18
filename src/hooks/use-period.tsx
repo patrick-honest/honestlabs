@@ -42,6 +42,8 @@ interface PeriodContextValue {
   setTimeRange: (tr: TimeRangePreset) => void;
   /** Available quick range presets for the active period */
   availablePresets: { value: TimeRangePreset; label: string }[];
+  /** Set both period and time range together (for unified selector) */
+  setPeriodAndRange: (p: Cycle, tr: TimeRangePreset) => void;
   /** Comparison mode */
   comparisonMode: ComparisonMode;
   setComparisonMode: (m: ComparisonMode) => void;
@@ -333,11 +335,18 @@ export function PeriodProvider({ children }: { children: ReactNode }) {
     savePeriodPrefs(period, timeRange, cm);
   }, [period, timeRange]);
 
-  // When switching period, default to last_full for that period
+  // When switching period alone, default to last_full
   const setPeriod = useCallback((p: Cycle) => {
     setPeriodRaw(p);
     setTimeRangeRaw("last_full");
     savePeriodPrefs(p, "last_full", comparisonMode);
+  }, [comparisonMode]);
+
+  // Set both period and time range together (for unified selector)
+  const setPeriodAndRange = useCallback((p: Cycle, tr: TimeRangePreset) => {
+    setPeriodRaw(p);
+    setTimeRangeRaw(tr);
+    savePeriodPrefs(p, tr, comparisonMode);
   }, [comparisonMode]);
 
   const { current, previous } = useMemo(
@@ -398,6 +407,7 @@ export function PeriodProvider({ children }: { children: ReactNode }) {
         timeRange,
         setTimeRange,
         availablePresets,
+        setPeriodAndRange,
         comparisonMode,
         setComparisonMode,
         timeRangeMultiplier,
