@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { Download, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { generateReportPdf } from "@/lib/report-pdf";
 import { SampleDataBanner, SampleDataBadge } from "@/components/dashboard/sample-data-banner";
+import { useTranslations } from "next-intl";
 
 import type { QueryInfo } from "@/components/query-inspector/query-inspector";
 
@@ -711,19 +712,20 @@ function getTrend(metric: MonthlyMetric): "up" | "down" | "flat" | "na" {
 
 type TabId = "segment" | "kpi" | "ojk" | "costbreakdown" | "funnel" | "monthly";
 
-const TABS: { id: TabId; label: string }[] = [
-  { id: "segment", label: "Segment Analysis" },
-  { id: "kpi", label: "KPIs (Orico Plan)" },
-  { id: "ojk", label: "KPIs (OJK Plan)" },
-  { id: "costbreakdown", label: "Cost Breakdown" },
-  { id: "funnel", label: "Funnel Tracking" },
-  { id: "monthly", label: "Monthly Metrics" },
+const TABS: { id: TabId; tKey: string }[] = [
+  { id: "segment", tKey: "segmentAnalysis" },
+  { id: "kpi", tKey: "kpiOricoPlan" },
+  { id: "ojk", tKey: "kpiOjkPlan" },
+  { id: "costbreakdown", tKey: "costBreakdown" },
+  { id: "funnel", tKey: "funnelTracking" },
+  { id: "monthly", tKey: "monthlyMetrics" },
 ];
 
 // ── Sub-components ──────────────────────────────────────────────────────────
 
-function KpiTable({ title, rows, invertColors }: { title: string; rows: KpiRow[]; invertColors?: boolean }) {
+function KpiTable({ title, rows, invertColors, columnLabels }: { title: string; rows: KpiRow[]; invertColors?: boolean; columnLabels?: { metric: string; plan: string; actual: string; gap: string; achievement: string } }) {
   const colorFn = invertColors ? gapColorInverse : gapColor;
+  const cols = columnLabels ?? { metric: "Metric", plan: "Plan", actual: "Actual", gap: "Gap", achievement: "Achievement" };
   return (
     <div className="mb-6">
       <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-3">{title}</h3>
@@ -731,11 +733,11 @@ function KpiTable({ title, rows, invertColors }: { title: string; rows: KpiRow[]
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-[var(--surface)] border-b border-[var(--border)]">
-              <th className="text-left py-2.5 px-4 text-[var(--text-secondary)] font-medium w-[40%]">Metric</th>
-              <th className="text-right py-2.5 px-4 text-[var(--text-secondary)] font-medium">Plan</th>
-              <th className="text-right py-2.5 px-4 text-[var(--text-secondary)] font-medium">Actual</th>
-              <th className="text-right py-2.5 px-4 text-[var(--text-secondary)] font-medium">Gap</th>
-              <th className="text-right py-2.5 px-4 text-[var(--text-secondary)] font-medium">Achievement</th>
+              <th className="text-left py-2.5 px-4 text-[var(--text-secondary)] font-medium w-[40%]">{cols.metric}</th>
+              <th className="text-right py-2.5 px-4 text-[var(--text-secondary)] font-medium">{cols.plan}</th>
+              <th className="text-right py-2.5 px-4 text-[var(--text-secondary)] font-medium">{cols.actual}</th>
+              <th className="text-right py-2.5 px-4 text-[var(--text-secondary)] font-medium">{cols.gap}</th>
+              <th className="text-right py-2.5 px-4 text-[var(--text-secondary)] font-medium">{cols.achievement}</th>
             </tr>
           </thead>
           <tbody>
@@ -763,7 +765,8 @@ function KpiTable({ title, rows, invertColors }: { title: string; rows: KpiRow[]
   );
 }
 
-function BalanceSheetTable({ rows }: { rows: BalanceSheetRow[] }) {
+function BalanceSheetTable({ rows, columnLabels }: { rows: BalanceSheetRow[]; columnLabels?: { metric: string; plan: string; actual: string } }) {
+  const cols = columnLabels ?? { metric: "Metric", plan: "Plan", actual: "Actual" };
   return (
     <div className="mb-6">
       <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-3">Balance Sheet (IDR 000)</h3>
@@ -771,9 +774,9 @@ function BalanceSheetTable({ rows }: { rows: BalanceSheetRow[] }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-[var(--surface)] border-b border-[var(--border)]">
-              <th className="text-left py-2.5 px-4 text-[var(--text-secondary)] font-medium w-[50%]">Metric</th>
-              <th className="text-right py-2.5 px-4 text-[var(--text-secondary)] font-medium">Plan</th>
-              <th className="text-right py-2.5 px-4 text-[var(--text-secondary)] font-medium">Actual</th>
+              <th className="text-left py-2.5 px-4 text-[var(--text-secondary)] font-medium w-[50%]">{cols.metric}</th>
+              <th className="text-right py-2.5 px-4 text-[var(--text-secondary)] font-medium">{cols.plan}</th>
+              <th className="text-right py-2.5 px-4 text-[var(--text-secondary)] font-medium">{cols.actual}</th>
             </tr>
           </thead>
           <tbody>
@@ -794,6 +797,20 @@ function BalanceSheetTable({ rows }: { rows: BalanceSheetRow[] }) {
 // ── Component ───────────────────────────────────────────────────────────────
 
 export default function OricoPageContent() {
+  const tOrico = useTranslations("orico");
+  const tCommon = useTranslations("common");
+  const kpiColumnLabels = useMemo(() => ({
+    metric: tCommon("metric"),
+    plan: tCommon("plan"),
+    actual: tCommon("actual"),
+    gap: tCommon("gap"),
+    achievement: tCommon("achievement"),
+  }), [tCommon]);
+  const bsColumnLabels = useMemo(() => ({
+    metric: tCommon("metric"),
+    plan: tCommon("plan"),
+    actual: tCommon("actual"),
+  }), [tCommon]);
   const { period, setPeriod, periodLabel } = usePeriod();
   const { filters } = useFilters();
 
@@ -877,7 +894,7 @@ export default function OricoPageContent() {
         Honest Bank Indonesia &mdash; Orico Monthly Report &mdash; CONFIDENTIAL
       </div>
 
-      <Header title="Orico Reports" />
+      <Header title={tOrico("title")} />
 
       <div className="flex-1 space-y-6 p-6">
         <ActiveFiltersBanner />
@@ -913,7 +930,7 @@ export default function OricoPageContent() {
                   : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--border)]"
               )}
             >
-              {tab.label}
+              {tOrico(tab.tKey)}
             </button>
           ))}
         </div>
@@ -1290,7 +1307,7 @@ export default function OricoPageContent() {
               </p>
             </div>
 
-            <KpiTable title="Key Performance Indicators" rows={kpiRows} />
+            <KpiTable title="Key Performance Indicators" rows={kpiRows} columnLabels={kpiColumnLabels} />
 
             <div className="page-break" />
 
@@ -1298,9 +1315,9 @@ export default function OricoPageContent() {
               dataset="mart_finance"
               reason="Revenue, cost, and P&L data cannot be automated"
             >
-              <KpiTable title="P&L Revenue (IDR 000)" rows={revenueRows} />
+              <KpiTable title="P&L Revenue (IDR 000)" rows={revenueRows} columnLabels={kpiColumnLabels} />
 
-              <KpiTable title="P&L Cost (IDR 000)" rows={costRows} invertColors />
+              <KpiTable title="P&L Cost (IDR 000)" rows={costRows} invertColors columnLabels={kpiColumnLabels} />
 
               {/* Bottom line */}
               <div className="mb-6">
@@ -1327,7 +1344,7 @@ export default function OricoPageContent() {
               reason="Cash, bank loan, and capital data cannot be automated"
               variant="inline"
             >
-              <BalanceSheetTable rows={balanceSheetRows} />
+              <BalanceSheetTable rows={balanceSheetRows} columnLabels={bsColumnLabels} />
             </SampleDataBanner>
 
             {/* Flow Rates */}
@@ -1382,14 +1399,14 @@ export default function OricoPageContent() {
                 Plan vs Actual using <span className="font-semibold">OJK business plan</span> targets &mdash; January 2026. All USD values in thousands (USD 000).
               </p>
             </div>
-            <KpiTable title="Key Performance Indicators (OJK Plan)" rows={ojkKpiRows} />
+            <KpiTable title="Key Performance Indicators (OJK Plan)" rows={ojkKpiRows} columnLabels={kpiColumnLabels} />
             <div className="page-break" />
             <SampleDataBanner
               dataset="mart_finance"
               reason="Revenue data cannot be automated"
               variant="inline"
             >
-              <KpiTable title="P&L Revenue (USD 000) — OJK Plan" rows={ojkRevenueRows} />
+              <KpiTable title="P&L Revenue (USD 000) — OJK Plan" rows={ojkRevenueRows} columnLabels={kpiColumnLabels} />
             </SampleDataBanner>
           </div>
         )}
