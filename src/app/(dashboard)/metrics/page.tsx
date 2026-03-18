@@ -28,16 +28,8 @@ interface MetricDef {
 // SQL Snippets — extracted from src/services/queries/*
 // ==========================================================================
 
-const SQL_ELIGIBLE_AND_TRANSACTORS = `WITH excluded_users AS (
-  SELECT DISTINCT cloc.external_id AS loc_acct
-  FROM \${TABLES.decision_completed} dc
-  JOIN \${TABLES.cms_line_of_credit} cloc
-    ON dc.user_id = cloc.user_id
-  WHERE dc.is_prepaid_card_applicable = TRUE
-     OR dc.is_account_opening_fee_applicable = TRUE
-),
-
-card_unblocked AS (
+const SQL_ELIGIBLE_AND_TRANSACTORS = `-- Product type filtering handled by UI (productType filter dimension)
+WITH card_unblocked AS (
   SELECT DISTINCT f9_dw005_loc_acct AS loc_acct
   FROM \${TABLES.principal_card_updates}
   WHERE f9_dw005_1st_unblk_all_mtd_tms IS NOT NULL
@@ -59,7 +51,6 @@ weekly_eligible AS (
     AND EXTRACT(DAYOFWEEK FROM dw4.f9_dw004_bus_dt) = 1
     AND dw4.fx_dw004_loc_stat IN ('G', 'N')
     AND dw4.f9_dw004_curr_dpd >= 0
-    AND dw4.p9_dw004_loc_acct NOT IN (SELECT loc_acct FROM excluded_users)
   GROUP BY week_start
 ),
 
@@ -81,7 +72,6 @@ weekly_transactors AS (
   WHERE dw7.f9_dw007_dt BETWEEN @startDate AND @endDate
     AND (dw7.fx_dw007_stat IS NULL OR TRIM(dw7.fx_dw007_stat) = '' OR dw7.fx_dw007_stat = ' ')
     AND dw7.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
-    AND cam.loc_acct NOT IN (SELECT loc_acct FROM excluded_users)
   GROUP BY week_start
 )
 
@@ -139,8 +129,7 @@ const SQL_NEW_CUSTOMER_ACTIVATION = `WITH approved_users AS (
     DATE(MIN(timestamp), 'Asia/Jakarta') AS approval_date
   FROM \${TABLES.decision_completed}
   WHERE decision = 'APPROVED'
-    AND (is_prepaid_card_applicable IS NULL OR is_prepaid_card_applicable = FALSE)
-    AND (is_account_opening_fee_applicable IS NULL OR is_account_opening_fee_applicable = FALSE)
+    -- Product type filtering handled by UI (productType filter dimension)
   GROUP BY user_id
 ),
 
