@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState, useEffect, useRef } from "react";
+import useSWR from "swr";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
@@ -8,8 +9,10 @@ import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-i
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
-import { usePeriod } from "@/hooks/use-period";
+import { usePeriod, useDateParams } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange, scaleTrendData, scaleMetricValue, getPeriodLabels, getPeriodInsightLabels } from "@/lib/period-data";
@@ -25,27 +28,36 @@ import {
 // --- Mock data ---
 const AS_OF = "Mar 15, 2026";
 
-const funnelStages = [
-  { stage: "Waitlisted", count: 12400, rate: null },
-  { stage: "Apply Started", count: 8900, rate: 71.8 },
-  { stage: "KYC Submitted", count: 7200, rate: 80.9 },
-  { stage: "Documents Verified", count: 6100, rate: 84.7 },
-  { stage: "Decision Made", count: 5800, rate: 95.1 },
-  { stage: "Approved", count: 4200, rate: 72.4 },
-  { stage: "Card Shipped", count: 3900, rate: 92.9 },
-  { stage: "Card Activated", count: 3400, rate: 87.2 },
-  { stage: "PIN Set", count: 3200, rate: 94.1 },
+// Mock fallback — matches real milestone_complete application_status values
+const MOCK_FUNNEL = [
+  { stage: "OTP login started", label: "OTP Started", count: 24000, conversion_from_prev_pct: null },
+  { stage: "Mobile verified", label: "Mobile Verified", count: 24000, conversion_from_prev_pct: 100 },
+  { stage: "Application agreements accepted", label: "Agreements Accepted", count: 23700, conversion_from_prev_pct: 98.8 },
+  { stage: "KYC complete", label: "KYC Complete", count: 18300, conversion_from_prev_pct: 77.2 },
+  { stage: "Personal details entered", label: "Personal Details", count: 16500, conversion_from_prev_pct: 90.2 },
+  { stage: "Personal info details part 2 complete", label: "Personal Info Pt2", count: 16400, conversion_from_prev_pct: 99.4 },
+  { stage: "Application submitted", label: "App Submitted", count: 18100, conversion_from_prev_pct: 110.4 },
+  { stage: "Decision complete", label: "Decision Complete", count: 17200, conversion_from_prev_pct: 95.0 },
+  { stage: "Cardholder agreement viewed", label: "CMA Viewed", count: 16500, conversion_from_prev_pct: 95.9 },
+  { stage: "Cardholder agreement accepted", label: "CMA Accepted", count: 15100, conversion_from_prev_pct: 91.5 },
+  { stage: "Tutorial complete", label: "Tutorial Complete", count: 13400, conversion_from_prev_pct: 88.7 },
+  { stage: "Delivery Address Entered", label: "Delivery Address", count: 13300, conversion_from_prev_pct: 99.3 },
+  { stage: "PIN set", label: "PIN Set", count: 13200, conversion_from_prev_pct: 99.2 },
 ];
 
 const stageToSqlValue: Record<string, string> = {
-  "Waitlisted": "Waitlisted",
-  "Apply Started": "Apply started",
-  "KYC Submitted": "KYC submitted",
-  "Documents Verified": "Documents verified",
-  "Decision Made": "Decision made",
-  "Approved": "Approved",
-  "Card Shipped": "Card shipped",
-  "Card Activated": "Card activated",
+  "OTP Started": "OTP login started",
+  "Mobile Verified": "Mobile verified",
+  "Agreements Accepted": "Application agreements accepted",
+  "KYC Complete": "KYC complete",
+  "Personal Details": "Personal details entered",
+  "Personal Info Pt2": "Personal info details part 2 complete",
+  "App Submitted": "Application submitted",
+  "Decision Complete": "Decision complete",
+  "CMA Viewed": "Cardholder agreement viewed",
+  "CMA Accepted": "Cardholder agreement accepted",
+  "Tutorial Complete": "Tutorial complete",
+  "Delivery Address": "Delivery Address Entered",
   "PIN Set": "PIN set",
 };
 
@@ -198,13 +210,33 @@ type ContextMenuState = {
 
 export default function AcquisitionPage() {
   const { period, periodLabel, timeRangeMultiplier } = usePeriod();
+  const { dateParams } = useDateParams();
   const { filters } = useFilters();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
-  const periodFunnel = useMemo(() => funnelStages.map(s => ({
-    ...s,
-    count: applyFilterToMetric(scaleMetricValue(s.count, period, false, timeRangeMultiplier), filters, false),
-  })), [period, filters]);
+  // Fetch real acquisition data from BigQuery
+  const { data: apiData } = useSWR(
+    `/api/acquisition?${dateParams}`,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 300_000 },
+  );
+
+  // Use real funnel data or fall back to mock
+  const periodFunnel = useMemo(() => {
+    if (apiData?.funnel?.length) {
+      return apiData.funnel.map((s: { stage: string; label: string; count: number; conversion_from_prev_pct: number | null }) => ({
+        stage: s.label,
+        count: s.count,
+        rate: s.conversion_from_prev_pct,
+      }));
+    }
+    // Mock fallback with scaling
+    return MOCK_FUNNEL.map(s => ({
+      stage: s.label,
+      count: applyFilterToMetric(scaleMetricValue(s.count, period, false, timeRangeMultiplier), filters, false),
+      rate: s.conversion_from_prev_pct,
+    }));
+  }, [apiData, period, filters, timeRangeMultiplier]);
 
   const periodDecisionBreakdown = useMemo(() => applyFilterToData(scaleTrendData(decisionBreakdown, period), filters), [period, filters]);
   const periodApprovalRateTrend = useMemo(() => applyFilterToData(scaleTrendData(approvalRateTrend, period), filters), [period, filters]);
@@ -368,7 +400,7 @@ export default function AcquisitionPage() {
         onRefresh={handleRefresh}
       >
         <div className="space-y-1 relative">
-          {periodFunnel.map((stage, i) => {
+          {periodFunnel.map((stage: { stage: string; count: number; rate: number | null }, i: number) => {
             const maxCount = periodFunnel[0].count;
             const widthPct = (stage.count / maxCount) * 100;
             const dropoff = i > 0 ? periodFunnel[i - 1].count - stage.count : 0;
@@ -450,7 +482,7 @@ export default function AcquisitionPage() {
                 <button
                   className="w-full text-left px-3 py-2.5 text-xs text-[var(--text-primary)] hover:bg-[var(--hover-bg,rgba(59,130,246,0.1))] transition-colors flex items-center gap-2 border-t border-[var(--border)]"
                   onClick={() => {
-                    const prevStage = funnelStages[ctxMenu.stageIndex - 1].stage;
+                    const prevStage = periodFunnel[ctxMenu.stageIndex - 1]?.stage ?? "";
                     copyToClipboard(getDropoffSql(prevStage, ctxMenu.stageName));
                   }}
                 >

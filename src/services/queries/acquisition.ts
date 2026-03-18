@@ -7,6 +7,7 @@ import { toSqlDate } from "@/lib/dates";
 
 export interface AcquisitionFunnelRow {
   stage: string;
+  label: string;
   count: number;
   conversion_from_prev_pct: number | null;
 }
@@ -22,25 +23,46 @@ export interface ApprovalsByProductRow {
 // Funnel stage ordering (matches milestone_complete application_status values)
 // ---------------------------------------------------------------------------
 
+/**
+ * Funnel stages in logical onboarding order.
+ * Values must EXACTLY match `application_status` in milestone_complete.
+ *
+ * Early stages (Apply button pressed, Application started) have very low
+ * distinct-user counts in recent data (legacy flow), so they're placed first
+ * but will naturally show as small counts if users skip them.
+ */
 const FUNNEL_STAGES = [
-  "Waitlisted",
-  "Apply button pressed",
-  "Application started",
-  "Agreements accepted",
-  "Mobile verified",
   "OTP login started",
+  "Mobile verified",
+  "Application agreements accepted",
   "KYC complete",
-  "Personal details",
-  "Decision complete",
+  "Personal details entered",
+  "Personal info details part 2 complete",
   "Application submitted",
-  "Income details",
-  "Personal info pt2",
+  "Decision complete",
   "Cardholder agreement viewed",
   "Cardholder agreement accepted",
   "Tutorial complete",
-  "Delivery address",
+  "Delivery Address Entered",
   "PIN set",
 ] as const;
+
+/** Short display labels for the UI */
+const STAGE_LABELS: Record<string, string> = {
+  "OTP login started": "OTP Started",
+  "Mobile verified": "Mobile Verified",
+  "Application agreements accepted": "Agreements Accepted",
+  "KYC complete": "KYC Complete",
+  "Personal details entered": "Personal Details",
+  "Personal info details part 2 complete": "Personal Info Pt2",
+  "Application submitted": "Application Submitted",
+  "Decision complete": "Decision Complete",
+  "Cardholder agreement viewed": "CMA Viewed",
+  "Cardholder agreement accepted": "CMA Accepted",
+  "Tutorial complete": "Tutorial Complete",
+  "Delivery Address Entered": "Delivery Address",
+  "PIN set": "PIN Set",
+};
 
 // ---------------------------------------------------------------------------
 // 1. Acquisition Funnel
@@ -86,6 +108,7 @@ export async function getAcquisitionFunnel(
 
     result.push({
       stage,
+      label: STAGE_LABELS[stage] ?? stage,
       count,
       conversion_from_prev_pct: conversion,
     });
