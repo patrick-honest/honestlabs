@@ -7,6 +7,11 @@ import {
   getVerificationSplit,
   getProductTypeSplit,
 } from "@/services/queries/cards-overview";
+import {
+  getCardStatusBreakdown,
+  getCardProgramBreakdown,
+  getVerificationBreakdown,
+} from "@/services/queries/cards-deep-dive";
 
 // ---------------------------------------------------------------------------
 // GET /api/cards-overview?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
@@ -28,6 +33,10 @@ export async function GET(request: NextRequest) {
       autoActivationCount,
       verificationSplit,
       productTypeSplit,
+      // Deep-dive queries
+      cardStatusBreakdown,
+      cardProgramBreakdown,
+      verificationBreakdown,
     ] = await Promise.all([
       getCardStatusDistribution(),
       getCardBrandSplit(),
@@ -35,6 +44,10 @@ export async function GET(request: NextRequest) {
       getAutoActivationCount(),
       getVerificationSplit(new Date(startDate), new Date(endDate)),
       getProductTypeSplit(new Date(startDate), new Date(endDate)),
+      // Deep-dive queries
+      getCardStatusBreakdown(),
+      getCardProgramBreakdown(),
+      getVerificationBreakdown(),
     ]);
 
     const response = NextResponse.json({
@@ -44,6 +57,10 @@ export async function GET(request: NextRequest) {
       autoActivationCount,
       verificationSplit,
       productTypeSplit,
+      // Deep-dive data
+      cardStatusBreakdown,
+      cardProgramBreakdown,
+      verificationBreakdown,
       asOf: new Date().toISOString(),
       dataRange: { start: startDate, end: endDate },
     });

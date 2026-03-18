@@ -134,6 +134,75 @@ export async function getWeeklySpendTrend(startDate: Date, endDate: Date): Promi
 }
 
 // ---------------------------------------------------------------------------
+// 0b. Period-level Spend Summary — cumulative SAR for the entire period
+// ---------------------------------------------------------------------------
+
+export interface PeriodSpendSummary {
+  eligible_count: number;
+  transactor_count: number;
+  total_transactions: number;
+  total_spend_idr: number;
+  spend_active_rate: number;
+  avg_spend_per_txn_idr: number;
+}
+
+export async function getPeriodSpendSummary(startDate: Date, endDate: Date): Promise<PeriodSpendSummary | null> {
+  const sql = `
+    WITH card_unblocked AS (
+      SELECT DISTINCT f9_dw005_loc_acct AS loc_acct
+      FROM ${TABLES.principal_card_updates}
+      WHERE f9_dw005_1st_unblk_all_mtd_tms IS NOT NULL
+        AND TRIM(CAST(f9_dw005_1st_unblk_all_mtd_tms AS STRING)) != ''
+        AND f9_dw005_hce_txn_ind LIKE '%0%'
+        AND f9_dw005_net_txn_ind LIKE '%0%'
+        AND fx_dw005_contc_less_flg LIKE '%Y%'
+        AND f9_dw005_contc_txn_ind LIKE '%0%'
+    ),
+    -- Eligible: snapshot on the last available date in the period
+    eligible AS (
+      SELECT COUNT(DISTINCT dw4.p9_dw004_loc_acct) AS cnt
+      FROM ${TABLES.financial_account_updates} dw4
+      JOIN card_unblocked cu ON dw4.p9_dw004_loc_acct = cu.loc_acct
+      WHERE dw4.f9_dw004_bus_dt = (
+        SELECT MAX(f9_dw004_bus_dt) FROM ${TABLES.financial_account_updates} WHERE f9_dw004_bus_dt <= @endDate
+      )
+        AND dw4.fx_dw004_loc_stat IN ('G', 'N')
+        AND dw4.f9_dw004_curr_dpd = 0
+    ),
+    card_acct_map AS (
+      SELECT DISTINCT f9_dw005_crn AS crn, f9_dw005_loc_acct AS loc_acct
+      FROM ${TABLES.principal_card_updates}
+    ),
+    -- Transactors: distinct accounts with >=1 valid txn in the ENTIRE period
+    transactors AS (
+      SELECT
+        COUNT(DISTINCT cam.loc_acct) AS cnt,
+        COUNT(*) AS total_txns,
+        ROUND(SUM(CAST(f9_dw007_amt_req AS FLOAT64) / 100), 2) AS total_spend
+      FROM ${TABLES.authorized_transaction} dw7
+      JOIN card_acct_map cam ON dw7.f9_dw007_prin_crn = cam.crn
+      WHERE dw7.f9_dw007_dt BETWEEN @startDate AND @endDate
+        AND COALESCE(dw7.fx_dw007_stat, '', ' ') IN ('', ' ')
+        AND dw7.fx_dw007_txn_typ NOT IN ('PM', 'RF', 'BE')
+    )
+    SELECT
+      e.cnt AS eligible_count,
+      t.cnt AS transactor_count,
+      t.total_txns AS total_transactions,
+      t.total_spend AS total_spend_idr,
+      ROUND(SAFE_DIVIDE(t.cnt, e.cnt) * 100, 2) AS spend_active_rate,
+      ROUND(SAFE_DIVIDE(t.total_spend, NULLIF(t.total_txns, 0)), 2) AS avg_spend_per_txn_idr
+    FROM eligible e, transactors t
+  `;
+
+  const rows = await runQuery<PeriodSpendSummary>(sql, {
+    startDate: toSqlDate(startDate),
+    endDate: toSqlDate(endDate),
+  });
+  return rows[0] ?? null;
+}
+
+// ---------------------------------------------------------------------------
 // 1. Channel Breakdown: Online vs Offline vs QRIS
 // ---------------------------------------------------------------------------
 

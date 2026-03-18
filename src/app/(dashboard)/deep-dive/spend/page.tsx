@@ -146,7 +146,13 @@ export default function SpendPage() {
     }));
   }, [spendAnalysis]);
 
-  // Latest KPI values from trend data
+  // Period-level summary (cumulative SAR for entire period)
+  const periodSummary = spendAnalysis?.periodSummary as {
+    eligible_count: number; transactor_count: number; total_transactions: number;
+    total_spend_idr: number; spend_active_rate: number; avg_spend_per_txn_idr: number;
+  } | null ?? null;
+
+  // Latest weekly values for trend comparison
   const latestWeek = weeklyTrend?.[weeklyTrend.length - 1];
   const prevWeek = weeklyTrend && weeklyTrend.length >= 2 ? weeklyTrend[weeklyTrend.length - 2] : null;
 
@@ -213,8 +219,7 @@ export default function SpendPage() {
             <MetricCard
               metricKey="spend_active_rate"
               label="Spend Active Rate"
-              value={latestWeek.rate}
-              prevValue={prevWeek?.rate ?? null}
+              value={periodSummary?.spend_active_rate ?? latestWeek.rate}
               unit="percent"
               asOf={AS_OF}
               dataRange={DATA_RANGE}
@@ -224,8 +229,7 @@ export default function SpendPage() {
             <MetricCard
               metricKey="spend_eligible"
               label="Eligible to Spend (Cum. EoP)"
-              value={latestWeek.eligible}
-              prevValue={prevWeek?.eligible ?? null}
+              value={periodSummary?.eligible_count ?? latestWeek.eligible}
               unit="count"
               asOf={AS_OF}
               dataRange={DATA_RANGE}
@@ -234,8 +238,7 @@ export default function SpendPage() {
             <MetricCard
               metricKey="spend_total_volume"
               label="Total Spend Volume"
-              value={latestWeek.totalSpend}
-              prevValue={prevWeek?.totalSpend ?? null}
+              value={periodSummary?.total_spend_idr ?? latestWeek.totalSpend}
               unit="idr"
               asOf={AS_OF}
               dataRange={DATA_RANGE}
@@ -244,8 +247,7 @@ export default function SpendPage() {
             <MetricCard
               metricKey="spend_txn_per_eligible"
               label="Txn per Eligible User"
-              value={Math.round(latestWeek.txnPerUser * 100) / 100}
-              prevValue={prevWeek ? Math.round(prevWeek.txnPerUser * 100) / 100 : null}
+              value={periodSummary ? Math.round((periodSummary.total_transactions / Math.max(periodSummary.eligible_count, 1)) * 100) / 100 : Math.round(latestWeek.txnPerUser * 100) / 100}
               unit="count"
               asOf={AS_OF}
               dataRange={DATA_RANGE}

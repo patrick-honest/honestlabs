@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 import {
-  getTicketVolumeTrend,
-  getTicketsByCategory,
-  getResolutionMetrics,
-  getTicketsByPriority,
-  getTicketsByStatus,
+  getWeeklyTicketTrend,
+  getTopContactReasons,
 } from "@/services/queries/customer-service-deep-dive";
 
 export async function GET(request: Request) {
@@ -23,26 +20,14 @@ export async function GET(request: Request) {
     const start = new Date(startDate);
     const end = new Date(endDate);
 
-    const [
-      ticketVolumeTrend,
-      ticketsByCategory,
-      resolutionMetrics,
-      ticketsByPriority,
-      ticketsByStatus,
-    ] = await Promise.all([
-      getTicketVolumeTrend(start, end),
-      getTicketsByCategory(start, end),
-      getResolutionMetrics(start, end),
-      getTicketsByPriority(start, end),
-      getTicketsByStatus(start, end),
+    const [weeklyTicketTrend, topContactReasons] = await Promise.all([
+      getWeeklyTicketTrend(start, end),
+      getTopContactReasons(start, end),
     ]);
 
     return NextResponse.json({
-      ticketVolumeTrend,
-      ticketsByCategory,
-      resolutionMetrics,
-      ticketsByPriority,
-      ticketsByStatus,
+      weeklyTicketTrend,
+      topContactReasons,
     });
   } catch (error) {
     console.error("[customer-service] Query failed:", error);
