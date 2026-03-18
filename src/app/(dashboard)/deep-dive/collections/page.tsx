@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
+import useSWR from "swr";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
@@ -8,7 +9,7 @@ import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
-import { usePeriod } from "@/hooks/use-period";
+import { usePeriod, useDateParams } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
 import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
@@ -81,11 +82,64 @@ const writeOffTrend = [
   { date: "Mar", writeOff: 940000000, recoveryRate: 10.3 },
 ];
 
+// ---------------------------------------------------------------------------
+// SWR fetcher + mock fallbacks for API data
+// ---------------------------------------------------------------------------
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
+
+const mockActivityTrend = [
+  { month: "2025-10", activities: 4200, unique_accounts: 1850 },
+  { month: "2025-11", activities: 4500, unique_accounts: 1920 },
+  { month: "2025-12", activities: 4100, unique_accounts: 1780 },
+  { month: "2026-01", activities: 4800, unique_accounts: 2010 },
+  { month: "2026-02", activities: 5100, unique_accounts: 2130 },
+  { month: "2026-03", activities: 5400, unique_accounts: 2250 },
+];
+
+const mockStatusBreakdown = [
+  { coll_stat_code: "AC", accounts: 5200, balance: 18200000000 },
+  { coll_stat_code: "PTP", accounts: 3100, balance: 10850000000 },
+  { coll_stat_code: "BPR", accounts: 1800, balance: 6300000000 },
+  { coll_stat_code: "None", accounts: 4500, balance: 15750000000 },
+];
+
+const mockCureRate = [
+  { month: "2025-10", cured_accounts: 1082, total_delinquent: 1850, cure_rate: 58.49 },
+  { month: "2025-11", cured_accounts: 1075, total_delinquent: 1920, cure_rate: 55.99 },
+  { month: "2025-12", cured_accounts: 990, total_delinquent: 1780, cure_rate: 55.62 },
+  { month: "2026-01", cured_accounts: 1148, total_delinquent: 2010, cure_rate: 57.11 },
+  { month: "2026-02", cured_accounts: 1250, total_delinquent: 2130, cure_rate: 58.69 },
+  { month: "2026-03", cured_accounts: 1415, total_delinquent: 2250, cure_rate: 62.89 },
+];
+
+const mockWriteOffTrend = [
+  { month: "2025-10", writeoff_count: 85, writeoff_balance: 942000000 },
+  { month: "2025-11", writeoff_count: 88, writeoff_balance: 948000000 },
+  { month: "2025-12", writeoff_count: 91, writeoff_balance: 958000000 },
+  { month: "2026-01", writeoff_count: 87, writeoff_balance: 951000000 },
+  { month: "2026-02", writeoff_count: 84, writeoff_balance: 945000000 },
+  { month: "2026-03", writeoff_count: 82, writeoff_balance: 940000000 },
+];
+
 export default function CollectionsPage() {
   const { period, periodLabel, timeRangeMultiplier } = usePeriod();
+  const { dateParams } = useDateParams();
   const { filters } = useFilters();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
+
+  // --- SWR: fetch live data from BQ with mock fallback ---
+  const { data: apiData } = useSWR(
+    `/api/collections?${dateParams}`,
+    fetcher,
+    { fallbackData: null, revalidateOnFocus: false },
+  );
+
+  const activityTrendData = apiData?.activityTrend ?? mockActivityTrend;
+  const statusBreakdownData = apiData?.statusBreakdown ?? mockStatusBreakdown;
+  const cureRateData = apiData?.cureRate ?? mockCureRate;
+  const writeOffTrendData = apiData?.writeOffTrend ?? mockWriteOffTrend;
 
   const pContactRate = useMemo(() => applyFilterToData(scaleTrendData(contactRateTrend, period), filters), [period, filters]);
   const pPtpRate = useMemo(() => applyFilterToData(scaleTrendData(ptpRateTrend, period), filters), [period, filters]);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
+import useSWR from "swr";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
@@ -8,13 +9,15 @@ import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
-import { usePeriod } from "@/hooks/use-period";
+import { usePeriod, useDateParams } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
 import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange, getPeriodInsightLabels, scaleTrendData, scaleMetricValue } from "@/lib/period-data";
 
 const AS_OF = "Mar 15, 2026";
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 // Mock data
 const dpdDistribution = [
@@ -115,12 +118,61 @@ export default function RiskPage() {
   const { period, periodLabel, timeRangeMultiplier } = usePeriod();
   const { filters } = useFilters();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
+  const { dateParams } = useDateParams();
+
+  const { data: apiData } = useSWR(
+    `/api/risk?${dateParams}`,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 300_000 },
+  );
+
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
 
+  // ── API-backed data with mock fallbacks ──
+  const apiDelinquencyRate = useMemo(() => {
+    if (!apiData?.delinquencyRateTrend) return delinquencyRate;
+    return apiData.delinquencyRateTrend.map((r: { month: string; dpd_30_plus_rate: number; dpd_60_plus_rate: number; dpd_90_plus_rate: number }) => ({
+      date: r.month,
+      rate30plus: r.dpd_30_plus_rate,
+      rate60plus: r.dpd_60_plus_rate,
+      rate90plus: r.dpd_90_plus_rate,
+    }));
+  }, [apiData]);
+
+  const apiWriteOffTrend = useMemo(() => {
+    if (!apiData?.writeOffTrend) return writeOffTrend;
+    return apiData.writeOffTrend.map((r: { month: string; writeoff_balance: number }) => ({
+      date: r.month,
+      amount: r.writeoff_balance,
+    }));
+  }, [apiData]);
+
+  const apiDpdBalanceExposure = useMemo(() => {
+    if (!apiData?.dpdBalanceExposure) return dpdBalanceExposure;
+    return apiData.dpdBalanceExposure.map((r: { dpd_bucket: string; balance: number; pct_of_total: number; accounts: number }) => ({
+      bucket: r.dpd_bucket === 'Current' ? 'Current' : `DPD ${r.dpd_bucket}`,
+      balance: Math.round(r.balance / 1000),
+      pctOfTotal: r.pct_of_total,
+      flowRate: null,
+      accounts: r.accounts,
+    }));
+  }, [apiData]);
+
+  const apiFlowRates = useMemo(() => {
+    if (!apiData?.dpdFlowRates) return flowRates;
+    // Keep mock flow rates table for now — roll rate matrix needs aggregation
+    return flowRates;
+  }, [apiData]);
+
+  const apiCollectionsStatus = useMemo(() => {
+    if (!apiData?.collectionsStatusBreakdown) return null;
+    return apiData.collectionsStatusBreakdown;
+  }, [apiData]);
+
   const pDpdDistribution = useMemo(() => applyFilterToData(scaleTrendData(dpdDistribution, period), filters), [period, filters]);
-  const pDelinquencyRate = useMemo(() => applyFilterToData(scaleTrendData(delinquencyRate, period), filters), [period, filters]);
+  const pDelinquencyRate = useMemo(() => applyFilterToData(scaleTrendData(apiDelinquencyRate, period), filters), [period, filters, apiDelinquencyRate]);
   const pCollectionsEffectiveness = useMemo(() => applyFilterToData(scaleTrendData(collectionsEffectiveness, period), filters), [period, filters]);
-  const pWriteOffTrend = useMemo(() => applyFilterToData(scaleTrendData(writeOffTrend, period), filters), [period, filters]);
+  const pWriteOffTrend = useMemo(() => applyFilterToData(scaleTrendData(apiWriteOffTrend, period), filters), [period, filters, apiWriteOffTrend]);
   const pRiskCostTrend = useMemo(() => applyFilterToData(scaleTrendData(riskCostTrend, period), filters), [period, filters]);
   const pDpdBalanceTrend = useMemo(() => applyFilterToData(scaleTrendData(dpdBalanceTrend, period), filters), [period, filters]);
 
@@ -198,7 +250,7 @@ export default function RiskPage() {
           asOf={AS_OF}
           dataRange={DATA_RANGE}
           higherIsBetter={false}
-          sparklineData={pDelinquencyRate.map((d) => d.rate30plus)}
+          sparklineData={pDelinquencyRate.map((d: Record<string, unknown>) => d.rate30plus as number)}
           target={4.0}
           onRefresh={handleRefresh}
         />
@@ -270,7 +322,7 @@ export default function RiskPage() {
           onRefresh={handleRefresh}
         >
           <DashboardLineChart
-            data={pDelinquencyRate}
+            data={pDelinquencyRate as Record<string, string | number>[]}
             lines={[
               { key: "rate30plus", color: "#f59e0b", label: "30+ DPD %" },
               { key: "rate60plus", color: "#ef4444", label: "60+ DPD %" },
@@ -349,7 +401,7 @@ export default function RiskPage() {
         onRefresh={handleRefresh}
       >
         <DashboardLineChart
-          data={pWriteOffTrend}
+          data={pWriteOffTrend as Record<string, string | number>[]}
           lines={[{ key: "amount", color: "#ef4444", label: "Write-off Amount" }]}
           valueType="currency"
           height={260}

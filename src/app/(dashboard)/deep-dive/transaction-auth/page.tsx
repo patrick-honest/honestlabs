@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
+import useSWR from "swr";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
@@ -9,7 +10,7 @@ import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { DashboardAreaChart } from "@/components/charts/area-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
-import { usePeriod } from "@/hooks/use-period";
+import { usePeriod, useDateParams } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
 import { getPeriodRange, scaleTrendData, scaleMetricValue, getPeriodInsightLabels } from "@/lib/period-data";
 import { applyFilterToData, applyFilterToMetric, hasActiveFilters } from "@/lib/filter-utils";
@@ -81,6 +82,43 @@ const foreignTxnTrend = [
   { date: "Mar", rate: 3.1 },
 ];
 
+// ---------------------------------------------------------------------------
+// SWR fetcher + mock fallbacks for API data
+// ---------------------------------------------------------------------------
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
+
+const mockApprovalRateTrend = [
+  { week: "2026-01-05", total_auths: 128000, approved: 121344, declined: 6656, approval_rate: 94.80 },
+  { week: "2026-01-12", total_auths: 130000, approved: 123500, declined: 6500, approval_rate: 95.00 },
+  { week: "2026-02-02", total_auths: 132000, approved: 125664, declined: 6336, approval_rate: 95.20 },
+  { week: "2026-02-09", total_auths: 134000, approved: 127766, declined: 6234, approval_rate: 95.35 },
+  { week: "2026-03-02", total_auths: 136000, approved: 129744, declined: 6256, approval_rate: 95.40 },
+];
+
+const mockDeclineByReason = [
+  { reason_code: "D", count: 84000, pct: 79.8 },
+  { reason_code: "C", count: 15000, pct: 14.3 },
+  { reason_code: "T", count: 4200, pct: 4.0 },
+  { reason_code: "X", count: 1500, pct: 1.4 },
+  { reason_code: "N", count: 500, pct: 0.5 },
+];
+
+const mockAuthByChannel = [
+  { channel: "Online", count: 240000, amount: 86400000000 },
+  { channel: "Offline", count: 182000, amount: 72800000000 },
+  { channel: "QRIS", count: 86000, amount: 11180000000 },
+];
+
+const mockVolumeByDay = [
+  { date: "2026-03-10", count: 18200, amount: 6552000000 },
+  { date: "2026-03-11", count: 19100, amount: 6876000000 },
+  { date: "2026-03-12", count: 18800, amount: 6768000000 },
+  { date: "2026-03-13", count: 19500, amount: 7020000000 },
+  { date: "2026-03-14", count: 17900, amount: 6444000000 },
+  { date: "2026-03-15", count: 16200, amount: 5832000000 },
+];
+
 const actionItems: ActionItem[] = [
   {
     id: "auth-1",
@@ -110,9 +148,22 @@ const actionItems: ActionItem[] = [
 
 export default function TransactionAuthPage() {
   const { period, periodLabel, timeRangeMultiplier } = usePeriod();
+  const { dateParams } = useDateParams();
   const { filters } = useFilters();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
+
+  // --- SWR: fetch live data from BQ with mock fallback ---
+  const { data: apiData } = useSWR(
+    `/api/transaction-auth?${dateParams}`,
+    fetcher,
+    { fallbackData: null, revalidateOnFocus: false },
+  );
+
+  const approvalRateTrendData = apiData?.approvalRateTrend ?? mockApprovalRateTrend;
+  const declineByReasonData = apiData?.declineByReason ?? mockDeclineByReason;
+  const authByChannelData = apiData?.authByChannel ?? mockAuthByChannel;
+  const volumeByDayData = apiData?.volumeByDay ?? mockVolumeByDay;
 
   const pAuthRate = useMemo(() => applyFilterToData(scaleTrendData(authApprovalRateTrend, period), filters), [period, filters]);
   const pTotalAuths = useMemo(() => applyFilterToData(scaleTrendData(totalAuthsTrend, period), filters), [period, filters]);

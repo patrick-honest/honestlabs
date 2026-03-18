@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
+import useSWR from "swr";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
-import { usePeriod } from "@/hooks/use-period";
+import { usePeriod, useDateParams } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
 import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
@@ -172,6 +173,45 @@ ORDER BY 1`,
     { name: "end_date", value: "2026-03-15", type: "DATE" },
   ],
 };
+
+// ---------------------------------------------------------------------------
+// SWR fetcher + mock fallbacks for API data
+// ---------------------------------------------------------------------------
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
+
+const mockVolumeTrend = [
+  { month: "2025-10", count: 41200, total_amount_idr: 24500000000 },
+  { month: "2025-11", count: 42500, total_amount_idr: 25800000000 },
+  { month: "2025-12", count: 39800, total_amount_idr: 23200000000 },
+  { month: "2026-01", count: 43100, total_amount_idr: 26400000000 },
+  { month: "2026-02", count: 44200, total_amount_idr: 27100000000 },
+  { month: "2026-03", count: 45300, total_amount_idr: 28300000000 },
+];
+
+const mockByVendor = [
+  { vendor: "BSM", count: 18500, amount: 11200000000 },
+  { vendor: "DUR", count: 12300, amount: 7800000000 },
+  { vendor: "QRIS", count: 8200, amount: 4900000000 },
+  { vendor: "CONV", count: 4100, amount: 2800000000 },
+  { vendor: "Other", count: 2200, amount: 1600000000 },
+];
+
+const mockTimeliness = [
+  { bucket: "On-time", accounts: 89350, pct: 77.6 },
+  { bucket: "1-7 late", accounts: 9430, pct: 8.2 },
+  { bucket: "8-30 late", accounts: 8280, pct: 7.2 },
+  { bucket: "30+ late", accounts: 8040, pct: 7.0 },
+];
+
+const mockBalanceRatio = [
+  { month: "2025-10", avg_ratio: 74.2 },
+  { month: "2025-11", avg_ratio: 75.1 },
+  { month: "2025-12", avg_ratio: 72.8 },
+  { month: "2026-01", avg_ratio: 76.3 },
+  { month: "2026-02", avg_ratio: 77.0 },
+  { month: "2026-03", avg_ratio: 78.4 },
+];
 
 // ---------------------------------------------------------------------------
 // Mock data — realistic for ~235K customers, ~115K active accounts
@@ -339,9 +379,22 @@ const actionItems: ActionItem[] = [
 
 export default function RepaymentsPage() {
   const { period, periodLabel, timeRangeMultiplier } = usePeriod();
+  const { dateParams } = useDateParams();
   const { filters } = useFilters();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
+
+  // --- SWR: fetch live data from BQ with mock fallback ---
+  const { data: apiData } = useSWR(
+    `/api/repayments?${dateParams}`,
+    fetcher,
+    { fallbackData: null, revalidateOnFocus: false },
+  );
+
+  const volumeTrendData = apiData?.volumeTrend ?? mockVolumeTrend;
+  const byVendorData = apiData?.byVendor ?? mockByVendor;
+  const timelinessData = apiData?.timeliness ?? mockTimeliness;
+  const balanceRatioData = apiData?.balanceRatio ?? mockBalanceRatio;
 
   // Scale trend data for selected period
   const pRepaymentCount = useMemo(() => applyFilterToData(scaleTrendData(repaymentCountTrend, period), filters), [period, filters]);

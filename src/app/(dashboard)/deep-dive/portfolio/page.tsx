@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
+import useSWR from "swr";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
@@ -8,7 +9,7 @@ import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-i
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
-import { usePeriod } from "@/hooks/use-period";
+import { usePeriod, useDateParams } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
 import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
@@ -23,6 +24,8 @@ import {
 } from "recharts";
 
 const AS_OF = "Mar 15, 2026";
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 // Mock data
 const activeAccountsTrend = [
@@ -211,11 +214,60 @@ export default function PortfolioPage() {
   const { period, periodLabel, timeRangeMultiplier } = usePeriod();
   const { filters } = useFilters();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
+  const { dateParams } = useDateParams();
+
+  const { data: apiData } = useSWR(
+    `/api/portfolio?${dateParams}`,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 300_000 },
+  );
 
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
 
-  const pActiveAccounts = useMemo(() => applyFilterToData(scaleTrendData(activeAccountsTrend, period), filters), [period, filters]);
-  const pNewAccounts = useMemo(() => applyFilterToData(scaleTrendData(newAccountsPerPeriod, period), filters), [period, filters]);
+  // ── API-backed data with mock fallbacks ──
+  const apiAccountStatus = useMemo(() => {
+    if (!apiData?.accountStatusDistribution) return accountStatusBreakdown;
+    return apiData.accountStatusDistribution.map((r: { status: string; count: number; balance_exposure: number }) => {
+      const colorMap: Record<string, string> = {
+        Good: "#22c55e", Normal: "#22c55e", Blocked: "#f59e0b",
+        Closed: "#ef4444", Suspended: "#6b7280", "Write-off": "#991b1b",
+      };
+      return { name: r.status, value: r.count, color: colorMap[r.status] ?? "#6b7280" };
+    });
+  }, [apiData]);
+
+  const apiCreditLimitDist = useMemo(() => {
+    if (!apiData?.creditLimitDistribution) return creditLimitDistribution;
+    return apiData.creditLimitDistribution.map((r: { limit_bucket: string; accounts: number }) => ({
+      bucket: r.limit_bucket,
+      count: r.accounts,
+    }));
+  }, [apiData]);
+
+  const apiAccountGrowth = useMemo(() => {
+    if (!apiData?.accountGrowthTrend) return null;
+    return {
+      active: apiData.accountGrowthTrend.map((r: { month: string; total_active: number }) => ({
+        date: r.month,
+        active: r.total_active,
+      })),
+      newAccounts: apiData.accountGrowthTrend.map((r: { month: string; new_accounts: number }) => ({
+        date: r.month,
+        newAccounts: r.new_accounts,
+      })),
+    };
+  }, [apiData]);
+
+  const apiBalanceDist = useMemo(() => {
+    if (!apiData?.balanceDistribution) return null;
+    return apiData.balanceDistribution.map((r: { balance_bucket: string; accounts: number }) => ({
+      bucket: r.balance_bucket,
+      count: r.accounts,
+    }));
+  }, [apiData]);
+
+  const pActiveAccounts = useMemo(() => applyFilterToData(scaleTrendData(apiAccountGrowth?.active ?? activeAccountsTrend, period), filters), [period, filters, apiAccountGrowth]);
+  const pNewAccounts = useMemo(() => applyFilterToData(scaleTrendData(apiAccountGrowth?.newAccounts ?? newAccountsPerPeriod, period), filters), [period, filters, apiAccountGrowth]);
   const pCreditUtilization = useMemo(() => applyFilterToData(scaleTrendData(creditUtilization, period), filters), [period, filters]);
   const pRepaymentMetrics = useMemo(() => applyFilterToData(scaleTrendData(repaymentMetrics, period), filters), [period, filters]);
 
@@ -301,7 +353,7 @@ export default function PortfolioPage() {
           unit="count"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
-          sparklineData={pActiveAccounts.map((d) => d.active)}
+          sparklineData={pActiveAccounts.map((d: Record<string, unknown>) => d.active as number)}
           onRefresh={handleRefresh}
         />
         <MetricCard
@@ -345,7 +397,7 @@ export default function PortfolioPage() {
           onRefresh={handleRefresh}
         >
           <DashboardLineChart
-            data={pActiveAccounts}
+            data={pActiveAccounts as Record<string, string | number>[]}
             lines={[{ key: "active", color: "#3b82f6", label: "Active Accounts" }]}
             height={280}
           />
@@ -359,7 +411,7 @@ export default function PortfolioPage() {
           onRefresh={handleRefresh}
         >
           <DashboardBarChart
-            data={pNewAccounts}
+            data={pNewAccounts as Record<string, string | number>[]}
             bars={[{ key: "newAccounts", color: "#22c55e", label: "New Accounts" }]}
             height={280}
           />
@@ -376,7 +428,7 @@ export default function PortfolioPage() {
           onRefresh={handleRefresh}
         >
           <DashboardBarChart
-            data={creditLimitDistribution}
+            data={apiCreditLimitDist}
             bars={[{ key: "count", color: "#8b5cf6", label: "Accounts" }]}
             xAxisKey="bucket"
             height={280}
@@ -412,7 +464,7 @@ export default function PortfolioPage() {
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={accountStatusBreakdown}
+                  data={apiAccountStatus}
                   cx="50%"
                   cy="50%"
                   innerRadius={60}
@@ -421,7 +473,7 @@ export default function PortfolioPage() {
                   dataKey="value"
                   nameKey="name"
                 >
-                  {accountStatusBreakdown.map((entry) => (
+                  {apiAccountStatus.map((entry: { name: string; color: string }) => (
                     <Cell key={entry.name} fill={entry.color} />
                   ))}
                 </Pie>
