@@ -145,7 +145,98 @@ export async function getAcquisitionFunnel(
 }
 
 // ---------------------------------------------------------------------------
-// 2. Approvals by Product
+// 2. Decision Breakdown — APPROVED / DECLINED / WAITLISTED counts
+// ---------------------------------------------------------------------------
+
+export interface DecisionBreakdownRow {
+  decision: string;
+  cnt: number;
+}
+
+export async function getDecisionBreakdown(
+  startDate: Date,
+  endDate: Date,
+): Promise<DecisionBreakdownRow[]> {
+  const sql = `
+    SELECT decision, COUNT(*) AS cnt
+    FROM ${TABLES.decision_completed}
+    WHERE DATE(timestamp, 'Asia/Jakarta') BETWEEN @startDate AND @endDate
+    GROUP BY decision
+  `;
+
+  return runQuery<DecisionBreakdownRow>(sql, {
+    startDate: toSqlDate(startDate),
+    endDate: toSqlDate(endDate),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 3. Product Mix — approved accounts by product type
+// ---------------------------------------------------------------------------
+
+export interface ProductMixRow {
+  product_type: string;
+  cnt: number;
+}
+
+export async function getProductMix(
+  startDate: Date,
+  endDate: Date,
+): Promise<ProductMixRow[]> {
+  const sql = `
+    SELECT
+      CASE
+        WHEN is_prepaid_card_applicable = TRUE THEN 'RP1'
+        WHEN is_account_opening_fee_applicable = TRUE THEN 'Registration Fee'
+        ELSE 'Standard CC'
+      END AS product_type,
+      COUNT(*) AS cnt
+    FROM ${TABLES.decision_completed}
+    WHERE decision = 'APPROVED'
+      AND DATE(timestamp, 'Asia/Jakarta') BETWEEN @startDate AND @endDate
+    GROUP BY product_type
+  `;
+
+  return runQuery<ProductMixRow>(sql, {
+    startDate: toSqlDate(startDate),
+    endDate: toSqlDate(endDate),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 4. Approval Rate Trend — weekly approval rate
+// ---------------------------------------------------------------------------
+
+export interface ApprovalRateTrendRow {
+  week_start: string;
+  total: number;
+  approved: number;
+  approval_rate: number;
+}
+
+export async function getApprovalRateTrend(
+  startDate: Date,
+  endDate: Date,
+): Promise<ApprovalRateTrendRow[]> {
+  const sql = `
+    SELECT
+      FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(DATE(timestamp, 'Asia/Jakarta'), WEEK(MONDAY))) AS week_start,
+      COUNT(*) AS total,
+      COUNTIF(decision = 'APPROVED') AS approved,
+      ROUND(SAFE_DIVIDE(COUNTIF(decision = 'APPROVED'), COUNT(*)) * 100, 2) AS approval_rate
+    FROM ${TABLES.decision_completed}
+    WHERE DATE(timestamp, 'Asia/Jakarta') BETWEEN @startDate AND @endDate
+    GROUP BY week_start ORDER BY week_start
+  `;
+
+  return runQuery<ApprovalRateTrendRow>(sql, {
+    startDate: toSqlDate(startDate),
+    endDate: toSqlDate(endDate),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 5. Approvals by Product (weekly, with avg credit line)
 // ---------------------------------------------------------------------------
 
 export async function getApprovalsByProduct(

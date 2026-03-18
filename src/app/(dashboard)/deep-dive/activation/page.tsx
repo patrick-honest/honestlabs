@@ -3,6 +3,7 @@
 import { useCallback, useMemo } from "react";
 import useSWR from "swr";
 import { ChartCard } from "@/components/dashboard/chart-card";
+import { MetricCard } from "@/components/dashboard/metric-card";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
@@ -90,6 +91,31 @@ export default function ActivationPage() {
     }));
   }, [apiData]);
 
+  // Dormancy analysis from DW004
+  const dormancyAnalysis = useMemo((): { bucket: string; accounts: number }[] | null => {
+    if (!apiData?.dormancyAnalysis?.length) return null;
+    return apiData.dormancyAnalysis as { bucket: string; accounts: number }[];
+  }, [apiData]);
+
+  // KPI summary values computed from API data
+  const kpiSummary = useMemo(() => {
+    if (!apiData?.activationRateTrend?.length) return null;
+    const trend = apiData.activationRateTrend as { week: string; approved_count: number; activated_count: number; rate: number }[];
+    const latest = trend[trend.length - 1];
+    const prev = trend.length > 1 ? trend[trend.length - 2] : null;
+    const totalApproved = trend.reduce((s: number, r: { approved_count: number }) => s + r.approved_count, 0);
+    const totalActivated = trend.reduce((s: number, r: { activated_count: number }) => s + r.activated_count, 0);
+    const overallRate = totalApproved > 0 ? Math.round((totalActivated / totalApproved) * 10000) / 100 : 0;
+
+    return {
+      latestRate: latest?.rate ?? 0,
+      prevRate: prev?.rate ?? null,
+      totalApproved,
+      totalActivated,
+      overallRate,
+    };
+  }, [apiData]);
+
   const periodActivationRate = useMemo(() => apiActivationRate ? applyFilterToData(scaleTrendData(apiActivationRate, period), filters) : null, [period, filters, apiActivationRate]);
   const periodActivationByProduct = useMemo(() => apiActivationByProduct ? applyFilterToData(scaleTrendData(apiActivationByProduct, period, "product"), filters) : null, [period, filters, apiActivationByProduct]);
   const periodDeliveryToActivation = useMemo(() => apiDaysToFirstTxn ? applyFilterToData(scaleTrendData(apiDaysToFirstTxn, period, "days"), filters) : null, [period, filters, apiDaysToFirstTxn]);
@@ -154,11 +180,55 @@ export default function ActivationPage() {
     <div className="space-y-6">
       <ActiveFiltersBanner />
 
-      {/* KPI row — requires real data */}
-      <SampleDataBanner
-        dataset="mart_finexus"
-        reason="Activation KPIs require financial_account_updates (DW004) and authorized_transaction (DW007)"
-      />
+      {/* KPI row — Activation summary MetricCards */}
+      {kpiSummary ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <MetricCard
+            metricKey="activation-rate"
+            label="Latest Activation Rate"
+            value={kpiSummary.latestRate}
+            prevValue={kpiSummary.prevRate}
+            unit="percent"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            target={70}
+            liveData
+          />
+          <MetricCard
+            metricKey="overall-activation-rate"
+            label="Overall Activation Rate"
+            value={kpiSummary.overallRate}
+            unit="percent"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            target={70}
+            liveData
+          />
+          <MetricCard
+            metricKey="total-approved"
+            label="Total Approved"
+            value={kpiSummary.totalApproved}
+            unit="count"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            liveData
+          />
+          <MetricCard
+            metricKey="total-activated"
+            label="Total Activated"
+            value={kpiSummary.totalActivated}
+            unit="count"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            liveData
+          />
+        </div>
+      ) : (
+        <SampleDataBanner
+          dataset="mart_finexus"
+          reason="Activation KPIs require financial_account_updates (DW004) and authorized_transaction (DW007)"
+        />
+      )}
 
       {/* Hero chart */}
       {periodActivationRate ? (
@@ -237,6 +307,34 @@ export default function ActivationPage() {
           />
         )}
       </div>
+
+      {/* Dormancy Analysis — from DW004 */}
+      {dormancyAnalysis ? (
+        <ChartCard
+          title="Dormancy Analysis"
+          subtitle="Account status distribution by DPD bucket"
+          asOf={AS_OF}
+          dataRange={DATA_RANGE}
+          onRefresh={handleRefresh}
+          liveData
+        >
+          <DashboardBarChart
+            data={dormancyAnalysis.map((r: { bucket: string; accounts: number }) => ({
+              bucket: r.bucket,
+              accounts: r.accounts,
+            }))}
+            bars={[{ key: "accounts", color: "#f59e0b", label: "Accounts" }]}
+            xAxisKey="bucket"
+            height={280}
+          />
+          <ChartInsights insights={dormancyInsights} />
+        </ChartCard>
+      ) : (
+        <SampleDataBanner
+          dataset="mart_finexus"
+          reason="Dormancy analysis requires financial_account_updates (DW004)"
+        />
+      )}
 
       {/* Revolving Rate — blocked by mart_finance */}
       <SampleDataBanner

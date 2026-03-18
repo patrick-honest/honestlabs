@@ -4,6 +4,7 @@ import {
   getDaysToFirstTransaction,
   getActivationByProductType,
   getPinSetRateTrend,
+  getDormancyAnalysis,
 } from "@/services/queries/activation-deep-dive";
 
 export async function GET(request: Request) {
@@ -27,11 +28,13 @@ export async function GET(request: Request) {
       daysToFirstTransaction,
       activationByProductType,
       pinSetRateTrend,
+      dormancyAnalysis,
     ] = await Promise.all([
       getActivationRateTrend(start, end),
       getDaysToFirstTransaction(start, end),
       getActivationByProductType(start, end),
       getPinSetRateTrend(start, end),
+      getDormancyAnalysis(end).catch(() => []),
     ]);
 
     return NextResponse.json({
@@ -39,6 +42,7 @@ export async function GET(request: Request) {
       daysToFirstTransaction,
       activationByProductType,
       pinSetRateTrend,
+      dormancyAnalysis,
     });
   } catch (error) {
     console.error("[activation] Query failed:", error);

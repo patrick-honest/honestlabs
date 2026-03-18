@@ -3,9 +3,11 @@
 import { useCallback, useMemo, useState, useEffect, useRef } from "react";
 import useSWR from "swr";
 import { ChartCard } from "@/components/dashboard/chart-card";
+import { MetricCard } from "@/components/dashboard/metric-card";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
+import { DashboardLineChart } from "@/components/charts/line-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { usePeriod, useDateParams } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
@@ -97,6 +99,29 @@ export default function AcquisitionPage() {
       count: s.count,
       rate: s.conversion_from_prev_pct,
     }));
+  }, [apiData]);
+
+  // Decision breakdown data
+  const decisionBreakdown = useMemo(() => {
+    if (!apiData?.decisionBreakdown?.length) return null;
+    return apiData.decisionBreakdown as { decision: string; cnt: number }[];
+  }, [apiData]);
+
+  const decisionTotal = useMemo(() => {
+    if (!decisionBreakdown) return 0;
+    return decisionBreakdown.reduce((sum: number, r: { cnt: number }) => sum + r.cnt, 0);
+  }, [decisionBreakdown]);
+
+  // Product mix data
+  const productMix = useMemo(() => {
+    if (!apiData?.productMix?.length) return null;
+    return apiData.productMix as { product_type: string; cnt: number }[];
+  }, [apiData]);
+
+  // Approval rate trend data
+  const approvalRateTrend = useMemo(() => {
+    if (!apiData?.approvalRateTrend?.length) return null;
+    return apiData.approvalRateTrend as { week_start: string; total: number; approved: number; approval_rate: number }[];
   }, [apiData]);
 
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
@@ -202,11 +227,37 @@ export default function AcquisitionPage() {
     <div className="space-y-6">
       <ActiveFiltersBanner />
 
-      {/* KPI row — requires real data */}
-      <SampleDataBanner
-        dataset="refined_rudderstack + mart_finexus"
-        reason="Decision and product mix data requires decision_completed and financial_account_updates"
-      />
+      {/* KPI row — Decision Breakdown as MetricCards */}
+      {decisionBreakdown ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <MetricCard
+            metricKey="total-decisions"
+            label="Total Decisions"
+            value={decisionTotal}
+            unit="count"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            liveData
+          />
+          {decisionBreakdown.map((row: { decision: string; cnt: number }) => (
+            <MetricCard
+              key={row.decision}
+              metricKey={`decision-${row.decision}`}
+              label={row.decision}
+              value={row.cnt}
+              unit="count"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              liveData
+            />
+          ))}
+        </div>
+      ) : (
+        <SampleDataBanner
+          dataset="refined_rudderstack"
+          reason="Decision breakdown requires decision_completed table"
+        />
+      )}
 
       {/* Funnel visualization */}
       {!periodFunnel ? (
@@ -325,11 +376,92 @@ export default function AcquisitionPage() {
       </ChartCard>
       )}
 
-      {/* Charts row — Decision, Product Mix, Approval Rate, Credit Limit, Vintage */}
-      <SampleDataBanner
-        dataset="refined_rudderstack + mart_finexus"
-        reason="Decision and product mix data requires decision_completed and financial_account_updates"
-      />
+      {/* Charts row — Decision Breakdown, Product Mix, Approval Rate Trend */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Decision Breakdown Bar Chart */}
+        {decisionBreakdown ? (
+          <ChartCard
+            title="Decision Breakdown"
+            subtitle="Distribution of decision outcomes"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            onRefresh={handleRefresh}
+            liveData
+          >
+            <DashboardBarChart
+              data={decisionBreakdown.map((r: { decision: string; cnt: number }) => ({
+                decision: r.decision,
+                count: r.cnt,
+              }))}
+              bars={[{ key: "count", color: "#6366f1", label: "Decisions" }]}
+              xAxisKey="decision"
+              height={280}
+            />
+            <ChartInsights insights={decisionInsights} />
+          </ChartCard>
+        ) : (
+          <SampleDataBanner
+            dataset="refined_rudderstack"
+            reason="Decision breakdown requires decision_completed table"
+          />
+        )}
+
+        {/* Product Mix Bar Chart */}
+        {productMix ? (
+          <ChartCard
+            title="Product Mix (Approved)"
+            subtitle="Approved accounts by product type"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            onRefresh={handleRefresh}
+            liveData
+          >
+            <DashboardBarChart
+              data={productMix.map((r: { product_type: string; cnt: number }) => ({
+                product: r.product_type,
+                count: r.cnt,
+              }))}
+              bars={[{ key: "count", color: "#8b5cf6", label: "Approved" }]}
+              xAxisKey="product"
+              height={280}
+            />
+            <ChartInsights insights={productMixInsights} />
+          </ChartCard>
+        ) : (
+          <SampleDataBanner
+            dataset="refined_rudderstack"
+            reason="Product mix requires decision_completed table"
+          />
+        )}
+      </div>
+
+      {/* Approval Rate Trend */}
+      {approvalRateTrend ? (
+        <ChartCard
+          title="Approval Rate Trend"
+          subtitle="Weekly approval rate (%)"
+          asOf={AS_OF}
+          dataRange={DATA_RANGE}
+          onRefresh={handleRefresh}
+          liveData
+        >
+          <DashboardLineChart
+            data={approvalRateTrend.map((r: { week_start: string; approval_rate: number }) => ({
+              date: r.week_start,
+              rate: r.approval_rate,
+            }))}
+            lines={[{ key: "rate", color: "#22c55e", label: "Approval Rate %" }]}
+            valueType="percent"
+            height={300}
+          />
+          <ChartInsights insights={approvalRateInsights} />
+        </ChartCard>
+      ) : (
+        <SampleDataBanner
+          dataset="refined_rudderstack"
+          reason="Approval rate trend requires decision_completed table"
+        />
+      )}
 
       {/* === SAMPLE DATA SECTIONS: Metrics from Orico spreadsheets not yet automated === */}
 

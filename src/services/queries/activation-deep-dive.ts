@@ -182,7 +182,7 @@ export async function getActivationByProductType(
         ON pc.f9_dw005_crn = t.f9_dw007_prin_crn
         AND t.fx_dw007_stat = 'N'
       GROUP BY a.user_id
-      HAVING DATE_DIFF(first_txn_date, a.approval_date, DAY) <= 7
+      HAVING DATE_DIFF(first_txn_date, MIN(a.approval_date), DAY) <= 7
     )
     SELECT
       a.product_type,
@@ -202,7 +202,41 @@ export async function getActivationByProductType(
 }
 
 // ---------------------------------------------------------------------------
-// 4. PIN Set Rate Trend — weekly decision vs first-unblock (PIN set proxy)
+// 4. Dormancy Analysis — account status buckets from DW004
+// ---------------------------------------------------------------------------
+
+export interface DormancyBucketRow {
+  bucket: string;
+  accounts: number;
+}
+
+export async function getDormancyAnalysis(
+  endDate: Date,
+): Promise<DormancyBucketRow[]> {
+  const sql = `
+    SELECT
+      CASE
+        WHEN f9_dw004_curr_dpd = 0 AND fx_dw004_loc_stat IN ('G', 'N') THEN 'Active (0 DPD)'
+        WHEN f9_dw004_curr_dpd BETWEEN 1 AND 30 THEN '1-30 DPD'
+        ELSE '30+ DPD'
+      END AS bucket,
+      COUNT(DISTINCT p9_dw004_loc_acct) AS accounts
+    FROM ${TABLES.financial_account_updates}
+    WHERE f9_dw004_bus_dt = (
+      SELECT MAX(f9_dw004_bus_dt)
+      FROM ${TABLES.financial_account_updates}
+      WHERE f9_dw004_bus_dt <= @endDate
+    )
+    GROUP BY bucket
+  `;
+
+  return runQuery<DormancyBucketRow>(sql, {
+    endDate: toSqlDate(endDate),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 5. PIN Set Rate Trend — weekly decision vs first-unblock (PIN set proxy)
 // ---------------------------------------------------------------------------
 
 export async function getPinSetRateTrend(

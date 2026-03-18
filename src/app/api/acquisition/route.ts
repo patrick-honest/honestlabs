@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   getAcquisitionFunnel,
   getApprovalsByProduct,
+  getDecisionBreakdown,
+  getProductMix,
+  getApprovalRateTrend,
 } from "@/services/queries/acquisition";
 
 // ---------------------------------------------------------------------------
 // GET /api/acquisition?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
 //
-// Returns acquisition funnel and approval data from BigQuery.
+// Returns acquisition funnel, decision breakdown, product mix, approval
+// rate trend, and approval data from BigQuery.
 // ---------------------------------------------------------------------------
 
 export async function GET(request: NextRequest) {
@@ -19,14 +23,20 @@ export async function GET(request: NextRequest) {
     const start = new Date(startDate);
     const end = new Date(endDate);
 
-    const [funnel, approvalsByProduct] = await Promise.all([
+    const [funnel, approvalsByProduct, decisionBreakdown, productMix, approvalRateTrend] = await Promise.all([
       getAcquisitionFunnel(start, end).catch(() => []),
       getApprovalsByProduct(start, end).catch(() => []),
+      getDecisionBreakdown(start, end).catch(() => []),
+      getProductMix(start, end).catch(() => []),
+      getApprovalRateTrend(start, end).catch(() => []),
     ]);
 
     const response = NextResponse.json({
       funnel,
       approvalsByProduct,
+      decisionBreakdown,
+      productMix,
+      approvalRateTrend,
       asOf: new Date().toISOString(),
       dataRange: { start: startDate, end: endDate },
     });
