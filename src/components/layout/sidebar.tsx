@@ -356,7 +356,7 @@ export function Sidebar() {
         className={cn(
           "flex items-center border-b",
           isDark ? "border-[var(--border)]" : "border-[var(--border)]",
-          collapsed ? "h-16 justify-center px-2" : "h-[72px] px-6"
+          collapsed ? "h-16 justify-center px-2" : "h-[80px] px-6"
         )}
       >
         {collapsed ? (
@@ -384,8 +384,14 @@ export function Sidebar() {
                 isDark && "brightness-150"
               )}
             />
-            <p className="mt-0.5 text-[9px] font-medium tracking-wider text-[var(--text-muted)] opacity-60">
-              by claudtrick
+            <span className={cn(
+              "-mt-0.5 text-[11px] font-semibold tracking-wide",
+              isDark ? "text-[var(--text-secondary)]" : "text-[var(--text-secondary)]"
+            )}>
+              Business Reviews
+            </span>
+            <p className="text-[8px] font-medium tracking-wider text-[var(--text-muted)] opacity-50">
+              by claudetrick
             </p>
           </div>
         )}

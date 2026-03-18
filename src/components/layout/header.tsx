@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useCurrency } from "@/hooks/use-currency";
-import { usePeriod } from "@/hooks/use-period";
+import { usePeriod, COMPARISON_OPTIONS, type TimeRangePreset, type ComparisonMode } from "@/hooks/use-period";
 import { useTheme } from "@/hooks/use-theme";
 import {
   useFilters,
@@ -21,6 +22,7 @@ import {
   type FilterSelections,
 } from "@/hooks/use-filters";
 import { HeaderFilterDropdown } from "@/components/filters/header-filter-dropdown";
+import { getVisibleFilters, isFilterVisible, type FilterKey } from "@/lib/page-filter-config";
 import { Sun, Moon, Calendar, SlidersHorizontal, ChevronDown, X } from "lucide-react";
 import type { Cycle } from "@/types/reports";
 
@@ -74,13 +76,56 @@ interface HeaderProps {
 }
 
 export function Header({ title }: HeaderProps) {
+  const pathname = usePathname();
   const { currency, toggleCurrency } = useCurrency();
-  const { period, setPeriod, periodLabel, dateRange, prevDateRange } = usePeriod();
+  const {
+    period, setPeriod, periodLabel, dateRange, prevDateRange,
+    timeRange, setTimeRange, availablePresets,
+    comparisonMode, setComparisonMode,
+  } = usePeriod();
   const { isDark, toggleTheme } = useTheme();
-  const { filters, toggleFilterValue, clearFilter, clearFilters, activeFilterCount } = useFilters();
+  const { filters, toggleFilterValue, clearFilter, clearFilters, setFilter, activeFilterCount } = useFilters();
   const [filtersExpanded, setFiltersExpanded] = useState(false);
 
-  const totalFilters = activeFilterCount;
+  // Resolve which filters are visible on this page
+  const visibleKeys = getVisibleFilters(pathname);
+
+  // Auto-clear hidden filters when navigating to a page that doesn't support them
+  const prevPathRef = useRef(pathname);
+  useEffect(() => {
+    if (prevPathRef.current !== pathname) {
+      prevPathRef.current = pathname;
+      if (visibleKeys !== null) {
+        const allKeys: FilterKey[] = [
+          "cardType", "productType", "cohort",
+          "transactionType", "transactionChannel", "transactionStatus",
+          "merchantCategory", "amountRange", "recurringType",
+          "riskCategory", "decisioningModel",
+        ];
+        for (const key of allKeys) {
+          if (!visibleKeys.includes(key) && filters[key].length > 0) {
+            clearFilter(key);
+          }
+        }
+      }
+    }
+  }, [pathname, visibleKeys, filters, clearFilter, setFilter]);
+
+  // Count only visible active filters
+  const totalFilters = visibleKeys === null
+    ? activeFilterCount
+    : visibleKeys.reduce((sum, key) => sum + filters[key].length, 0);
+
+  // Hide the filters button entirely if no filters apply to this page
+  const hasAnyFilters = visibleKeys === null || visibleKeys.length > 0;
+
+  // Build visible filter groups, pruning hidden filters
+  const visibleGroups = FILTER_GROUPS
+    .map((group) => ({
+      ...group,
+      filters: group.filters.filter((f) => isFilterVisible(f.key, visibleKeys)),
+    }))
+    .filter((group) => group.filters.length > 0);
 
   return (
     <header
@@ -95,6 +140,26 @@ export function Header({ title }: HeaderProps) {
       <div className="flex items-center gap-2 px-4 py-1.5">
         {/* Title */}
         <h1 className="text-sm font-semibold text-[var(--text-primary)] shrink-0">{title}</h1>
+
+        {/* Quick time range pills */}
+        <div className="flex items-center rounded-md bg-[var(--surface-elevated)] p-0.5 shrink-0">
+          {availablePresets.map((preset) => (
+            <button
+              key={preset.value}
+              onClick={() => setTimeRange(preset.value)}
+              className={cn(
+                "rounded px-2 py-0.5 text-[10px] font-semibold transition-colors",
+                timeRange === preset.value
+                  ? isDark
+                    ? "bg-[#5B22FF] text-white"
+                    : "bg-[#D00083] text-white"
+                  : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+              )}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
 
         {/* Date range chip */}
         <div className={cn(
@@ -113,9 +178,30 @@ export function Header({ title }: HeaderProps) {
           )}>
             {dateRange.label}
           </span>
-          <span className="text-[9px] text-[var(--text-muted)] ml-1">
-            vs {prevDateRange.label}
-          </span>
+          {comparisonMode !== "none" && (
+            <span className="text-[9px] text-[var(--text-muted)] ml-1">
+              vs {prevDateRange.label}
+            </span>
+          )}
+        </div>
+
+        {/* Comparison mode selector */}
+        <div className="relative shrink-0">
+          <select
+            value={comparisonMode}
+            onChange={(e) => setComparisonMode(e.target.value as ComparisonMode)}
+            className={cn(
+              "appearance-none rounded-md border px-2 py-0.5 pr-5 text-[10px] font-medium cursor-pointer outline-none transition-colors",
+              isDark
+                ? "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:border-[#5B22FF]/50"
+                : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:border-[#D00083]/50"
+            )}
+          >
+            {COMPARISON_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-1 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-[var(--text-muted)]" />
         </div>
 
         {/* Spacer */}
@@ -142,32 +228,34 @@ export function Header({ title }: HeaderProps) {
         </div>
 
         {/* Divider */}
-        <div className="h-4 w-px bg-[var(--border)] shrink-0" />
+        {hasAnyFilters && <div className="h-4 w-px bg-[var(--border)] shrink-0" />}
 
-        {/* Filters toggle */}
-        <button
-          onClick={() => setFiltersExpanded((p) => !p)}
-          className={cn(
-            "flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors shrink-0",
-            totalFilters > 0
-              ? isDark
-                ? "bg-[#5B22FF]/15 text-[#7C4DFF] border border-[#5B22FF]/30"
-                : "bg-[#D00083]/10 text-[#D00083] border border-[#D00083]/30"
-              : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-          )}
-        >
-          <SlidersHorizontal className="h-3 w-3" />
-          <span>Filters</span>
-          {totalFilters > 0 && (
-            <span className={cn(
-              "flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[9px] font-bold text-white",
-              isDark ? "bg-[#5B22FF]" : "bg-[#D00083]"
-            )}>
-              {totalFilters}
-            </span>
-          )}
-          <ChevronDown className={cn("h-3 w-3 transition-transform", filtersExpanded && "rotate-180")} />
-        </button>
+        {/* Filters toggle — hidden on pages with no applicable filters */}
+        {hasAnyFilters && (
+          <button
+            onClick={() => setFiltersExpanded((p) => !p)}
+            className={cn(
+              "flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors shrink-0",
+              totalFilters > 0
+                ? isDark
+                  ? "bg-[#5B22FF]/15 text-[#7C4DFF] border border-[#5B22FF]/30"
+                  : "bg-[#D00083]/10 text-[#D00083] border border-[#D00083]/30"
+                : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+            )}
+          >
+            <SlidersHorizontal className="h-3 w-3" />
+            <span>Filters</span>
+            {totalFilters > 0 && (
+              <span className={cn(
+                "flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[9px] font-bold text-white",
+                isDark ? "bg-[#5B22FF]" : "bg-[#D00083]"
+              )}>
+                {totalFilters}
+              </span>
+            )}
+            <ChevronDown className={cn("h-3 w-3 transition-transform", filtersExpanded && "rotate-180")} />
+          </button>
+        )}
 
         {totalFilters > 0 && (
           <button
@@ -211,14 +299,14 @@ export function Header({ title }: HeaderProps) {
         </button>
       </div>
 
-      {/* Expandable filter panel */}
-      {filtersExpanded && (
+      {/* Expandable filter panel — only shows filters relevant to current page */}
+      {filtersExpanded && hasAnyFilters && (
         <div className={cn(
           "border-t px-4 py-2",
           isDark ? "border-[var(--border)] bg-[var(--surface)]/50" : "border-[var(--border)] bg-[var(--surface)]/50"
         )}>
           <div className="flex items-start gap-4">
-            {FILTER_GROUPS.map((group, gi) => (
+            {visibleGroups.map((group, gi) => (
               <div key={group.label} className="flex items-center gap-1.5">
                 <span className={cn(
                   "text-[9px] font-bold uppercase tracking-widest shrink-0 w-7",
@@ -238,7 +326,7 @@ export function Header({ title }: HeaderProps) {
                     />
                   ))}
                 </div>
-                {gi < FILTER_GROUPS.length - 1 && (
+                {gi < visibleGroups.length - 1 && (
                   <div className="h-5 w-px bg-[var(--border)] ml-1.5 shrink-0" />
                 )}
               </div>

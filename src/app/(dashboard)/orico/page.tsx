@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
@@ -792,8 +792,14 @@ export default function OricoPageWrapper() {
 }
 
 function OricoPageContent() {
-  const { period, periodLabel } = usePeriod();
+  const { period, setPeriod, periodLabel } = usePeriod();
   const { filters } = useFilters();
+
+  // Orico reports are monthly — default to monthly on mount
+  useEffect(() => {
+    if (period !== "monthly") setPeriod("monthly");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
   const [activeTab, setActiveTab] = useState<TabId>("segment");
   const [printMode, setPrintMode] = useState(false);

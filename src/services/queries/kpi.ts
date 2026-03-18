@@ -335,7 +335,7 @@ export async function getPortfolioSnapshot(
         WHEN f9_dw004_curr_dpd > 90 THEN '90+ DPD'
       END AS label,
       COUNT(DISTINCT p9_dw004_loc_acct) AS count,
-      ROUND(SUM(f9_dw004_curr_bal / 100.0), 0) AS exposure_idr
+      ROUND(SUM(f9_dw004_clo_bal / 100.0), 0) AS exposure_idr
     FROM ${TABLES.financial_account_updates}
     WHERE f9_dw004_bus_dt = @snapshotDate
       AND f9_dw004_curr_dpd >= 0

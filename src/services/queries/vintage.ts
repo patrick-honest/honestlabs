@@ -131,7 +131,7 @@ export async function getVintageCohorts(
       SELECT
         cm.cohort_month,
         cm.mob,
-        ROUND(SUM(dw4.f9_dw004_curr_bal / 100.0), 0) AS total_exposure_idr
+        ROUND(SUM(dw4.f9_dw004_clo_bal / 100.0), 0) AS total_exposure_idr
       FROM cohort_mob cm
       JOIN ${TABLES.financial_account_updates} dw4
         ON cm.loc_acct = dw4.p9_dw004_loc_acct
