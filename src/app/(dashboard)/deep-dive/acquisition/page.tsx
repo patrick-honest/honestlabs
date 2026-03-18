@@ -399,61 +399,54 @@ export default function AcquisitionPage() {
         dataRange={DATA_RANGE}
         onRefresh={handleRefresh}
       >
-        <div className="space-y-1 relative">
-          {periodFunnel.map((stage: { stage: string; count: number; rate: number | null }, i: number) => {
-            const maxCount = periodFunnel[0].count;
-            const widthPct = (stage.count / maxCount) * 100;
-            const dropoff = i > 0 ? periodFunnel[i - 1].count - stage.count : 0;
-            const dropoffPct = i > 0 ? (dropoff / maxCount) * 100 : 0;
-            const convColor =
-              stage.rate === null
-                ? ""
-                : stage.rate >= 90
-                  ? "text-emerald-400"
-                  : stage.rate >= 75
-                    ? "text-blue-400"
-                    : "text-red-400";
+        <div className="space-y-0.5 relative">
+          {(() => {
+            // Use max count across all stages as the 100% reference
+            const maxCount = Math.max(...periodFunnel.map((s: { count: number }) => s.count));
+            return periodFunnel.map((stage: { stage: string; count: number; rate: number | null }, i: number) => {
+              const widthPct = maxCount > 0 ? (stage.count / maxCount) * 100 : 0;
+              const convColor =
+                stage.rate === null
+                  ? ""
+                  : stage.rate >= 90
+                    ? "text-emerald-400"
+                    : stage.rate >= 75
+                      ? "text-blue-400"
+                      : "text-red-400";
+              // Gradient intensity decreases down the funnel
+              const opacity = 0.9 - (i / periodFunnel.length) * 0.4;
 
-            return (
-              <div key={stage.stage} className="flex items-center gap-3">
-                <span className="w-36 text-xs text-[var(--text-secondary)] text-right shrink-0">
-                  {stage.stage}
-                </span>
-                <div className="flex-1 h-7 relative flex">
-                  {/* Main funnel bar */}
-                  <div
-                    className="h-full rounded-l bg-gradient-to-r from-blue-600/80 to-blue-500/40 flex items-center px-2 cursor-context-menu"
-                    style={{ width: `${widthPct}%` }}
-                    onContextMenu={(e) => handleBarContextMenu(e, stage.stage, i, false)}
-                  >
-                    <span className="text-xs font-semibold text-[var(--text-primary)] whitespace-nowrap">
-                      {stage.count.toLocaleString()}
-                    </span>
-                  </div>
-                  {/* Drop-off bar */}
-                  {i > 0 && dropoff > 0 && (
+              return (
+                <div key={stage.stage} className="flex items-center gap-3">
+                  <span className="w-36 text-xs text-[var(--text-secondary)] text-right shrink-0">
+                    {stage.stage}
+                  </span>
+                  <div className="flex-1 h-7 relative flex justify-center">
+                    {/* Centered funnel bar */}
                     <div
-                      className="h-full rounded-r bg-gradient-to-r from-red-500/30 to-red-400/15 flex items-center justify-end px-2 cursor-context-menu border-l border-red-400/20"
-                      style={{ width: `${dropoffPct}%` }}
-                      onContextMenu={(e) => handleBarContextMenu(e, stage.stage, i, true)}
-                      title={`Drop-off: ${dropoff.toLocaleString()}`}
+                      className="h-full rounded flex items-center justify-center px-2 cursor-context-menu"
+                      style={{
+                        width: `${widthPct}%`,
+                        background: `linear-gradient(90deg, rgba(99,102,241,${opacity}) 0%, rgba(139,92,246,${opacity * 0.7}) 100%)`,
+                      }}
+                      onContextMenu={(e) => handleBarContextMenu(e, stage.stage, i, false)}
                     >
-                      {dropoffPct > 6 && (
-                        <span className="text-[10px] font-medium text-red-400/80 whitespace-nowrap">
-                          -{dropoff.toLocaleString()}
-                        </span>
-                      )}
+                      <span className="text-xs font-semibold text-white whitespace-nowrap drop-shadow-sm">
+                        {stage.count.toLocaleString()}
+                      </span>
                     </div>
+                  </div>
+                  {stage.rate !== null ? (
+                    <span className={`w-14 text-xs font-medium text-right shrink-0 ${convColor}`}>
+                      {stage.rate.toFixed(1)}%
+                    </span>
+                  ) : (
+                    <span className="w-14 shrink-0" />
                   )}
                 </div>
-                {stage.rate !== null && (
-                  <span className={`w-14 text-xs font-medium text-right shrink-0 ${convColor}`}>
-                    {stage.rate}%
-                  </span>
-                )}
-              </div>
-            );
-          })}
+              );
+            });
+          })()}
 
           {/* Context menu */}
           {ctxMenu && (
