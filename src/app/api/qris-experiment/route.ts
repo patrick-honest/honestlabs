@@ -8,6 +8,8 @@ import {
   getQrisOnlyMerchantSpendTrend,
   getCohortFinancials,
   getCohortRpu,
+  getTopQrisOnlyMerchantsByTxn,
+  getTopQrisOnlyMerchantsBySpend,
 } from "@/services/queries/qris-experiment";
 
 export async function GET(request: Request) {
@@ -17,7 +19,7 @@ export async function GET(request: Request) {
 
     const endDate = searchParams.get("endDate") || new Date().toISOString().slice(0, 10);
 
-    const [cohortComparison, merchantBreakdown, merchantGrowth, mixedMerchantStats, interchangeProjection, qrisOnlyMerchantSpend, cohortFinancials, cohortRpu] =
+    const [cohortComparison, merchantBreakdown, merchantGrowth, mixedMerchantStats, interchangeProjection, qrisOnlyMerchantSpend, cohortFinancials, cohortRpu, topMerchantsByTxn, topMerchantsBySpend] =
       await Promise.all([
         getQrisCohortComparison(startDate),
         getQrisMerchantBreakdown(),
@@ -27,9 +29,11 @@ export async function GET(request: Request) {
         getQrisOnlyMerchantSpendTrend(),
         getCohortFinancials(),
         getCohortRpu(startDate, endDate),
+        getTopQrisOnlyMerchantsByTxn(),
+        getTopQrisOnlyMerchantsBySpend(startDate, endDate),
       ]);
 
-    return NextResponse.json({ cohortComparison, merchantBreakdown, merchantGrowth, mixedMerchantStats, interchangeProjection, qrisOnlyMerchantSpend, cohortFinancials, cohortRpu });
+    return NextResponse.json({ cohortComparison, merchantBreakdown, merchantGrowth, mixedMerchantStats, interchangeProjection, qrisOnlyMerchantSpend, cohortFinancials, cohortRpu, topMerchantsByTxn, topMerchantsBySpend });
   } catch (error) {
     console.error("[qris-experiment] Query failed:", error);
     return NextResponse.json(

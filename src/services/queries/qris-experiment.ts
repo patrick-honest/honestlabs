@@ -797,3 +797,71 @@ export async function getCohortRpu(startDate: string, endDate: string): Promise<
   `;
   return runQuery<CohortRpuRow>(sql, { startDate, endDate });
 }
+
+// ---------------------------------------------------------------------------
+// Top QRIS-Only Merchants
+// ---------------------------------------------------------------------------
+
+export interface TopQrisMerchantRow {
+  merchant: string;
+  txn_count: number;
+  total_spend_idr: number;
+  total_spend_usd: number;
+}
+
+/** Top 15 QRIS-only merchants by transaction count (all time) */
+export async function getTopQrisOnlyMerchantsByTxn(): Promise<TopQrisMerchantRow[]> {
+  const sql = `
+    WITH qris_only AS (
+      SELECT fx_dw007_merc_name AS merchant
+      FROM ${TABLES.authorized_transaction}
+      WHERE (fx_dw007_stat IS NULL OR TRIM(fx_dw007_stat) = '')
+        AND fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+      GROUP BY merchant
+      HAVING MAX(CASE WHEN fx_dw007_rte_dest = 'L' THEN 1 ELSE 0 END) = 1
+         AND MAX(CASE WHEN fx_dw007_rte_dest != 'L' OR fx_dw007_rte_dest IS NULL THEN 1 ELSE 0 END) = 0
+    )
+    SELECT
+      t.fx_dw007_merc_name AS merchant,
+      COUNT(*) AS txn_count,
+      ROUND(SUM(CAST(t.f9_dw007_amt_req AS FLOAT64) / 100), 0) AS total_spend_idr,
+      ROUND(SUM(CAST(t.f9_dw007_amt_req AS FLOAT64) / 100 / 16000), 2) AS total_spend_usd
+    FROM ${TABLES.authorized_transaction} t
+    JOIN qris_only q ON t.fx_dw007_merc_name = q.merchant
+    WHERE (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '')
+      AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+    GROUP BY merchant
+    ORDER BY txn_count DESC
+    LIMIT 15
+  `;
+  return runQuery<TopQrisMerchantRow>(sql);
+}
+
+/** Top 15 QRIS-only merchants by spend in period */
+export async function getTopQrisOnlyMerchantsBySpend(startDate: string, endDate: string): Promise<TopQrisMerchantRow[]> {
+  const sql = `
+    WITH qris_only AS (
+      SELECT fx_dw007_merc_name AS merchant
+      FROM ${TABLES.authorized_transaction}
+      WHERE (fx_dw007_stat IS NULL OR TRIM(fx_dw007_stat) = '')
+        AND fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+      GROUP BY merchant
+      HAVING MAX(CASE WHEN fx_dw007_rte_dest = 'L' THEN 1 ELSE 0 END) = 1
+         AND MAX(CASE WHEN fx_dw007_rte_dest != 'L' OR fx_dw007_rte_dest IS NULL THEN 1 ELSE 0 END) = 0
+    )
+    SELECT
+      t.fx_dw007_merc_name AS merchant,
+      COUNT(*) AS txn_count,
+      ROUND(SUM(CAST(t.f9_dw007_amt_req AS FLOAT64) / 100), 0) AS total_spend_idr,
+      ROUND(SUM(CAST(t.f9_dw007_amt_req AS FLOAT64) / 100 / 16000), 2) AS total_spend_usd
+    FROM ${TABLES.authorized_transaction} t
+    JOIN qris_only q ON t.fx_dw007_merc_name = q.merchant
+    WHERE (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '')
+      AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+      AND t.f9_dw007_dt BETWEEN @startDate AND @endDate
+    GROUP BY merchant
+    ORDER BY total_spend_idr DESC
+    LIMIT 15
+  `;
+  return runQuery<TopQrisMerchantRow>(sql, { startDate, endDate });
+}

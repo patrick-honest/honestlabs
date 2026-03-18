@@ -309,6 +309,8 @@ interface ApiData {
   cohortFinancials?: any[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   cohortRpu?: any[];
+  topMerchantsByTxn?: { merchant: string; txn_count: number; total_spend_idr: number; total_spend_usd: number }[];
+  topMerchantsBySpend?: { merchant: string; txn_count: number; total_spend_idr: number; total_spend_usd: number }[];
 }
 
 export default function QrisExperimentPage() {
@@ -894,6 +896,73 @@ export default function QrisExperimentPage() {
             </div>
           </div>
         )}
+
+        {/* ============================================================ */}
+        {/* TOP QRIS-ONLY MERCHANTS                                        */}
+        {/* ============================================================ */}
+        {(apiData?.topMerchantsByTxn?.length || apiData?.topMerchantsBySpend?.length) ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {apiData.topMerchantsByTxn && apiData.topMerchantsByTxn.length > 0 && (
+              <div className={cn("rounded-xl border p-5", isDark ? "border-[var(--border)] bg-[var(--surface)]" : "border-[var(--border)] bg-[var(--surface)]")}>
+                <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">
+                  Top QRIS-Only Merchants by Transaction Count
+                  <span className={cn("ml-2 text-[9px]", isDark ? "text-[#FFD166]" : "text-amber-500")} title="Live BigQuery data">&#9733;</span>
+                </h3>
+                <p className="text-[10px] text-[var(--text-muted)] mb-3">All time — merchants that have only ever processed QRIS</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-[10px] text-[var(--text-muted)] border-b border-[var(--border)]">
+                        <th className="pb-1.5 text-left font-medium">Merchant</th>
+                        <th className="pb-1.5 text-right font-medium">Txns</th>
+                        <th className="pb-1.5 text-right font-medium">Spend (IDR)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-[var(--text-secondary)]">
+                      {apiData.topMerchantsByTxn.map((m: { merchant: string; txn_count: number; total_spend_idr: number }) => (
+                        <tr key={m.merchant} className="border-b border-[var(--border)]/20">
+                          <td className="py-1.5 font-medium truncate max-w-[180px]">{m.merchant}</td>
+                          <td className="py-1.5 text-right font-mono">{m.txn_count.toLocaleString()}</td>
+                          <td className="py-1.5 text-right font-mono">{m.total_spend_idr >= 1e9 ? `Rp ${(m.total_spend_idr/1e9).toFixed(1)}B` : m.total_spend_idr >= 1e6 ? `Rp ${(m.total_spend_idr/1e6).toFixed(0)}M` : `Rp ${m.total_spend_idr.toLocaleString()}`}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {apiData.topMerchantsBySpend && apiData.topMerchantsBySpend.length > 0 && (
+              <div className={cn("rounded-xl border p-5", isDark ? "border-[var(--border)] bg-[var(--surface)]" : "border-[var(--border)] bg-[var(--surface)]")}>
+                <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">
+                  Top QRIS-Only Merchants by Spend
+                  <span className={cn("ml-2 text-[9px]", isDark ? "text-[#FFD166]" : "text-amber-500")} title="Live BigQuery data">&#9733;</span>
+                </h3>
+                <p className="text-[10px] text-[var(--text-muted)] mb-3">Current period — ordered by total spend</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-[10px] text-[var(--text-muted)] border-b border-[var(--border)]">
+                        <th className="pb-1.5 text-left font-medium">Merchant</th>
+                        <th className="pb-1.5 text-right font-medium">Spend (IDR)</th>
+                        <th className="pb-1.5 text-right font-medium">Txns</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-[var(--text-secondary)]">
+                      {apiData.topMerchantsBySpend.map((m: { merchant: string; txn_count: number; total_spend_idr: number }) => (
+                        <tr key={m.merchant} className="border-b border-[var(--border)]/20">
+                          <td className="py-1.5 font-medium truncate max-w-[180px]">{m.merchant}</td>
+                          <td className="py-1.5 text-right font-mono">{m.total_spend_idr >= 1e9 ? `Rp ${(m.total_spend_idr/1e9).toFixed(1)}B` : m.total_spend_idr >= 1e6 ? `Rp ${(m.total_spend_idr/1e6).toFixed(0)}M` : `Rp ${m.total_spend_idr.toLocaleString()}`}</td>
+                          <td className="py-1.5 text-right font-mono">{m.txn_count.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : null}
 
         {/* ============================================================ */}
         {/* COHORT FINANCIAL METRICS                                       */}
