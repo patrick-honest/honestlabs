@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { ShieldCheck, CreditCard, Truck, Headphones, ChevronDown, ChevronUp, Banknote, AlertTriangle, Copy, Check, ExternalLink } from "lucide-react";
+import { ShieldCheck, CreditCard, Truck, Headphones, ChevronDown, ChevronUp, Banknote, AlertTriangle, Copy, Check, ExternalLink, Receipt } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
 import type { UserSearchResult, FreshworksTicket } from "@/types/search";
@@ -303,6 +303,55 @@ export function UserInfoCard({ user }: UserInfoCardProps) {
             <Field label="AWB Number" value={user.awb_number} mono />
             <Field label="Delivery Status" value={user.awb_status?.replace(/_/g, " ")} />
             <Field label="Delivered" value={formatDate(user.delivery_date)} />
+          </div>
+        </div>
+      )}
+
+      {/* Repayment History Section */}
+      {user.repayment_history && user.repayment_history.length > 0 && (
+        <div className="mb-5 border-t border-[var(--border)] pt-4">
+          <SectionHeader icon={<Receipt className="h-3 w-3" />} title="Payment History" count={user.repayment_history.length} />
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-[10px] text-[var(--text-muted)] border-b border-[var(--border)]">
+                  <th className="pb-2 text-left font-medium">Date</th>
+                  <th className="pb-2 text-left font-medium">Vendor</th>
+                  <th className="pb-2 text-right font-medium">Amount</th>
+                  <th className="pb-2 text-left font-medium pl-4">Payment Code / VA</th>
+                </tr>
+              </thead>
+              <tbody>
+                {user.repayment_history.map((entry, i) => (
+                  <tr key={i} className="border-b border-[var(--border)]/50">
+                    <td className="py-2 text-[var(--text-secondary)]">{formatDate(entry.date)}</td>
+                    <td className="py-2">
+                      <span className={cn(
+                        "inline-block rounded px-1.5 py-0.5 text-[10px] font-medium",
+                        entry.vendor === "DUR" ? "bg-emerald-500/10 text-emerald-600" :
+                        entry.vendor === "BSM" ? "bg-blue-500/10 text-blue-600" :
+                        "bg-[var(--surface-elevated)] text-[var(--text-secondary)]"
+                      )}>
+                        {entry.vendor === "DUR" ? "Durianpay" : entry.vendor === "BSM" ? "BSI" : entry.vendor ?? "—"}
+                      </span>
+                    </td>
+                    <td className="py-2 text-right font-mono text-[var(--text-primary)]">
+                      {entry.amount ? `Rp ${Number(entry.amount).toLocaleString()}` : "—"}
+                    </td>
+                    <td className="py-2 pl-4">
+                      {entry.repayment_code && entry.repayment_code.trim() ? (
+                        <span className="group inline-flex items-center gap-1 font-mono text-[var(--text-secondary)]">
+                          {entry.repayment_code.trim()}
+                          <CopyButton value={entry.repayment_code.trim()} />
+                        </span>
+                      ) : (
+                        <span className="text-[var(--text-muted)]">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

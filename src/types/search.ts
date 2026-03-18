@@ -68,9 +68,20 @@ export interface UserSearchResult {
   restriction_status: string | null;
   has_spending_block: boolean;
 
+  // Repayment history
+  repayment_history: RepaymentEntry[];
+
   // Freshworks
   open_tickets: FreshworksTicket[];
   ticket_history: FreshworksTicket[];
+}
+
+export interface RepaymentEntry {
+  repayment_code: string | null;
+  vendor: string | null;
+  amount: string | null;
+  currency: string | null;
+  date: string | null;
 }
 
 export interface SearchResultResponse {

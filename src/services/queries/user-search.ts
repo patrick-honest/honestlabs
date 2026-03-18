@@ -50,9 +50,20 @@ export interface UserSearchResult {
   restriction_status: string | null; // fx_dw004_restrct_stat
   has_spending_block: boolean;
 
+  // Repayment history
+  repayment_history: RepaymentEntry[];
+
   // Freshworks
   open_tickets: FreshworksTicket[];
   ticket_history: FreshworksTicket[];
+}
+
+export interface RepaymentEntry {
+  repayment_code: string | null;
+  vendor: string | null;
+  amount: string | null;
+  currency: string | null;
+  date: string | null;
 }
 
 export interface UrnHistoryEntry {
@@ -398,14 +409,29 @@ export async function searchUserById(
     LIMIT 20
   `;
 
+  // Repayment history (recent payments with codes/VA references)
+  const repaymentSql = `
+    SELECT
+      TRIM(repayment_code) AS repayment_code,
+      vendor,
+      repayment_amount AS amount,
+      repayment_currency AS currency,
+      FORMAT_DATE('%Y-%m-%d', DATE(timestamp, 'Asia/Jakarta')) AS date
+    FROM ${TABLES.repayment_completed}
+    WHERE user_id = @userId
+    ORDER BY timestamp DESC
+    LIMIT 12
+  `;
+
   // Run all queries in parallel
-  const [mainRows, urnRows, savingsRows, awbRows, openTicketRows, ticketHistoryRows] = await Promise.all([
+  const [mainRows, urnRows, savingsRows, awbRows, openTicketRows, ticketHistoryRows, repaymentRows] = await Promise.all([
     runQuery<Record<string, unknown>>(mainSql, { userId }),
     runQuery<{ urn: string; date: string }>(urnHistSql, { userId }),
     runQuery<{ account_number: string }>(savingsSql, { userId }),
     runQuery<{ awb_no: string; status: string; delivery_date: string | null }>(awbSql, { userId }),
     runQuery<FreshworksTicket>(openTicketsSql, { userId }),
     runQuery<FreshworksTicket>(ticketHistorySql, { userId }),
+    runQuery<RepaymentEntry>(repaymentSql, { userId }),
   ]);
 
   if (mainRows.length === 0) return null;
@@ -464,6 +490,7 @@ export async function searchUserById(
     card_status: rawCardStatus ? (CARD_STATUS_MAP[rawCardStatus] ?? rawCardStatus) : null,
     restriction_status: rawRestrictionStatus ? (RESTRICTION_MAP[rawRestrictionStatus] ?? rawRestrictionStatus) : null,
     has_spending_block: hasSpendingBlock,
+    repayment_history: repaymentRows,
     open_tickets: openTicketRows,
     ticket_history: ticketHistoryRows,
   };
