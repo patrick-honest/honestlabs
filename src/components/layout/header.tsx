@@ -25,7 +25,8 @@ import {
 } from "@/hooks/use-filters";
 import { HeaderFilterDropdown } from "@/components/filters/header-filter-dropdown";
 import { getVisibleFilters, isFilterVisible, type FilterKey } from "@/lib/page-filter-config";
-import { Sun, Moon, Calendar, SlidersHorizontal, ChevronDown, ChevronLeft, ChevronRight, X, Save, Bookmark, Trash2, Pencil, Check } from "lucide-react";
+import { Sun, Moon, Calendar, SlidersHorizontal, ChevronDown, ChevronLeft, ChevronRight, X, Save, Bookmark, Trash2, Pencil, Check, Globe } from "lucide-react";
+import { useLanguage, type Locale } from "@/hooks/use-language";
 import type { Cycle } from "@/types/reports";
 // Types already imported above from use-period
 
@@ -403,6 +404,7 @@ export function Header({ title }: HeaderProps) {
     setPeriodAndRange, comparisonMode, setComparisonMode, setCustomRange,
   } = usePeriod();
   const { isDark, toggleTheme } = useTheme();
+  const { locale, setLocale, localeLabels } = useLanguage();
   const {
     filters, toggleFilterValue, clearFilter, clearFilters, activeFilterCount,
     savedPresets, savePreset, loadPreset, renamePreset, deletePreset, suggestPresetName,
@@ -544,6 +546,25 @@ export function Header({ title }: HeaderProps) {
         >
           {isDark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
         </button>
+
+        {/* Language selector */}
+        <div className="relative shrink-0">
+          <select
+            value={locale}
+            onChange={(e) => setLocale(e.target.value as Locale)}
+            className={cn(
+              "appearance-none rounded-md border px-1.5 py-0.5 pr-5 text-[10px] font-medium cursor-pointer outline-none transition-colors",
+              isDark
+                ? "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]"
+                : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]"
+            )}
+          >
+            {(Object.entries(localeLabels) as [Locale, string][]).map(([val, label]) => (
+              <option key={val} value={val}>{label}</option>
+            ))}
+          </select>
+          <Globe className="pointer-events-none absolute right-1 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-[var(--text-muted)]" />
+        </div>
       </div>
 
       {/* Expandable filter panel */}
