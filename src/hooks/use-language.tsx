@@ -59,7 +59,7 @@ export function LanguageProvider({ children, initialMessages }: { children: Reac
 
   return (
     <LanguageContext.Provider value={{ locale, setLocale, locales: LOCALES, localeLabels: LOCALE_LABELS, localeFullLabels: LOCALE_FULL_LABELS }}>
-      <NextIntlClientProvider locale={locale} messages={messages}>
+      <NextIntlClientProvider locale={locale} messages={messages} timeZone="Asia/Jakarta">
         {children}
       </NextIntlClientProvider>
     </LanguageContext.Provider>

@@ -95,7 +95,8 @@ interface HealthScore {
   keyAlert: string;
 }
 
-function computeHealth(kpis: KpiMetric[], isDark: boolean, t: (key: string, values?: Record<string, string>) => string): HealthScore {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function computeHealth(kpis: KpiMetric[], isDark: boolean, t: any): HealthScore {
   const find = (key: string) => kpis.find((k) => k.metric === key);
   const sar = find("spend_active_rate");
   const dpd = find("dpd_30_plus_rate");
@@ -176,7 +177,8 @@ interface Alert {
   link?: string;
 }
 
-function generateAlerts(kpis: KpiMetric[], period: Cycle, t: (key: string, values?: Record<string, string>) => string): Alert[] {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function generateAlerts(kpis: KpiMetric[], period: Cycle, t: any): Alert[] {
   const alerts: Alert[] = [];
   const sar = kpis.find((k) => k.metric === "spend_active_rate");
   const dpd = kpis.find((k) => k.metric === "dpd_30_plus_rate");
