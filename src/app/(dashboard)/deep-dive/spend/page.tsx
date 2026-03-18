@@ -204,7 +204,7 @@ const sampleBnplUsageInsights: ChartInsight[] = [
 ];
 
 export default function SpendPage() {
-  const { period, periodLabel } = usePeriod();
+  const { period, periodLabel, timeRangeMultiplier } = usePeriod();
   const { filters } = useFilters();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
@@ -307,8 +307,8 @@ export default function SpendPage() {
         <MetricCard
           metricKey="spend_total_volume"
           label="Total Spend Volume"
-          value={applyFilterToMetric(scaleMetricValue(31000000000, period, false), filters, false)}
-          prevValue={applyFilterToMetric(scaleMetricValue(29000000000, period, false), filters, false)}
+          value={applyFilterToMetric(scaleMetricValue(31000000000, period, false, timeRangeMultiplier), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(29000000000, period, false, timeRangeMultiplier), filters, false)}
           unit="idr"
           asOf={AS_OF}
           dataRange={DATA_RANGE}

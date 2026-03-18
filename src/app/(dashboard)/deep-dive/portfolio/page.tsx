@@ -208,7 +208,7 @@ const activeCustomerRatioTrend = [
 ];
 
 export default function PortfolioPage() {
-  const { period, periodLabel } = usePeriod();
+  const { period, periodLabel, timeRangeMultiplier } = usePeriod();
   const { filters } = useFilters();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
@@ -312,8 +312,8 @@ export default function PortfolioPage() {
         <MetricCard
           metricKey="port_new_accounts"
           label="New Accounts (Period)"
-          value={applyFilterToMetric(scaleMetricValue(4200, period, false), filters, false)}
-          prevValue={applyFilterToMetric(scaleMetricValue(4100, period, false), filters, false)}
+          value={applyFilterToMetric(scaleMetricValue(4200, period, false, timeRangeMultiplier), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(4100, period, false, timeRangeMultiplier), filters, false)}
           unit="count"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -332,8 +332,8 @@ export default function PortfolioPage() {
         <MetricCard
           metricKey="port_repayment_vol"
           label="Repayment Volume"
-          value={applyFilterToMetric(scaleMetricValue(18200000000, period, false), filters, false)}
-          prevValue={applyFilterToMetric(scaleMetricValue(17800000000, period, false), filters, false)}
+          value={applyFilterToMetric(scaleMetricValue(18200000000, period, false, timeRangeMultiplier), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(17800000000, period, false, timeRangeMultiplier), filters, false)}
           unit="idr"
           asOf={AS_OF}
           dataRange={DATA_RANGE}

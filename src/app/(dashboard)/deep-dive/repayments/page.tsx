@@ -338,7 +338,7 @@ const actionItems: ActionItem[] = [
 // ---------------------------------------------------------------------------
 
 export default function RepaymentsPage() {
-  const { period, periodLabel } = usePeriod();
+  const { period, periodLabel, timeRangeMultiplier } = usePeriod();
   const { filters } = useFilters();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
@@ -373,8 +373,8 @@ export default function RepaymentsPage() {
         <MetricCard
           metricKey="repay_count"
           label="Total Repayments"
-          value={applyFilterToMetric(scaleMetricValue(45300, period, false), filters, false)}
-          prevValue={applyFilterToMetric(scaleMetricValue(44200, period, false), filters, false)}
+          value={applyFilterToMetric(scaleMetricValue(45300, period, false, timeRangeMultiplier), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(44200, period, false, timeRangeMultiplier), filters, false)}
           unit="count"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -385,8 +385,8 @@ export default function RepaymentsPage() {
         <MetricCard
           metricKey="repay_amount"
           label="Total Amount Collected"
-          value={applyFilterToMetric(scaleMetricValue(28300000000, period, false), filters, false)}
-          prevValue={applyFilterToMetric(scaleMetricValue(27100000000, period, false), filters, false)}
+          value={applyFilterToMetric(scaleMetricValue(28300000000, period, false, timeRangeMultiplier), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(27100000000, period, false, timeRangeMultiplier), filters, false)}
           unit="idr"
           asOf={AS_OF}
           dataRange={DATA_RANGE}

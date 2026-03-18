@@ -156,7 +156,7 @@ const actionItems: ActionItem[] = [
 // ==========================================================================
 
 export default function ChannelQualityPage() {
-  const { period, dateRange } = usePeriod();
+  const { period, dateRange, timeRangeMultiplier } = usePeriod();
   const { isDark } = useTheme();
   const { filters } = useFilters();
   const range = getPeriodRange(period);
@@ -192,7 +192,7 @@ export default function ChannelQualityPage() {
   const totalApplications = useMemo(() => {
     const base = activeChannelData.reduce((sum, c) => sum + c.applications, 0);
     if (isLiveData) return base;
-    return Math.round(applyFilterToMetric(scaleMetricValue(base, period, false), filters, false));
+    return Math.round(applyFilterToMetric(scaleMetricValue(base, period, false, timeRangeMultiplier), filters, false));
   }, [activeChannelData, isLiveData, period, filters]);
 
   const overallApprovalRate = useMemo(() => {
@@ -221,7 +221,7 @@ export default function ChannelQualityPage() {
     if (isLiveData) return src; // Real data doesn't need scaling
     const scaled = src.map((d) => ({
       ...d,
-      applications: Math.round(scaleMetricValue(d.applications, period, false)),
+      applications: Math.round(scaleMetricValue(d.applications, period, false, timeRangeMultiplier)),
     }));
     return applyFilterToData(scaled, filters);
   }, [activeChannelData, isLiveData, period, filters]);

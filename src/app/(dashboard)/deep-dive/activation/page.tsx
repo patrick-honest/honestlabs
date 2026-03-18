@@ -100,7 +100,7 @@ const actionItems: ActionItem[] = [
 ];
 
 export default function ActivationPage() {
-  const { period, periodLabel } = usePeriod();
+  const { period, periodLabel, timeRangeMultiplier } = usePeriod();
   const { filters } = useFilters();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
@@ -193,8 +193,8 @@ export default function ActivationPage() {
         <MetricCard
           metricKey="act_cards_activated"
           label="Cards Activated"
-          value={applyFilterToMetric(scaleMetricValue(3100, period, false), filters, false)}
-          prevValue={applyFilterToMetric(scaleMetricValue(2850, period, false), filters, false)}
+          value={applyFilterToMetric(scaleMetricValue(3100, period, false, timeRangeMultiplier), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(2850, period, false, timeRangeMultiplier), filters, false)}
           unit="count"
           asOf={AS_OF}
           dataRange={DATA_RANGE}

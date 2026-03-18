@@ -81,7 +81,7 @@ const actionItems: ActionItem[] = [
 ];
 
 export default function CreditLinePage() {
-  const { period, periodLabel } = usePeriod();
+  const { period, periodLabel, timeRangeMultiplier } = usePeriod();
   const { filters } = useFilters();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
@@ -140,8 +140,8 @@ export default function CreditLinePage() {
         <MetricCard
           metricKey="cli_issued"
           label="CLIs Issued"
-          value={applyFilterToMetric(scaleMetricValue(8500, period, false), filters, false)}
-          prevValue={applyFilterToMetric(scaleMetricValue(8900, period, false), filters, false)}
+          value={applyFilterToMetric(scaleMetricValue(8500, period, false, timeRangeMultiplier), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(8900, period, false, timeRangeMultiplier), filters, false)}
           unit="count"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -160,8 +160,8 @@ export default function CreditLinePage() {
         <MetricCard
           metricKey="cli_unique_recipients"
           label="Unique Recipients"
-          value={applyFilterToMetric(scaleMetricValue(6200, period, false), filters, false)}
-          prevValue={applyFilterToMetric(scaleMetricValue(6500, period, false), filters, false)}
+          value={applyFilterToMetric(scaleMetricValue(6200, period, false, timeRangeMultiplier), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(6500, period, false, timeRangeMultiplier), filters, false)}
           unit="count"
           asOf={AS_OF}
           dataRange={DATA_RANGE}

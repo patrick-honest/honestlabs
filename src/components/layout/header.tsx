@@ -133,79 +133,91 @@ export function Header({ title }: HeaderProps) {
           : "border-[var(--border)] bg-[var(--background)]/95"
       )}
     >
-      {/* Main row: title + time range + date + comparison + period + filters + currency + theme */}
+      {/* Main row: title + time controls + filters + settings */}
       <div className="flex items-center gap-2 px-4 py-1.5">
         {/* Title */}
         <h1 className="text-sm font-semibold text-[var(--text-primary)] shrink-0">{title}</h1>
 
-        {/* Time range pills */}
-        <div className="flex items-center rounded-md bg-[var(--surface-elevated)] p-0.5 shrink-0">
-          {availablePresets.map((preset) => (
-            <button
-              key={preset.value}
-              onClick={() => setTimeRange(preset.value)}
+        {/* ── Time controls group ── */}
+        <div className={cn(
+          "flex items-center gap-1.5 rounded-lg border px-2 py-1 shrink-0",
+          isDark ? "border-[var(--border)]/50 bg-[var(--surface)]/50" : "border-[var(--border)]/50 bg-[var(--surface)]/30"
+        )}>
+          {/* Period toggle (W/M/Q/Y) */}
+          <div className="flex rounded-md bg-[var(--surface-elevated)] p-0.5">
+            {CYCLES.map((c) => (
+              <button
+                key={c.value}
+                onClick={() => setPeriod(c.value)}
+                className={cn(
+                  "rounded px-1.5 py-0.5 text-[10px] font-semibold transition-colors",
+                  period === c.value
+                    ? isDark ? "bg-[#5B22FF] text-white" : "bg-[#D00083] text-white"
+                    : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                )}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="h-3.5 w-px bg-[var(--border)] shrink-0" />
+
+          {/* Time range pills */}
+          <div className="flex rounded-md bg-[var(--surface-elevated)] p-0.5">
+            {availablePresets.map((preset) => (
+              <button
+                key={preset.value}
+                onClick={() => setTimeRange(preset.value)}
+                className={cn(
+                  "rounded px-1.5 py-0.5 text-[10px] font-semibold transition-colors",
+                  timeRange === preset.value
+                    ? isDark ? "bg-[#5B22FF] text-white" : "bg-[#D00083] text-white"
+                    : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                )}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="h-3.5 w-px bg-[var(--border)] shrink-0" />
+
+          {/* Date range chip */}
+          <div className="flex items-center gap-1">
+            <Calendar className={cn("h-3 w-3", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")} />
+            <span className={cn("text-[10px] font-semibold", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>
+              {dateRange.label}
+            </span>
+            {comparisonMode !== "none" && (
+              <span className="text-[9px] text-[var(--text-muted)]">vs {prevDateRange.label}</span>
+            )}
+          </div>
+
+          <div className="h-3.5 w-px bg-[var(--border)] shrink-0" />
+
+          {/* Comparison selector */}
+          <div className="relative">
+            <select
+              value={comparisonMode}
+              onChange={(e) => setComparisonMode(e.target.value as ComparisonMode)}
               className={cn(
-                "rounded px-2 py-0.5 text-[10px] font-semibold transition-colors",
-                timeRange === preset.value
-                  ? isDark ? "bg-[#5B22FF] text-white" : "bg-[#D00083] text-white"
-                  : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                "appearance-none rounded-md border px-1.5 py-0.5 pr-4 text-[10px] font-medium cursor-pointer outline-none transition-colors",
+                isDark
+                  ? "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]"
+                  : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]"
               )}
             >
-              {preset.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Date range chip */}
-        <div className="flex items-center gap-1 shrink-0">
-          <Calendar className={cn("h-3 w-3", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")} />
-          <span className={cn("text-[10px] font-semibold", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>
-            {dateRange.label}
-          </span>
-          {comparisonMode !== "none" && (
-            <span className="text-[9px] text-[var(--text-muted)]">vs {prevDateRange.label}</span>
-          )}
-        </div>
-
-        {/* Comparison selector */}
-        <div className="relative shrink-0">
-          <select
-            value={comparisonMode}
-            onChange={(e) => setComparisonMode(e.target.value as ComparisonMode)}
-            className={cn(
-              "appearance-none rounded-md border px-2 py-0.5 pr-5 text-[10px] font-medium cursor-pointer outline-none transition-colors",
-              isDark
-                ? "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]"
-                : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]"
-            )}
-          >
-            {COMPARISON_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-          <ChevronDown className="pointer-events-none absolute right-1 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-[var(--text-muted)]" />
+              {COMPARISON_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-0.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-[var(--text-muted)]" />
+          </div>
         </div>
 
         {/* Spacer */}
         <div className="flex-1" />
-
-        {/* Period toggle */}
-        <div className="flex rounded-md bg-[var(--surface-elevated)] p-0.5 shrink-0">
-          {CYCLES.map((c) => (
-            <button
-              key={c.value}
-              onClick={() => setPeriod(c.value)}
-              className={cn(
-                "rounded px-2 py-0.5 text-[11px] font-semibold transition-colors",
-                period === c.value
-                  ? isDark ? "bg-[#5B22FF] text-white" : "bg-[#D00083] text-white"
-                  : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-              )}
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
 
         <div className="h-4 w-px bg-[var(--border)] shrink-0" />
 

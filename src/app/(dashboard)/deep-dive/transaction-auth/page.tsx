@@ -109,7 +109,7 @@ const actionItems: ActionItem[] = [
 ];
 
 export default function TransactionAuthPage() {
-  const { period, periodLabel } = usePeriod();
+  const { period, periodLabel, timeRangeMultiplier } = usePeriod();
   const { filters } = useFilters();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
@@ -195,8 +195,8 @@ export default function TransactionAuthPage() {
         <MetricCard
           metricKey="auth_total"
           label="Total Authorizations"
-          value={applyFilterToMetric(scaleMetricValue(549500, period, false), filters, false)}
-          prevValue={applyFilterToMetric(scaleMetricValue(535500, period, false), filters, false)}
+          value={applyFilterToMetric(scaleMetricValue(549500, period, false, timeRangeMultiplier), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(535500, period, false, timeRangeMultiplier), filters, false)}
           unit="count"
           asOf={AS_OF}
           dataRange={DATA_RANGE}

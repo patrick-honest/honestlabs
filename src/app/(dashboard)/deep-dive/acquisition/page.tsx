@@ -197,13 +197,13 @@ type ContextMenuState = {
 } | null;
 
 export default function AcquisitionPage() {
-  const { period, periodLabel } = usePeriod();
+  const { period, periodLabel, timeRangeMultiplier } = usePeriod();
   const { filters } = useFilters();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
   const periodFunnel = useMemo(() => funnelStages.map(s => ({
     ...s,
-    count: applyFilterToMetric(scaleMetricValue(s.count, period, false), filters, false),
+    count: applyFilterToMetric(scaleMetricValue(s.count, period, false, timeRangeMultiplier), filters, false),
   })), [period, filters]);
 
   const periodDecisionBreakdown = useMemo(() => applyFilterToData(scaleTrendData(decisionBreakdown, period), filters), [period, filters]);
@@ -324,8 +324,8 @@ export default function AcquisitionPage() {
         <MetricCard
           metricKey="acq_total_applications"
           label="Total Applications"
-          value={applyFilterToMetric(scaleMetricValue(8900, period, false), filters, false)}
-          prevValue={applyFilterToMetric(scaleMetricValue(8200, period, false), filters, false)}
+          value={applyFilterToMetric(scaleMetricValue(8900, period, false, timeRangeMultiplier), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(8200, period, false, timeRangeMultiplier), filters, false)}
           unit="count"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -355,8 +355,8 @@ export default function AcquisitionPage() {
         <MetricCard
           metricKey="acq_cards_activated"
           label="Cards Activated"
-          value={applyFilterToMetric(scaleMetricValue(3400, period, false), filters, false)}
-          prevValue={applyFilterToMetric(scaleMetricValue(3100, period, false), filters, false)}
+          value={applyFilterToMetric(scaleMetricValue(3400, period, false, timeRangeMultiplier), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(3100, period, false, timeRangeMultiplier), filters, false)}
           unit="count"
           asOf={AS_OF}
           dataRange={DATA_RANGE}

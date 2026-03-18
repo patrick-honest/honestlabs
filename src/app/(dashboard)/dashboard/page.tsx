@@ -21,13 +21,13 @@ import Link from "next/link";
 
 // ── Mock data generators (period-aware) ─────────────────────────────────────
 
-function generateMockKpis(period: Cycle): KpiMetric[] {
+function generateMockKpis(period: Cycle, trm: number = 1): KpiMetric[] {
   const m: Record<Cycle, number> = { weekly: 0.25, monthly: 1, quarterly: 3, yearly: 12 };
-  const scale = m[period];
+  const scale = m[period] * trm; // Apply time range multiplier to absolute values
   return [
-    { metric: "eligible_to_spend", label: "Active Accounts", value: Math.round(60240 * (0.85 + scale * 0.05)), prevValue: Math.round(58100 * (0.85 + scale * 0.05)), unit: "count", changePercent: 3.7, direction: "up" },
+    { metric: "eligible_to_spend", label: "Active Accounts", value: Math.round(60240 * (0.85 + scale * 0.05)), prevValue: Math.round(58100 * (0.85 + m[period] * 0.05)), unit: "count", changePercent: 3.7, direction: "up" },
     { metric: "spend_active_rate", label: "Spend Active Rate", value: period === "weekly" ? 39.8 : period === "monthly" ? 42.1 : period === "quarterly" ? 40.5 : 38.9, prevValue: period === "weekly" ? 38.5 : period === "monthly" ? 41.6 : period === "quarterly" ? 39.2 : 36.1, unit: "percent", changePercent: period === "weekly" ? 3.4 : 1.2, direction: "up" },
-    { metric: "total_spend", label: "Total Spend", value: Math.round(78500000000 * scale), prevValue: Math.round(72000000000 * scale), unit: "idr", changePercent: 9.0, direction: "up" },
+    { metric: "total_spend", label: "Total Spend", value: Math.round(78500000000 * scale), prevValue: Math.round(72000000000 * m[period]), unit: "idr", changePercent: 9.0, direction: "up" },
     { metric: "dpd_30_plus_rate", label: "30+ DPD Rate", value: period === "weekly" ? 4.8 : period === "monthly" ? 4.6 : period === "quarterly" ? 4.9 : 5.2, prevValue: period === "weekly" ? 5.0 : period === "monthly" ? 5.1 : period === "quarterly" ? 5.2 : 5.8, unit: "percent", changePercent: -4.0, direction: "down" },
   ];
 }
@@ -258,7 +258,7 @@ const NEWS = [
 // ── Page ────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-  const { period, periodLabel, dateRange, prevDateRange, comparisonMode } = usePeriod();
+  const { period, periodLabel, dateRange, prevDateRange, comparisonMode, timeRangeMultiplier } = usePeriod();
   const { isDark } = useTheme();
   const { filters } = useFilters();
   const { currency } = useCurrency();
@@ -268,14 +268,14 @@ export default function DashboardPage() {
 
   // KPIs with filter scaling
   const kpis = useMemo(() => {
-    const raw = (apiData?.kpis as KpiMetric[]) ?? generateMockKpis(period);
+    const raw = (apiData?.kpis as KpiMetric[]) ?? generateMockKpis(period, timeRangeMultiplier);
     if (!hasActiveFilters(filters)) return raw;
     return raw.map((k) => ({
       ...k,
       value: applyFilterToMetric(k.value, filters, k.unit === "percent"),
       prevValue: k.prevValue != null ? applyFilterToMetric(k.prevValue, filters, k.unit === "percent") : k.prevValue,
     }));
-  }, [apiData, period, filters]);
+  }, [apiData, period, timeRangeMultiplier, filters]);
 
   const sparklines = useMemo(() => generateSparklines(period), [period]);
   const { spendRateData, prevSpendRateData, dpdData } = useMemo(() => {

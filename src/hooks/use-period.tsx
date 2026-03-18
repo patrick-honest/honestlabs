@@ -45,6 +45,13 @@ interface PeriodContextValue {
   /** Comparison mode */
   comparisonMode: ComparisonMode;
   setComparisonMode: (m: ComparisonMode) => void;
+  /**
+   * Multiplier (0-1) representing what fraction of the full period
+   * is covered by the current time range. Use to scale mock data.
+   * - "full" / "last_full" = 1.0 (complete period)
+   * - "xtd" = fraction of period elapsed (e.g. Monday of a week = 1/7)
+   */
+  timeRangeMultiplier: number;
 }
 
 // ── Constants ────────────────────────────────────────────────────────
@@ -348,6 +355,38 @@ export function PeriodProvider({ children }: { children: ReactNode }) {
     [period],
   );
 
+  // Compute what fraction of a full period the current range covers
+  const timeRangeMultiplier = useMemo(() => {
+    if (timeRange === "full" || timeRange === "last_full") return 1;
+    // "xtd" — fraction of period elapsed
+    const today = TODAY;
+    switch (period) {
+      case "weekly": {
+        const dayOfWeek = today.getDay();
+        const dayNum = dayOfWeek === 0 ? 7 : dayOfWeek; // Mon=1, Sun=7
+        return dayNum / 7;
+      }
+      case "monthly": {
+        const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+        return today.getDate() / daysInMonth;
+      }
+      case "quarterly": {
+        const qStart = new Date(today.getFullYear(), Math.floor(today.getMonth() / 3) * 3, 1);
+        const qEnd = new Date(today.getFullYear(), Math.floor(today.getMonth() / 3) * 3 + 3, 0);
+        const totalDays = (qEnd.getTime() - qStart.getTime()) / (1000 * 60 * 60 * 24) + 1;
+        const elapsed = (today.getTime() - qStart.getTime()) / (1000 * 60 * 60 * 24) + 1;
+        return elapsed / totalDays;
+      }
+      case "yearly": {
+        const yearStart = new Date(today.getFullYear(), 0, 1);
+        const yearEnd = new Date(today.getFullYear(), 11, 31);
+        const totalDays = (yearEnd.getTime() - yearStart.getTime()) / (1000 * 60 * 60 * 24) + 1;
+        const elapsed = (today.getTime() - yearStart.getTime()) / (1000 * 60 * 60 * 24) + 1;
+        return elapsed / totalDays;
+      }
+    }
+  }, [period, timeRange]);
+
   return (
     <PeriodContext.Provider
       value={{
@@ -361,6 +400,7 @@ export function PeriodProvider({ children }: { children: ReactNode }) {
         availablePresets,
         comparisonMode,
         setComparisonMode,
+        timeRangeMultiplier,
       }}
     >
       {children}

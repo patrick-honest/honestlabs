@@ -112,7 +112,7 @@ const actionItems: ActionItem[] = [
 ];
 
 export default function RiskPage() {
-  const { period, periodLabel } = usePeriod();
+  const { period, periodLabel, timeRangeMultiplier } = usePeriod();
   const { filters } = useFilters();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
@@ -221,8 +221,8 @@ export default function RiskPage() {
         <MetricCard
           metricKey="risk_exposure_at_risk"
           label="Exposure at Risk (30+ DPD)"
-          value={applyFilterToMetric(scaleMetricValue(28500000000, period, false), filters, false)}
-          prevValue={applyFilterToMetric(scaleMetricValue(29200000000, period, false), filters, false)}
+          value={applyFilterToMetric(scaleMetricValue(28500000000, period, false, timeRangeMultiplier), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(29200000000, period, false, timeRangeMultiplier), filters, false)}
           unit="idr"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -232,8 +232,8 @@ export default function RiskPage() {
         <MetricCard
           metricKey="risk_writeoff"
           label="Write-offs (Period)"
-          value={applyFilterToMetric(scaleMetricValue(990000000, period, false), filters, false)}
-          prevValue={applyFilterToMetric(scaleMetricValue(1020000000, period, false), filters, false)}
+          value={applyFilterToMetric(scaleMetricValue(990000000, period, false, timeRangeMultiplier), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(1020000000, period, false, timeRangeMultiplier), filters, false)}
           unit="idr"
           asOf={AS_OF}
           dataRange={DATA_RANGE}

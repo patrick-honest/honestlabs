@@ -130,7 +130,7 @@ const appRatingTrend = [
 ];
 
 export default function CustomerServicePage() {
-  const { period, periodLabel } = usePeriod();
+  const { period, periodLabel, timeRangeMultiplier } = usePeriod();
   const { filters } = useFilters();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
@@ -237,8 +237,8 @@ export default function CustomerServicePage() {
         <MetricCard
           metricKey="cs_ticket_volume"
           label="Ticket Volume"
-          value={applyFilterToMetric(scaleMetricValue(2750, period, false), filters, false)}
-          prevValue={applyFilterToMetric(scaleMetricValue(2900, period, false), filters, false)}
+          value={applyFilterToMetric(scaleMetricValue(2750, period, false, timeRangeMultiplier), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(2900, period, false, timeRangeMultiplier), filters, false)}
           unit="count"
           asOf={AS_OF}
           dataRange={DATA_RANGE}

@@ -82,7 +82,7 @@ const writeOffTrend = [
 ];
 
 export default function CollectionsPage() {
-  const { period, periodLabel } = usePeriod();
+  const { period, periodLabel, timeRangeMultiplier } = usePeriod();
   const { filters } = useFilters();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
@@ -218,8 +218,8 @@ export default function CollectionsPage() {
         <MetricCard
           metricKey="coll_recovery"
           label="Recovery Amount"
-          value={applyFilterToMetric(scaleMetricValue(3800000000, period, false), filters, false)}
-          prevValue={applyFilterToMetric(scaleMetricValue(3500000000, period, false), filters, false)}
+          value={applyFilterToMetric(scaleMetricValue(3800000000, period, false, timeRangeMultiplier), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(3500000000, period, false, timeRangeMultiplier), filters, false)}
           unit="idr"
           asOf={AS_OF}
           dataRange={DATA_RANGE}

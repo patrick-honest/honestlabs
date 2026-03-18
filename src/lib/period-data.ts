@@ -170,11 +170,16 @@ export function getPeriodInsightLabels(period: Cycle): PeriodInsightLabels {
  * Scales a single metric value based on period.
  * Rates stay roughly the same; absolute counts scale.
  */
-export function scaleMetricValue(value: number, period: Cycle, isRate: boolean): number {
+/**
+ * Scales a single metric value based on period and optional time range fraction.
+ * @param timeRangeFraction 0-1 multiplier for partial period (e.g. WTD on Monday = 1/7).
+ *   Defaults to 1 (full period). Only applies to absolute values, not rates.
+ */
+export function scaleMetricValue(value: number, period: Cycle, isRate: boolean, timeRangeFraction: number = 1): number {
   if (isRate) {
-    // Slight variance for rates
+    // Rates don't scale with time range — but slight variance by period
     const offsets: Record<Cycle, number> = { weekly: -1.2, monthly: 0, quarterly: 0.5, yearly: -0.8 };
     return +(value + offsets[period]).toFixed(1);
   }
-  return Math.round(value * getScaleMultiplier(period));
+  return Math.round(value * getScaleMultiplier(period) * timeRangeFraction);
 }

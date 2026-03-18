@@ -73,7 +73,7 @@ const actionItems: ActionItem[] = [
 ];
 
 export default function ReferralPage() {
-  const { period, periodLabel } = usePeriod();
+  const { period, periodLabel, timeRangeMultiplier } = usePeriod();
   const { filters } = useFilters();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
@@ -124,8 +124,8 @@ export default function ReferralPage() {
         <MetricCard
           metricKey="ref_started"
           label="Referrals Started"
-          value={applyFilterToMetric(scaleMetricValue(2500, period, false), filters, false)}
-          prevValue={applyFilterToMetric(scaleMetricValue(2580, period, false), filters, false)}
+          value={applyFilterToMetric(scaleMetricValue(2500, period, false, timeRangeMultiplier), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(2580, period, false, timeRangeMultiplier), filters, false)}
           unit="count"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -134,8 +134,8 @@ export default function ReferralPage() {
         <MetricCard
           metricKey="ref_approved"
           label="Referrals Approved"
-          value={applyFilterToMetric(scaleMetricValue(1280, period, false), filters, false)}
-          prevValue={applyFilterToMetric(scaleMetricValue(1340, period, false), filters, false)}
+          value={applyFilterToMetric(scaleMetricValue(1280, period, false, timeRangeMultiplier), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(1340, period, false, timeRangeMultiplier), filters, false)}
           unit="count"
           asOf={AS_OF}
           dataRange={DATA_RANGE}

@@ -89,7 +89,7 @@ const actionItems: ActionItem[] = [
 ];
 
 export default function PointsProgramPage() {
-  const { period, periodLabel } = usePeriod();
+  const { period, periodLabel, timeRangeMultiplier } = usePeriod();
   const { filters } = useFilters();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
@@ -209,8 +209,8 @@ export default function PointsProgramPage() {
         <MetricCard
           metricKey="pts_outstanding"
           label="Total Points Outstanding"
-          value={applyFilterToMetric(scaleMetricValue(842000000, period, false), filters, false)}
-          prevValue={applyFilterToMetric(scaleMetricValue(842000000, period, false), filters, false)}
+          value={applyFilterToMetric(scaleMetricValue(842000000, period, false, timeRangeMultiplier), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(842000000, period, false, timeRangeMultiplier), filters, false)}
           unit="count"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -219,8 +219,8 @@ export default function PointsProgramPage() {
         <MetricCard
           metricKey="pts_holders"
           label="Active Point Holders"
-          value={applyFilterToMetric(scaleMetricValue(112000, period, false), filters, false)}
-          prevValue={applyFilterToMetric(scaleMetricValue(108000, period, false), filters, false)}
+          value={applyFilterToMetric(scaleMetricValue(112000, period, false, timeRangeMultiplier), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(108000, period, false, timeRangeMultiplier), filters, false)}
           unit="count"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -240,8 +240,8 @@ export default function PointsProgramPage() {
         <MetricCard
           metricKey="pts_expired"
           label="Points Expired This Period"
-          value={applyFilterToMetric(scaleMetricValue(61000000, period, false), filters, false)}
-          prevValue={applyFilterToMetric(scaleMetricValue(1900000, period, false), filters, false)}
+          value={applyFilterToMetric(scaleMetricValue(61000000, period, false, timeRangeMultiplier), filters, false)}
+          prevValue={applyFilterToMetric(scaleMetricValue(1900000, period, false, timeRangeMultiplier), filters, false)}
           unit="count"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
