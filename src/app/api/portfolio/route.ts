@@ -5,6 +5,9 @@ import {
   getCreditLimitDistribution,
   getAccountGrowthTrend,
   getBalanceDistribution,
+  getPortfolioSnapshot,
+  getAccountStatusBreakdown,
+  getCreditLimitBuckets,
 } from "@/services/queries/portfolio-deep-dive";
 
 export async function GET(request: Request) {
@@ -29,12 +32,18 @@ export async function GET(request: Request) {
       creditLimitDistribution,
       accountGrowthTrend,
       balanceDistribution,
+      snapshot,
+      statusBreakdown,
+      creditLimitDist,
     ] = await Promise.all([
       getAccountStatusDistribution(end),
       getDpdDistribution(end),
       getCreditLimitDistribution(end),
       getAccountGrowthTrend(start, end),
       getBalanceDistribution(end),
+      getPortfolioSnapshot(start, end),
+      getAccountStatusBreakdown(end),
+      getCreditLimitBuckets(end),
     ]);
 
     return NextResponse.json({
@@ -43,6 +52,9 @@ export async function GET(request: Request) {
       creditLimitDistribution,
       accountGrowthTrend,
       balanceDistribution,
+      snapshot,
+      statusBreakdown,
+      creditLimitDist,
     });
   } catch (error) {
     console.error("[portfolio] Query failed:", error);

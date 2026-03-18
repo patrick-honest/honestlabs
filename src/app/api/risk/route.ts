@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server";
 import {
-  getDelinquencyRateTrend,
-  getDpdFlowRates,
+  getWeeklyDpdDistribution,
   getDpdBalanceExposure,
-  getWriteOffTrend,
-  getCollectionsStatusBreakdown,
-} from "@/services/queries/risk-deep-dive";
+} from "@/services/queries/risk-analysis";
 
 export async function GET(request: Request) {
   try {
@@ -23,26 +20,14 @@ export async function GET(request: Request) {
     const start = new Date(startDate);
     const end = new Date(endDate);
 
-    const [
-      delinquencyRateTrend,
-      dpdFlowRates,
-      dpdBalanceExposure,
-      writeOffTrend,
-      collectionsStatusBreakdown,
-    ] = await Promise.all([
-      getDelinquencyRateTrend(start, end),
-      getDpdFlowRates(start, end),
+    const [dpdTrend, balanceExposure] = await Promise.all([
+      getWeeklyDpdDistribution(start, end),
       getDpdBalanceExposure(end),
-      getWriteOffTrend(start, end),
-      getCollectionsStatusBreakdown(end),
     ]);
 
     return NextResponse.json({
-      delinquencyRateTrend,
-      dpdFlowRates,
-      dpdBalanceExposure,
-      writeOffTrend,
-      collectionsStatusBreakdown,
+      dpdTrend,
+      balanceExposure,
     });
   } catch (error) {
     console.error("[risk] Query failed:", error);

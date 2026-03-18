@@ -33,6 +33,29 @@ export interface BalanceDistributionRow {
   accounts: number;
 }
 
+export interface PortfolioSnapshotRow {
+  week_start: string;
+  total_accounts: number;
+  active_accounts: number;
+  blocked_accounts: number;
+  closed_accounts: number;
+  avg_credit_limit: number;
+  avg_balance: number;
+  utilization_pct: number;
+  delinquent_accounts: number;
+  delinquency_rate: number;
+}
+
+export interface AccountStatusBreakdownRow {
+  status: string;
+  accounts: number;
+}
+
+export interface CreditLimitBucketRow {
+  bucket: string;
+  accounts: number;
+}
+
 // ---------------------------------------------------------------------------
 // Helper: last snapshot per month using ROW_NUMBER
 // ---------------------------------------------------------------------------
@@ -290,4 +313,93 @@ export async function getBalanceDistribution(
   `;
 
   return runQuery<BalanceDistributionRow>(sql, { busDate: toSqlDate(busDate) });
+}
+
+// ---------------------------------------------------------------------------
+// 6. Portfolio Weekly Snapshot — weekly health metrics
+// ---------------------------------------------------------------------------
+
+export async function getPortfolioSnapshot(
+  startDate: Date,
+  endDate: Date,
+): Promise<PortfolioSnapshotRow[]> {
+  const sql = `
+    SELECT
+      FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(f9_dw004_bus_dt, ISOWEEK)) AS week_start,
+      COUNT(DISTINCT p9_dw004_loc_acct) AS total_accounts,
+      COUNTIF(fx_dw004_loc_stat IN ('G', 'N')) AS active_accounts,
+      COUNTIF(fx_dw004_loc_stat = 'B') AS blocked_accounts,
+      COUNTIF(fx_dw004_loc_stat = 'C') AS closed_accounts,
+      ROUND(AVG(CAST(f9_dw004_loc_lmt AS FLOAT64)), 2) AS avg_credit_limit,
+      ROUND(AVG(CAST(f9_dw004_cur_bal AS FLOAT64)), 2) AS avg_balance,
+      ROUND(SAFE_DIVIDE(SUM(CAST(f9_dw004_cur_bal AS FLOAT64)), NULLIF(SUM(CAST(f9_dw004_loc_lmt AS FLOAT64)), 0)) * 100, 2) AS utilization_pct,
+      COUNTIF(f9_dw004_curr_dpd > 0) AS delinquent_accounts,
+      ROUND(SAFE_DIVIDE(COUNTIF(f9_dw004_curr_dpd > 0), COUNT(DISTINCT p9_dw004_loc_acct)) * 100, 2) AS delinquency_rate
+    FROM ${TABLES.financial_account_updates}
+    WHERE f9_dw004_bus_dt BETWEEN @startDate AND @endDate
+      AND EXTRACT(DAYOFWEEK FROM f9_dw004_bus_dt) = 1
+    GROUP BY week_start
+    ORDER BY week_start
+  `;
+
+  return runQuery<PortfolioSnapshotRow>(sql, {
+    startDate: toSqlDate(startDate),
+    endDate: toSqlDate(endDate),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 7. Account Status Breakdown — latest snapshot
+// ---------------------------------------------------------------------------
+
+export async function getAccountStatusBreakdown(
+  endDate: Date,
+): Promise<AccountStatusBreakdownRow[]> {
+  const sql = `
+    SELECT
+      fx_dw004_loc_stat AS status,
+      COUNT(DISTINCT p9_dw004_loc_acct) AS accounts
+    FROM ${TABLES.financial_account_updates}
+    WHERE f9_dw004_bus_dt = (
+      SELECT MAX(f9_dw004_bus_dt) FROM ${TABLES.financial_account_updates} WHERE f9_dw004_bus_dt <= @endDate
+    )
+    GROUP BY status
+    ORDER BY accounts DESC
+  `;
+
+  return runQuery<AccountStatusBreakdownRow>(sql, {
+    endDate: toSqlDate(endDate),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 8. Credit Limit Distribution (bucketed) — latest snapshot, active only
+// ---------------------------------------------------------------------------
+
+export async function getCreditLimitBuckets(
+  endDate: Date,
+): Promise<CreditLimitBucketRow[]> {
+  const sql = `
+    SELECT
+      CASE
+        WHEN CAST(f9_dw004_loc_lmt AS FLOAT64) <= 1 THEN 'RP1 (<=1)'
+        WHEN CAST(f9_dw004_loc_lmt AS FLOAT64) <= 5000000 THEN '<=5M'
+        WHEN CAST(f9_dw004_loc_lmt AS FLOAT64) <= 10000000 THEN '5-10M'
+        WHEN CAST(f9_dw004_loc_lmt AS FLOAT64) <= 25000000 THEN '10-25M'
+        WHEN CAST(f9_dw004_loc_lmt AS FLOAT64) <= 50000000 THEN '25-50M'
+        ELSE '>50M'
+      END AS bucket,
+      COUNT(DISTINCT p9_dw004_loc_acct) AS accounts
+    FROM ${TABLES.financial_account_updates}
+    WHERE f9_dw004_bus_dt = (
+      SELECT MAX(f9_dw004_bus_dt) FROM ${TABLES.financial_account_updates} WHERE f9_dw004_bus_dt <= @endDate
+    )
+      AND fx_dw004_loc_stat IN ('G', 'N')
+    GROUP BY bucket
+    ORDER BY MIN(CAST(f9_dw004_loc_lmt AS FLOAT64))
+  `;
+
+  return runQuery<CreditLimitBucketRow>(sql, {
+    endDate: toSqlDate(endDate),
+  });
 }

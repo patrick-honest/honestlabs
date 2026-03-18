@@ -63,6 +63,26 @@ export interface AuthVolumeByDayRow {
   amount: number;
 }
 
+export interface WeeklyAuthTrendRow {
+  week_start: string;
+  total_auths: number;
+  approved: number;
+  declined: number;
+  approval_rate: number;
+  online_txns: number;
+  qris_txns: number;
+  offline_txns: number;
+  avg_ticket_idr: number;
+  foreign_txn_pct: number;
+}
+
+export interface TopMerchantDW007Row {
+  merchant_name: string;
+  txn_count: number;
+  total_spend_idr: number;
+  unique_cards: number;
+}
+
 // ---------------------------------------------------------------------------
 // 1. Weekly Auth Metrics: approval count, decline count, total, approval rate
 // ---------------------------------------------------------------------------
@@ -299,6 +319,68 @@ export async function getAuthVolumeByDay(
   `;
 
   return runQuery<AuthVolumeByDayRow>(sql, {
+    startDate: toSqlDate(startDate),
+    endDate: toSqlDate(endDate),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 9. Weekly Auth Trend — full auth metrics per week (DW007)
+// ---------------------------------------------------------------------------
+
+export async function getWeeklyAuthTrend(
+  startDate: Date,
+  endDate: Date,
+): Promise<WeeklyAuthTrendRow[]> {
+  const sql = `
+    SELECT
+      FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(f9_dw007_dt, ISOWEEK)) AS week_start,
+      COUNT(*) AS total_auths,
+      COUNTIF(COALESCE(fx_dw007_stat, '', ' ') IN ('', ' ')) AS approved,
+      COUNTIF(fx_dw007_stat = 'D') AS declined,
+      ROUND(SAFE_DIVIDE(COUNTIF(COALESCE(fx_dw007_stat, '', ' ') IN ('', ' ')), COUNT(*)) * 100, 2) AS approval_rate,
+      COUNTIF(fx_dw007_txn_typ = 'TM') AS online_txns,
+      COUNTIF(fx_dw007_txn_typ = 'RA' AND fx_dw007_rte_dest = 'L') AS qris_txns,
+      COUNTIF(fx_dw007_txn_typ NOT IN ('TM', 'PM', 'RF', 'BE') AND NOT (fx_dw007_txn_typ = 'RA' AND fx_dw007_rte_dest = 'L')) AS offline_txns,
+      ROUND(SAFE_DIVIDE(SUM(CASE WHEN COALESCE(fx_dw007_stat, '', ' ') IN ('', ' ') THEN CAST(f9_dw007_amt_req AS FLOAT64) / 100 END), COUNTIF(COALESCE(fx_dw007_stat, '', ' ') IN ('', ' '))), 2) AS avg_ticket_idr,
+      ROUND(SAFE_DIVIDE(COUNTIF(fx_dw007_txn_typ = 'RA' AND fx_dw007_rte_dest != 'L'), COUNT(*)) * 100, 2) AS foreign_txn_pct
+    FROM ${TABLES.authorized_transaction}
+    WHERE f9_dw007_dt BETWEEN @startDate AND @endDate
+      AND fx_dw007_txn_typ NOT IN ('PM', 'RF', 'BE')
+    GROUP BY week_start
+    ORDER BY week_start
+  `;
+
+  return runQuery<WeeklyAuthTrendRow>(sql, {
+    startDate: toSqlDate(startDate),
+    endDate: toSqlDate(endDate),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 10. Top 15 Merchants by approved txn count (DW007)
+// ---------------------------------------------------------------------------
+
+export async function getTopMerchantsDW007(
+  startDate: Date,
+  endDate: Date,
+): Promise<TopMerchantDW007Row[]> {
+  const sql = `
+    SELECT
+      fx_dw007_merc_name AS merchant_name,
+      COUNT(*) AS txn_count,
+      ROUND(SUM(CAST(f9_dw007_amt_req AS FLOAT64) / 100), 2) AS total_spend_idr,
+      COUNT(DISTINCT f9_dw007_prin_crn) AS unique_cards
+    FROM ${TABLES.authorized_transaction}
+    WHERE f9_dw007_dt BETWEEN @startDate AND @endDate
+      AND COALESCE(fx_dw007_stat, '', ' ') IN ('', ' ')
+      AND fx_dw007_txn_typ NOT IN ('PM', 'RF', 'BE')
+    GROUP BY merchant_name
+    ORDER BY txn_count DESC
+    LIMIT 15
+  `;
+
+  return runQuery<TopMerchantDW007Row>(sql, {
     startDate: toSqlDate(startDate),
     endDate: toSqlDate(endDate),
   });
