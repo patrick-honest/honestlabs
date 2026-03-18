@@ -323,3 +323,111 @@ export async function getQrisCohortComparison(
 
   return runQuery<QrisCohortRow>(sql, { startDate });
 }
+
+// ---------------------------------------------------------------------------
+// Merchant Reach Analysis
+// ---------------------------------------------------------------------------
+
+export interface QrisMerchantSummary {
+  qris_only_merchants: number;
+  mixed_merchants: number;
+  non_qris_only_merchants: number;
+}
+
+export interface QrisMerchantGrowthRow {
+  month: string;
+  new_merchants: number;
+  cumulative_merchants: number;
+}
+
+export interface MixedMerchantStats {
+  qris_txns_at_mixed: number;
+  qris_spend_idr_at_mixed: number;
+  qris_spend_usd_at_mixed: number;
+  mixed_merchant_count: number;
+}
+
+/** Count of QRIS-only, mixed, and non-QRIS merchants */
+export async function getQrisMerchantBreakdown(): Promise<QrisMerchantSummary> {
+  const sql = `
+    WITH all_merchants AS (
+      SELECT
+        fx_dw007_merc_name AS merchant,
+        MAX(CASE WHEN fx_dw007_rte_dest = 'L' THEN 1 ELSE 0 END) AS has_qris,
+        MAX(CASE WHEN fx_dw007_rte_dest != 'L' OR fx_dw007_rte_dest IS NULL THEN 1 ELSE 0 END) AS has_non_qris
+      FROM ${TABLES.authorized_transaction}
+      WHERE (fx_dw007_stat IS NULL OR TRIM(fx_dw007_stat) = '')
+        AND fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+      GROUP BY merchant
+    )
+    SELECT
+      COUNTIF(has_qris = 1 AND has_non_qris = 0) AS qris_only_merchants,
+      COUNTIF(has_qris = 1 AND has_non_qris = 1) AS mixed_merchants,
+      COUNTIF(has_qris = 0 AND has_non_qris = 1) AS non_qris_only_merchants
+    FROM all_merchants
+  `;
+  const rows = await runQuery<QrisMerchantSummary>(sql);
+  return rows[0] ?? { qris_only_merchants: 0, mixed_merchants: 0, non_qris_only_merchants: 0 };
+}
+
+/** Monthly cumulative growth of QRIS-only merchants */
+export async function getQrisOnlyMerchantGrowthTrend(): Promise<QrisMerchantGrowthRow[]> {
+  const sql = `
+    WITH merchant_first_txn AS (
+      SELECT
+        fx_dw007_merc_name AS merchant,
+        MIN(f9_dw007_dt) AS first_qris_date
+      FROM ${TABLES.authorized_transaction}
+      WHERE (fx_dw007_stat IS NULL OR TRIM(fx_dw007_stat) = '')
+        AND fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+        AND fx_dw007_rte_dest = 'L'
+      GROUP BY merchant
+      HAVING merchant NOT IN (
+        SELECT DISTINCT fx_dw007_merc_name
+        FROM ${TABLES.authorized_transaction}
+        WHERE (fx_dw007_stat IS NULL OR TRIM(fx_dw007_stat) = '')
+          AND fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+          AND (fx_dw007_rte_dest != 'L' OR fx_dw007_rte_dest IS NULL)
+      )
+    ),
+    monthly AS (
+      SELECT DATE_TRUNC(first_qris_date, MONTH) AS mth, COUNT(*) AS new_merchants
+      FROM merchant_first_txn
+      GROUP BY mth
+    )
+    SELECT
+      FORMAT_DATE('%Y-%m', mth) AS month,
+      new_merchants,
+      SUM(new_merchants) OVER (ORDER BY mth) AS cumulative_merchants
+    FROM monthly
+    ORDER BY mth
+  `;
+  return runQuery<QrisMerchantGrowthRow>(sql);
+}
+
+/** QRIS transactions at mixed merchants (merchants that also accept non-QRIS) */
+export async function getMixedMerchantQrisStats(): Promise<MixedMerchantStats> {
+  const sql = `
+    WITH mixed_merchants AS (
+      SELECT fx_dw007_merc_name AS merchant
+      FROM ${TABLES.authorized_transaction}
+      WHERE (fx_dw007_stat IS NULL OR TRIM(fx_dw007_stat) = '')
+        AND fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+      GROUP BY merchant
+      HAVING MAX(CASE WHEN fx_dw007_rte_dest = 'L' THEN 1 ELSE 0 END) = 1
+         AND MAX(CASE WHEN fx_dw007_rte_dest != 'L' OR fx_dw007_rte_dest IS NULL THEN 1 ELSE 0 END) = 1
+    )
+    SELECT
+      COUNT(*) AS qris_txns_at_mixed,
+      ROUND(SUM(CAST(t.f9_dw007_amt_req AS FLOAT64) / 100), 2) AS qris_spend_idr_at_mixed,
+      ROUND(SUM(CAST(t.f9_dw007_amt_req AS FLOAT64) / 100 / 16000), 2) AS qris_spend_usd_at_mixed,
+      COUNT(DISTINCT t.fx_dw007_merc_name) AS mixed_merchant_count
+    FROM ${TABLES.authorized_transaction} t
+    JOIN mixed_merchants m ON t.fx_dw007_merc_name = m.merchant
+    WHERE (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '')
+      AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+      AND t.fx_dw007_rte_dest = 'L'
+  `;
+  const rows = await runQuery<MixedMerchantStats>(sql);
+  return rows[0] ?? { qris_txns_at_mixed: 0, qris_spend_idr_at_mixed: 0, qris_spend_usd_at_mixed: 0, mixed_merchant_count: 0 };
+}

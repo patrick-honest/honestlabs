@@ -6,10 +6,15 @@ import { Header } from "@/components/layout/header";
 import { useTranslations } from "next-intl";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
-import { QrCode, CheckCircle2, TrendingUp, Users, CreditCard, ArrowUpRight, Star } from "lucide-react";
+import { QrCode, CheckCircle2, TrendingUp, Users, CreditCard, ArrowUpRight, Star, Store } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
 import { usePeriod } from "@/hooks/use-period";
+import { MetricCard } from "@/components/dashboard/metric-card";
+import { ChartCard } from "@/components/dashboard/chart-card";
+import { DashboardLineChart } from "@/components/charts/line-chart";
+import { DashboardBarChart } from "@/components/charts/bar-chart";
+import { getPeriodRange } from "@/lib/period-data";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -496,6 +501,110 @@ export default function QrisExperimentPage() {
               format="percent"
               live
             />
+          </div>
+        )}
+
+        {/* ============================================================ */}
+        {/* MERCHANT REACH ANALYSIS                                       */}
+        {/* ============================================================ */}
+        {apiData?.merchantBreakdown && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Store className={cn("h-5 w-5", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")} />
+              <h2 className="text-lg font-semibold text-[var(--text-primary)]">QRIS Merchant Reach</h2>
+            </div>
+
+            {/* Merchant KPI cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <MetricCard
+                metricKey="qris_only_merchants"
+                label="QRIS-Only Merchants"
+                value={(apiData.merchantBreakdown as { qris_only_merchants: number }).qris_only_merchants}
+                unit="count"
+                asOf="All Time"
+                dataRange={{ start: "", end: "" }}
+                liveData
+              />
+              <MetricCard
+                metricKey="mixed_merchants"
+                label="Mixed (Card + QRIS)"
+                value={(apiData.merchantBreakdown as { mixed_merchants: number }).mixed_merchants}
+                unit="count"
+                asOf="All Time"
+                dataRange={{ start: "", end: "" }}
+                liveData
+              />
+              <MetricCard
+                metricKey="non_qris_merchants"
+                label="Card-Only Merchants"
+                value={(apiData.merchantBreakdown as { non_qris_only_merchants: number }).non_qris_only_merchants}
+                unit="count"
+                asOf="All Time"
+                dataRange={{ start: "", end: "" }}
+                liveData
+              />
+            </div>
+
+            {/* Cumulative QRIS-only merchant growth */}
+            {apiData.merchantGrowth?.length > 0 && (
+              <ChartCard
+                title="Cumulative QRIS-Only Merchants"
+                subtitle="Running total of merchants that have only ever processed QRIS transactions"
+                asOf="All Time"
+                dataRange={{ start: "", end: "" }}
+                liveData
+              >
+                <DashboardLineChart
+                  data={(apiData.merchantGrowth as { month: string; cumulative_merchants: number; new_merchants: number }[]).map(r => ({
+                    date: r.month,
+                    cumulative: r.cumulative_merchants,
+                    new: r.new_merchants,
+                  }))}
+                  lines={[
+                    { key: "cumulative", color: "#06b6d4", label: "Cumulative QRIS-Only Merchants" },
+                  ]}
+                  xAxisKey="date"
+                  height={300}
+                />
+              </ChartCard>
+            )}
+
+            {/* Mixed merchant QRIS stats */}
+            {apiData.mixedMerchantStats && (() => {
+              const stats = apiData.mixedMerchantStats as { qris_txns_at_mixed: number; qris_spend_idr_at_mixed: number; qris_spend_usd_at_mixed: number; mixed_merchant_count: number };
+              return (
+                <div className={cn(
+                  "rounded-xl border p-5",
+                  isDark ? "border-[var(--border)] bg-[var(--surface)]" : "border-[var(--border)] bg-[var(--surface)]"
+                )}>
+                  <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">
+                    QRIS at Mixed Merchants
+                    <span className={cn("ml-2 text-[9px]", isDark ? "text-[#FFD166]" : "text-amber-500")} title="Live BigQuery data">&#9733;</span>
+                  </h3>
+                  <p className="text-xs text-[var(--text-secondary)] mb-4">
+                    Merchants that accept both card and QRIS payments — showing QRIS transaction volume at these merchants
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div className="text-center">
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">Mixed Merchants</p>
+                      <p className="text-2xl font-bold text-[var(--text-primary)]">{stats.mixed_merchant_count.toLocaleString()}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">QRIS Txns</p>
+                      <p className="text-2xl font-bold text-[var(--text-primary)]">{stats.qris_txns_at_mixed.toLocaleString()}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">QRIS Spend (IDR)</p>
+                      <p className="text-2xl font-bold text-[var(--text-primary)]">Rp {(stats.qris_spend_idr_at_mixed / 1e9).toFixed(1)}B</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">QRIS Spend (USD)</p>
+                      <p className="text-2xl font-bold text-[var(--text-primary)]">${(stats.qris_spend_usd_at_mixed / 1000).toFixed(0)}K</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
 
