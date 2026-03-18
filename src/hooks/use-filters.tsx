@@ -262,7 +262,7 @@ export function FiltersProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const clearFilters = useCallback(() => setFilters(DEFAULT_FILTERS), []);
+  const clearFilters = useCallback(() => setFilters(EMPTY_FILTERS), []);
 
   const clearFilter = useCallback(
     (key: keyof FilterSelections) => {
@@ -271,18 +271,26 @@ export function FiltersProvider({ children }: { children: ReactNode }) {
     []
   );
 
+  // Count filters that differ from defaults (so default productType: ["regular"] doesn't count)
+  function countNonDefault(key: keyof FilterSelections): number {
+    const current = filters[key];
+    const def = DEFAULT_FILTERS[key];
+    if (current.length === def.length && current.every((v, i) => v === def[i])) return 0;
+    return current.length;
+  }
+
   const activeFilterCount =
-    filters.cardType.length +
-    filters.productType.length +
-    filters.cohort.length +
-    filters.transactionType.length +
-    filters.transactionChannel.length +
-    filters.transactionStatus.length +
-    filters.merchantCategory.length +
-    filters.amountRange.length +
-    filters.recurringType.length +
-    filters.riskCategory.length +
-    filters.decisioningModel.length;
+    countNonDefault("cardType") +
+    countNonDefault("productType") +
+    countNonDefault("cohort") +
+    countNonDefault("transactionType") +
+    countNonDefault("transactionChannel") +
+    countNonDefault("transactionStatus") +
+    countNonDefault("merchantCategory") +
+    countNonDefault("amountRange") +
+    countNonDefault("recurringType") +
+    countNonDefault("riskCategory") +
+    countNonDefault("decisioningModel");
 
   return (
     <FiltersContext.Provider
