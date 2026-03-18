@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Header } from "@/components/layout/header";
 import { Search, Filter, ChevronDown, ChevronRight, TrendingUp, TrendingDown, Minus, Calendar, X, FileDown, Printer } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
+import { generateReportPdf } from "@/lib/report-pdf";
 import type { Cycle } from "@/types/reports";
 
 // ---------------------------------------------------------------------------
@@ -367,12 +368,7 @@ function ReportRow({ report, isDark }: { report: ReportEntry; isDark: boolean })
         <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
           {report.status === "complete" && (
             <button
-              onClick={() => {
-                // Generate PDF by navigating to the relevant deep-dive page and printing
-                const section = report.section.toLowerCase().replace(/\s+/g, "-");
-                const route = section === "executive-summary" ? "/dashboard" : `/deep-dive/${section}`;
-                window.open(`${route}?print=true`, "_blank");
-              }}
+              onClick={() => generateReportPdf(report)}
               className={cn(
                 "flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium transition-colors",
                 isDark
