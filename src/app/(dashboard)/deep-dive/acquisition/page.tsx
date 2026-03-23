@@ -136,11 +136,11 @@ export default function AcquisitionPage() {
     return (apiData.creditLimitTrend as {
       week_start: string;
       approval_count: number;
-      avg_credit_limit_usd: number;
+      avg_credit_limit_idr: number;
       weighted_avg_fee_pct: number;
     }[]).map((r) => ({
       date: r.week_start,
-      avgCreditLimitUsd: r.avg_credit_limit_usd,
+      avgCreditLimitIdr: r.avg_credit_limit_idr,
       weightedAvgFeePct: r.weighted_avg_fee_pct,
       approvalCount: r.approval_count,
     }));
@@ -522,9 +522,9 @@ export default function AcquisitionPage() {
             <MetricCard
               metricKey="acq_avg_credit_limit"
               label={tAcq("avgCreditLimit")}
-              value={latestCreditLimit.avgCreditLimitUsd}
-              prevValue={prevCreditLimit?.avgCreditLimitUsd ?? null}
-              unit="usd"
+              value={latestCreditLimit.avgCreditLimitIdr}
+              prevValue={prevCreditLimit?.avgCreditLimitIdr ?? null}
+              unit="idr"
               asOf={AS_OF}
               dataRange={DATA_RANGE}
               liveData={creditLimitIsLive}
@@ -553,7 +553,7 @@ export default function AcquisitionPage() {
               <DashboardLineChart
                 data={aggregateByIncrement(creditLimitTrend, increment, "date")}
                 lines={[
-                  { key: "avgCreditLimitUsd", color: "#3b82f6", label: "Avg Credit Limit (USD)" },
+                  { key: "avgCreditLimitIdr", color: "#3b82f6", label: "Avg Credit Limit" },
                   { key: "weightedAvgFeePct", color: "#f59e0b", label: "Weighted Avg Fee %" },
                 ]}
                 xAxisKey="date"

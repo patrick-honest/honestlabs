@@ -57,7 +57,7 @@ async function queryAcquisition(startDate: string, endDate: string, env: Env, fi
       SELECT
         FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(F9_DW001_DECSN_DT, ISOWEEK)) AS week_start,
         COUNT(*) AS approval_count,
-        ROUND(AVG(CAST(F9_DW001_LOC_LMT AS FLOAT64)) / 16000, 2) AS avg_credit_limit_usd,
+        ROUND(AVG(CAST(F9_DW001_LOC_LMT AS FLOAT64)), 0) AS avg_credit_limit_idr,
         ROUND(SAFE_DIVIDE(
           SUM(a.admin_fee * CAST(F9_DW001_LOC_LMT AS FLOAT64)),
           SUM(CAST(F9_DW001_LOC_LMT AS FLOAT64))
