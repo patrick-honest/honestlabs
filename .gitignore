@@ -53,3 +53,4 @@ next-env.d.ts
 # reference PDFs
 reference/
 .wrangler/
+logs/

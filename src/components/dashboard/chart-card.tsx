@@ -40,9 +40,10 @@ interface ChartCardProps {
  * Compute the number of days in the date range.
  */
 function daysBetween(start: string, end: string): number {
-  const a = new Date(start + "T00:00:00Z");
-  const b = new Date(end + "T00:00:00Z");
-  return Math.max(1, Math.round((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24)));
+  const a = new Date(start);
+  const b = new Date(end);
+  if (isNaN(a.getTime()) || isNaN(b.getTime())) return 1;
+  return Math.max(1, Math.round(Math.abs(b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24)));
 }
 
 const INCREMENT_OPTIONS: { value: ChartIncrement; label: string; minDays: number }[] = [

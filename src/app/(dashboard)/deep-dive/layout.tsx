@@ -46,9 +46,11 @@ export default function DeepDiveLayout({
   const tTime = useTranslations("time");
   const tCommon = useTranslations("common");
 
-  const navKey = PAGE_NAV_KEYS[pathname];
-  const sectionLabel = navKey ? tNav(navKey) : tNav("deepDive");
-  const title = `${sectionLabel} ${tNav("deepDive")}`;
+  // Strip basePath prefix and trailing slash so the key always matches
+  const normalizedPath = pathname.replace(/\/$/, "").replace(/^\/honestlabs/, "");
+  const navKey = PAGE_NAV_KEYS[normalizedPath];
+  const sectionLabel = navKey ? tNav(navKey) : "";
+  const title = sectionLabel ? `${sectionLabel} ${tNav("deepDive")}` : tNav("deepDive");
 
   // Time range label for display — now translated
   const timeRangeLabels: Record<string, string> = {
@@ -63,8 +65,8 @@ export default function DeepDiveLayout({
       cycle: period,
       periodStart: dateRange.start.toISOString().slice(0, 10),
       periodEnd: dateRange.end.toISOString().slice(0, 10),
-      section: `${sectionLabel} ${tNav("deepDive")}`,
-      title: `${sectionLabel} ${tNav("deepDive")} — ${timeRangeLabels[timeRange] ?? periodLabel}`,
+      section: title,
+      title: `${title} — ${timeRangeLabels[timeRange] ?? periodLabel}`,
       generatedAt: new Date().toISOString(),
       kpis: [],
       trends: [
@@ -73,7 +75,7 @@ export default function DeepDiveLayout({
         "For detailed metrics and charts, refer to the webapp dashboard.",
       ],
     }, locale, currency);
-  }, [sectionLabel, tNav, pathname, period, periodLabel, dateRange, timeRange, timeRangeLabels, locale, currency]);
+  }, [title, pathname, period, periodLabel, dateRange, timeRange, timeRangeLabels, locale, currency]);
 
   return (
     <div className="flex flex-col h-full">
