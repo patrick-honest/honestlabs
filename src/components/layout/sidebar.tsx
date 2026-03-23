@@ -19,7 +19,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { useCurrency } from "@/hooks/use-currency";
 import { useLanguage, type Locale } from "@/hooks/use-language";
 import { useSession, signOut } from "next-auth/react";
-import { IS_STATIC_EXPORT } from "@/lib/static-mode";
+import { IS_STATIC_EXPORT, setStaticAuthenticated } from "@/lib/static-mode";
 import { useTranslations } from "next-intl";
 import { Sun, Moon, Globe } from "lucide-react";
 
@@ -575,7 +575,14 @@ export function Sidebar() {
                 </div>
               </div>
               <button
-                onClick={() => { if (!IS_STATIC_EXPORT) signOut({ callbackUrl: "/login" }); }}
+                onClick={() => {
+                  if (IS_STATIC_EXPORT) {
+                    setStaticAuthenticated(false);
+                    window.location.href = "/login/";
+                  } else {
+                    signOut({ callbackUrl: "/login" });
+                  }
+                }}
                 className="mt-2 flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]"
               >
                 <LogOut className="h-4 w-4" />

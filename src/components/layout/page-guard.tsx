@@ -18,8 +18,21 @@ export function PageGuard({ children }: { children: React.ReactNode }) {
   const tAuth = useTranslations("auth");
   const tCommon = useTranslations("common");
 
-  // Static export mode — bypass access control
-  if (IS_STATIC_EXPORT) return <>{children}</>;
+  // Static export mode — require login but bypass page-level access control
+  if (IS_STATIC_EXPORT) {
+    if (status === "loading") {
+      return (
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-pulse text-[var(--text-muted)] text-sm">{tCommon("loading")}</div>
+        </div>
+      );
+    }
+    if (!session?.user) {
+      if (typeof window !== "undefined") window.location.replace("/login/");
+      return null;
+    }
+    return <>{children}</>;
+  }
 
   // While loading session, show nothing (avoids flash)
   if (status === "loading") {

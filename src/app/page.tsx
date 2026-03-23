@@ -2,12 +2,17 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { IS_STATIC_EXPORT, isStaticAuthenticated } from "@/lib/static-mode";
 
 export default function RootPage() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace("/dashboard");
+    if (IS_STATIC_EXPORT && !isStaticAuthenticated()) {
+      router.replace("/login");
+    } else {
+      router.replace("/dashboard");
+    }
   }, [router]);
 
   return (

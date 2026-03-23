@@ -3,14 +3,14 @@ import type { NextConfig } from "next";
 const isStaticExport = process.env.NEXT_PUBLIC_STATIC_EXPORT === "true";
 
 const nextConfig: NextConfig = {
-  // Static export for GitHub Pages
+  // Static export for Cloudflare Pages / GitHub Pages
   ...(isStaticExport
     ? {
         output: "export",
-        basePath: "/honestlabs",
-        assetPrefix: "/honestlabs/",
+        ...(process.env.CF_PAGES
+          ? {}
+          : { basePath: "/honestlabs", assetPrefix: "/honestlabs/" }),
         images: { unoptimized: true },
-        // Trailing slashes help with static file resolution on GH Pages
         trailingSlash: true,
       }
     : {
