@@ -13,7 +13,9 @@ const DECLINE_CODE_DESCRIPTIONS: Record<string, string> = {
   N: "Insufficient Funds",
 };
 
-async function querySpendAnalysis(startDate: string, endDate: string, env: Env, filters: ParsedFilters) {
+async function querySpendAnalysis(startDate: string, endDate: string, env: Env, filters: ParsedFilters, rawStartDate?: string) {
+  // startDate = extended (for chart context), rawStartDate = user's actual selection (for KPIs)
+  const kpiStartDate = rawStartDate ?? startDate;
   const [weeklyTrend, channelBreakdown, declineRows, periodSummaryRows, onboardingSummaryRows, onboardingTrendRows, firstTxnChannelRows] = await Promise.all([
     // Weekly spend trend — cohort-based SAR + spend metrics
     runQuery(
@@ -101,23 +103,23 @@ async function querySpendAnalysis(startDate: string, endDate: string, env: Env, 
       `SELECT CASE WHEN t.fx_dw007_txn_typ='RA' AND t.fx_dw007_rte_dest='L' THEN 'QRIS' WHEN t.fx_dw007_txn_typ='TM' THEN 'Online' ELSE 'Offline' END AS channel,
         COUNT(*) AS txn_count, ROUND(SUM(t.f9_dw007_amt_req/100),0) AS spend_idr, COUNT(DISTINCT t.f9_dw007_prin_crn) AS unique_cards
       FROM ${TABLES.authorized_transaction} t
-      WHERE t.f9_dw007_dt BETWEEN @startDate AND @endDate AND (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat)='' OR t.fx_dw007_stat=' ') AND t.fx_dw007_txn_typ NOT IN ('PM','BE','RF')
+      WHERE t.f9_dw007_dt BETWEEN @kpiStart AND @endDate AND (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat)='' OR t.fx_dw007_stat=' ') AND t.fx_dw007_txn_typ NOT IN ('PM','BE','RF')
         ${transactionTypeWhere(filters, 't')}
         ${amountRangeWhere(filters, 't')}
       GROUP BY channel`,
-      { startDate, endDate }, env,
+      { kpiStart: kpiStartDate, endDate }, env,
     ),
     // Decline breakdown
     runQuery<{ code: string; cnt: number; amount_idr: number }>(
       `SELECT t.fx_dw007_stat AS code, COUNT(*) AS cnt, ROUND(SUM(t.f9_dw007_amt_req/100),0) AS amount_idr
       FROM ${TABLES.authorized_transaction} t
-      WHERE t.f9_dw007_dt BETWEEN @startDate AND @endDate AND t.fx_dw007_stat IS NOT NULL AND TRIM(t.fx_dw007_stat)!='' AND t.fx_dw007_stat!=' '
+      WHERE t.f9_dw007_dt BETWEEN @kpiStart AND @endDate AND t.fx_dw007_stat IS NOT NULL AND TRIM(t.fx_dw007_stat)!='' AND t.fx_dw007_stat!=' '
         ${transactionTypeWhere(filters, 't')}
         ${amountRangeWhere(filters, 't')}
       GROUP BY code ORDER BY cnt DESC`,
-      { startDate, endDate }, env,
+      { kpiStart: kpiStartDate, endDate }, env,
     ),
-    // Period summary — cohort-based SAR for the full period
+    // Period summary — cohort-based SAR for the selected period (not extended)
     runQuery(
       `WITH regular_users AS (
         SELECT DISTINCT dc.user_id, loc.external_id AS loc_acct
@@ -150,7 +152,7 @@ async function querySpendAnalysis(startDate: string, endDate: string, env: Env, 
       period_cohort AS (
         SELECT user_id, first_eligible_date, crn
         FROM first_eligible
-        WHERE first_eligible_date BETWEEN @startDate AND @endDate
+        WHERE first_eligible_date BETWEEN @kpiStart AND @endDate
           AND DATE_ADD(first_eligible_date, INTERVAL 7 DAY) <= CURRENT_DATE('Asia/Jakarta')
       ),
       transactors AS (
@@ -166,7 +168,7 @@ async function querySpendAnalysis(startDate: string, endDate: string, env: Env, 
       spend AS (
         SELECT COUNT(DISTINCT cam.loc_acct) AS transactor_cnt, COUNT(*) AS total_txns, ROUND(SUM(CAST(dw7.f9_dw007_amt_req AS FLOAT64)/100),2) AS total_spend
         FROM ${TABLES.authorized_transaction} dw7 JOIN card_acct_map cam ON dw7.f9_dw007_prin_crn=cam.crn
-        WHERE (dw7.fx_dw007_stat IS NULL OR TRIM(dw7.fx_dw007_stat)='') AND dw7.fx_dw007_txn_typ NOT IN ('PM','BE','RF') AND dw7.f9_dw007_dt BETWEEN @startDate AND @endDate
+        WHERE (dw7.fx_dw007_stat IS NULL OR TRIM(dw7.fx_dw007_stat)='') AND dw7.fx_dw007_txn_typ NOT IN ('PM','BE','RF') AND dw7.f9_dw007_dt BETWEEN @kpiStart AND @endDate
           ${transactionTypeWhere(filters, 'dw7')} ${amountRangeWhere(filters, 'dw7')}
       )
       SELECT
@@ -177,7 +179,7 @@ async function querySpendAnalysis(startDate: string, endDate: string, env: Env, 
         ROUND((SELECT COUNT(*) FROM transactors) * 100.0 / NULLIF((SELECT COUNT(*) FROM period_cohort), 0), 2) AS spend_active_rate,
         ROUND(SAFE_DIVIDE(s.total_spend, NULLIF(s.total_txns,0)),2) AS avg_spend_per_txn_idr
       FROM spend s`,
-      { startDate, endDate }, env,
+      { kpiStart: kpiStartDate, endDate }, env,
     ),
     // Query 5: Onboarding Activation Summary
     runQuery(
@@ -190,7 +192,7 @@ async function querySpendAnalysis(startDate: string, endDate: string, env: Env, 
         FROM ${TABLES.decision_completed} dc
         INNER JOIN ${TABLES.cms_line_of_credit} loc ON dc.user_id = loc.user_id
         WHERE UPPER(dc.decision) = 'APPROVED'
-          AND DATE(TIMESTAMP(dc.original_timestamp), 'Asia/Jakarta') BETWEEN @startDate AND @endDate
+          AND DATE(TIMESTAMP(dc.original_timestamp), 'Asia/Jakarta') BETWEEN @kpiStart AND @endDate
       ),
       rp1_users AS (
         SELECT au.user_id, au.approval_date, au.loc_acct
@@ -250,7 +252,7 @@ async function querySpendAnalysis(startDate: string, endDate: string, env: Env, 
         (SELECT COUNT(*) FROM unblocked_users) AS unblocked_total,
         (SELECT COUNT(*) FROM spend_activated) AS spend_activated_count,
         ROUND(SAFE_DIVIDE((SELECT COUNT(*) FROM spend_activated), (SELECT COUNT(*) FROM unblocked_users)) * 100, 2) AS spend_activation_rate`,
-      { startDate, endDate }, env,
+      { kpiStart: kpiStartDate, endDate }, env,
     ),
     // Query 6: Weekly Onboarding Trend
     runQuery(

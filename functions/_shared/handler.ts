@@ -40,7 +40,7 @@ function extendStartDate(startDate: string, period: string): string {
 
 interface HandlerOptions {
   section: string;
-  queryFn: (startDate: string, endDate: string, env: Env, filters: ParsedFilters) => Promise<unknown>;
+  queryFn: (startDate: string, endDate: string, env: Env, filters: ParsedFilters, rawStartDate?: string) => Promise<unknown>;
   cacheTtl?: number;
 }
 
@@ -50,8 +50,13 @@ export function createHandler(options: HandlerOptions) {
   return async function onRequest(context: { request: Request; env: Env }): Promise<Response> {
     const { request, env } = context;
     const url = new URL(request.url);
-    const startDate = url.searchParams.get("startDate");
+    const rawStartDate = url.searchParams.get("startDate");
     const endDate = url.searchParams.get("endDate");
+    const period = url.searchParams.get("period") || "monthly";
+
+    // Extend start date backwards to provide chart context (6 periods of history).
+    // This ensures charts have enough data points when a narrow range is selected.
+    const startDate = rawStartDate ? extendStartDate(rawStartDate, period) : null;
 
     if (!startDate || !endDate) {
       return new Response(
@@ -88,7 +93,8 @@ export function createHandler(options: HandlerOptions) {
       }
 
       // Query BigQuery with filters
-      const result = await queryFn(startDate, endDate, env, filters);
+      // Pass rawStartDate so queries can use it for KPI summaries (non-extended)
+      const result = await queryFn(startDate, endDate, env, filters, rawStartDate ?? startDate);
 
       // Cache unfiltered results only
       if (!hasFilters) {
