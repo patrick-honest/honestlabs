@@ -11,7 +11,7 @@ async function queryActivation(startDate: string, endDate: string, env: Env) {
           FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(DATE(timestamp, 'Asia/Jakarta'), ISOWEEK)) AS week,
           user_id
         FROM ${TABLES.decision_completed}
-        WHERE decision = 'approved'
+        WHERE decision = 'APPROVED'
           AND DATE(timestamp, 'Asia/Jakarta') BETWEEN @startDate AND @endDate
       ),
       first_txn AS (
@@ -23,14 +23,15 @@ async function queryActivation(startDate: string, endDate: string, env: Env) {
         FROM approved a
         INNER JOIN ${TABLES.decision_completed} a_ts
           ON a.user_id = a_ts.user_id
-          AND a_ts.decision = 'approved'
+          AND a_ts.decision = 'APPROVED'
         INNER JOIN ${TABLES.cms_line_of_credit} loc
           ON a.user_id = loc.user_id
         INNER JOIN ${TABLES.principal_card_updates} pc
           ON loc.external_id = pc.f9_dw005_loc_acct
         INNER JOIN ${TABLES.authorized_transaction} t
           ON pc.f9_dw005_crn = t.f9_dw007_prin_crn
-          AND t.fx_dw007_stat = 'N'
+          AND (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '' OR t.fx_dw007_stat = ' ')
+          AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
         GROUP BY a.user_id, a.week
         HAVING DATE_DIFF(first_txn_date, approval_date, DAY) <= 7
       )
@@ -54,7 +55,7 @@ async function queryActivation(startDate: string, endDate: string, env: Env) {
           user_id,
           MIN(DATE(timestamp, 'Asia/Jakarta')) AS approval_date
         FROM ${TABLES.decision_completed}
-        WHERE decision = 'approved'
+        WHERE decision = 'APPROVED'
           AND DATE(timestamp, 'Asia/Jakarta') BETWEEN @startDate AND @endDate
         GROUP BY user_id
       ),
@@ -68,7 +69,8 @@ async function queryActivation(startDate: string, endDate: string, env: Env) {
         INNER JOIN ${TABLES.principal_card_updates} pc ON loc.external_id = pc.f9_dw005_loc_acct
         INNER JOIN ${TABLES.authorized_transaction} t
           ON pc.f9_dw005_crn = t.f9_dw007_prin_crn
-          AND t.fx_dw007_stat = 'N'
+          AND (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '' OR t.fx_dw007_stat = ' ')
+          AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
         GROUP BY au.user_id, au.approval_date
       ),
       bucketed AS (
@@ -111,7 +113,7 @@ async function queryActivation(startDate: string, endDate: string, env: Env) {
             ELSE 'Standard CC'
           END AS product_type
         FROM ${TABLES.decision_completed}
-        WHERE decision = 'approved'
+        WHERE decision = 'APPROVED'
           AND DATE(timestamp, 'Asia/Jakarta') BETWEEN @startDate AND @endDate
         GROUP BY user_id
       ),
@@ -124,7 +126,8 @@ async function queryActivation(startDate: string, endDate: string, env: Env) {
         INNER JOIN ${TABLES.principal_card_updates} pc ON loc.external_id = pc.f9_dw005_loc_acct
         INNER JOIN ${TABLES.authorized_transaction} t
           ON pc.f9_dw005_crn = t.f9_dw007_prin_crn
-          AND t.fx_dw007_stat = 'N'
+          AND (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '' OR t.fx_dw007_stat = ' ')
+          AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
         GROUP BY a.user_id
         HAVING DATE_DIFF(first_txn_date, MIN(a.approval_date), DAY) <= 7
       )
@@ -168,7 +171,7 @@ async function queryActivation(startDate: string, endDate: string, env: Env) {
           FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(DATE(timestamp, 'Asia/Jakarta'), ISOWEEK)) AS week,
           user_id
         FROM ${TABLES.decision_completed}
-        WHERE decision = 'approved'
+        WHERE decision = 'APPROVED'
           AND DATE(timestamp, 'Asia/Jakarta') BETWEEN @startDate AND @endDate
       ),
       pin_set AS (

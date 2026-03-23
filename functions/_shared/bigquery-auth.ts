@@ -13,7 +13,8 @@ interface Env {
   GCP_REFRESH_TOKEN?: string;
   GCP_CLIENT_ID?: string;
   GCP_CLIENT_SECRET?: string;
-  KPI_CACHE?: KVNamespace;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  KPI_CACHE?: any;
 }
 
 let cachedToken: { token: string; expiresAt: number } | null = null;

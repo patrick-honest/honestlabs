@@ -4,16 +4,16 @@ import type { Env } from "../_shared/bigquery-auth";
 
 async function queryRepayments(startDate: string, endDate: string, env: Env) {
   const [weeklyTrend, byVendor, timeliness] = await Promise.all([
-    // Weekly Repayment Trend (from DW009 posted_transaction)
+    // Weekly Repayment Trend (from DW009 posted_transaction, payment codes)
     runQuery(
       `SELECT
         FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(p9_dw009_pst_dt, ISOWEEK)) AS week_start,
         COUNT(*) AS payment_count,
-        ROUND(SUM(CAST(f9_dw009_txn_amt AS FLOAT64) / 100), 2) AS total_amount_idr,
+        ROUND(SUM(ABS(CAST(f9_dw009_txn_amt AS FLOAT64)) / 100), 0) AS total_amount_idr,
         COUNT(DISTINCT fx_dw009_loc_acct) AS unique_accounts
       FROM ${TABLES.posted_transaction}
       WHERE p9_dw009_pst_dt BETWEEN @startDate AND @endDate
-        AND f9_dw009_txn_cde LIKE '%PM%'
+        AND f9_dw009_txn_cde IN ('4111', '4621', '4631')
       GROUP BY week_start
       ORDER BY week_start`,
       { startDate, endDate }, env,
