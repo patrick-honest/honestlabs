@@ -10,8 +10,6 @@ import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { usePeriod } from "@/hooks/use-period";
 import { useApiParams } from "@/hooks/use-api-params";
-import { useFilters } from "@/hooks/use-filters";
-import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange } from "@/lib/period-data";
 
@@ -42,7 +40,6 @@ const actionItems: ActionItem[] = [
 
 export default function RiskPage() {
   const { period } = usePeriod();
-  const { filters } = useFilters();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
   const { apiParams } = useApiParams();
 
@@ -80,8 +77,8 @@ export default function RiskPage() {
       total_accounts: r.total_accounts,
       delinquency_rate: r.delinquency_rate_30plus,
     }));
-    return applyFilterToData(raw, filters);
-  }, [apiData, filters]);
+    return raw;
+  }, [apiData]);
 
   // ---------------------------------------------------------------------------
   // Transform balance exposure data
@@ -97,8 +94,8 @@ export default function RiskPage() {
       accounts: r.accounts,
       balance: r.total_balance_idr,
     }));
-    return applyFilterToData(raw, filters);
-  }, [apiData, filters]);
+    return raw;
+  }, [apiData]);
 
   // ---------------------------------------------------------------------------
   // KPI values from latest week

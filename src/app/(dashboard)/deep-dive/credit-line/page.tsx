@@ -11,9 +11,7 @@ import { DashboardLineChart } from "@/components/charts/line-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { usePeriod } from "@/hooks/use-period";
 import { useApiParams } from "@/hooks/use-api-params";
-import { useFilters } from "@/hooks/use-filters";
 import { getPeriodRange, getPeriodInsightLabels } from "@/lib/period-data";
-import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 
 const AS_OF = "Mar 15, 2026";
@@ -69,7 +67,6 @@ interface VolumeTrendRow {
 export default function CreditLinePage() {
   const { period } = usePeriod();
   const { apiParams } = useApiParams();
-  const { filters } = useFilters();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
 
@@ -84,20 +81,20 @@ export default function CreditLinePage() {
   // Weekly trend
   const trendData = useMemo((): TrendRow[] | null => {
     if (!apiData?.trend?.length) return null;
-    return applyFilterToData(apiData.trend as TrendRow[], filters);
-  }, [apiData, filters]);
+    return apiData.trend as TrendRow[];
+  }, [apiData]);
 
   // By type
   const byTypeData = useMemo((): ByTypeRow[] | null => {
     if (!apiData?.byType?.length) return null;
-    return applyFilterToData(apiData.byType as ByTypeRow[], filters);
-  }, [apiData, filters]);
+    return apiData.byType as ByTypeRow[];
+  }, [apiData]);
 
   // Volume trend
   const volumeTrend = useMemo((): VolumeTrendRow[] | null => {
     if (!apiData?.volumeTrend?.length) return null;
-    return applyFilterToData(apiData.volumeTrend as VolumeTrendRow[], filters);
-  }, [apiData, filters]);
+    return apiData.volumeTrend as VolumeTrendRow[];
+  }, [apiData]);
 
   // KPI summary
   const kpiSummary = useMemo(() => {
@@ -149,7 +146,7 @@ export default function CreditLinePage() {
           <MetricCard
             metricKey="cli-total"
             label="Total CLIs"
-            value={applyFilterToMetric(kpiSummary.totalCli, filters, false)}
+            value={kpiSummary.totalCli}
             unit="count"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
@@ -158,7 +155,7 @@ export default function CreditLinePage() {
           <MetricCard
             metricKey="cli-users"
             label="Unique Recipients"
-            value={applyFilterToMetric(kpiSummary.totalUsers, filters, false)}
+            value={kpiSummary.totalUsers}
             unit="count"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
@@ -167,7 +164,7 @@ export default function CreditLinePage() {
           <MetricCard
             metricKey="cli-avg-change"
             label="Avg CLI Amount"
-            value={applyFilterToMetric(kpiSummary.avgChange, filters, false)}
+            value={kpiSummary.avgChange}
             unit="idr"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
@@ -176,8 +173,8 @@ export default function CreditLinePage() {
           <MetricCard
             metricKey="cli-latest-week"
             label="Latest Week CLIs"
-            value={applyFilterToMetric(kpiSummary.latestWeekCount, filters, false)}
-            prevValue={kpiSummary.prevWeekCount != null ? applyFilterToMetric(kpiSummary.prevWeekCount, filters, false) : null}
+            value={kpiSummary.latestWeekCount}
+            prevValue={kpiSummary.prevWeekCount}
             unit="count"
             asOf={AS_OF}
             dataRange={DATA_RANGE}

@@ -10,11 +10,11 @@ import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { Newspaper, TrendingUp, TrendingDown, AlertTriangle, Sparkles, ArrowRight, Info, X } from "lucide-react";
+import useSWR from "swr";
 import { usePeriod } from "@/hooks/use-period";
+import { useApiParams } from "@/hooks/use-api-params";
 import { useTheme } from "@/hooks/use-theme";
 import { useFilters } from "@/hooks/use-filters";
-import { useKpis } from "@/hooks/use-cached-fetch";
-import { applyFilterToMetric, hasActiveFilters } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange } from "@/lib/period-data";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
@@ -249,7 +249,33 @@ export default function DashboardPage() {
   const { period, periodLabel, dateRange } = usePeriod();
   const { isDark } = useTheme();
   const { filters } = useFilters();
-  const { data: apiData, isLoading: loading } = useKpis(period);
+  const { apiParams } = useApiParams();
+
+  const fetcher = useCallback(async (url: string) => {
+    const res = await fetch(url);
+    if (res.ok) return res.json();
+    if (res.status === 404) {
+      const refreshRes = await fetch("/api/kpis/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cycle: period }),
+      });
+      if (refreshRes.ok) return refreshRes.json();
+    }
+    throw new Error(`Fetch failed (${res.status})`);
+  }, [period]);
+
+  const { data: apiData, isLoading: loading } = useSWR<{
+    kpis: unknown[];
+    chartData: Record<string, unknown>;
+    trends: string[];
+    asOf: string;
+    dataRange: { start: string; end: string };
+  }>(`/api/kpis?${apiParams}`, {
+    fetcher,
+    revalidateOnFocus: false,
+    dedupingInterval: 300_000,
+  });
   const kpisAreLive = !!apiData?.kpis;
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
@@ -274,13 +300,8 @@ export default function DashboardPage() {
       return { metric: key, label: big4Labels[key] ?? key, value: 0, prevValue: null, unit: (key.includes("rate") ? "percent" : "count") as "count" | "percent" | "idr" | "usd", changePercent: null, direction: "flat" as const };
     });
 
-    if (!hasActiveFilters(filters)) return raw;
-    return raw.map((k) => ({
-      ...k,
-      value: applyFilterToMetric(k.value, filters, k.unit === "percent"),
-      prevValue: k.prevValue != null ? applyFilterToMetric(k.prevValue, filters, k.unit === "percent") : k.prevValue,
-    }));
-  }, [apiData, filters]);
+    return raw;
+  }, [apiData]);
 
   const health = useMemo(() => kpis ? computeHealth(kpis, isDark, tDash) : null, [kpis, isDark, tDash]);
   const alerts = useMemo(() => kpis ? generateAlerts(kpis, period, tDash) : [], [kpis, period, tDash]);

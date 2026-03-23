@@ -8,6 +8,7 @@
 import { runQuery, TABLES, toSqlDate, getLastFullWeek, getPriorWeek, getExtendedRange } from "../_shared/bigquery-client";
 import { getCached, setCached, cacheKey } from "../_shared/cache";
 import type { Env } from "../_shared/bigquery-auth";
+import { parseFilters, hasAnyFilter, cardTypeWhere, cycleDateWhere, transactionTypeWhere, amountRangeWhere, productTypeWhere, type ParsedFilters } from "../_shared/filters";
 
 // ---------------------------------------------------------------------------
 // Types (matching src/types/reports.ts)
@@ -66,17 +67,18 @@ interface SummaryRow {
 // Query functions (ported from src/services/queries/kpi.ts)
 // ---------------------------------------------------------------------------
 
-async function getEligibleAndTransactors(startDate: string, endDate: string, env: Env) {
+async function getEligibleAndTransactors(startDate: string, endDate: string, env: Env, filters: ParsedFilters) {
   const sql = `
     WITH card_unblocked AS (
-      SELECT DISTINCT f9_dw005_loc_acct AS loc_acct
-      FROM ${TABLES.principal_card_updates}
-      WHERE f9_dw005_1st_unblk_all_mtd_tms IS NOT NULL
-        AND TRIM(CAST(f9_dw005_1st_unblk_all_mtd_tms AS STRING)) != ''
-        AND f9_dw005_hce_txn_ind LIKE '%0%'
-        AND f9_dw005_net_txn_ind LIKE '%0%'
-        AND fx_dw005_contc_less_flg LIKE '%Y%'
-        AND f9_dw005_contc_txn_ind LIKE '%0%'
+      SELECT DISTINCT pc.f9_dw005_loc_acct AS loc_acct
+      FROM ${TABLES.principal_card_updates} pc
+      WHERE pc.f9_dw005_1st_unblk_all_mtd_tms IS NOT NULL
+        AND TRIM(CAST(pc.f9_dw005_1st_unblk_all_mtd_tms AS STRING)) != ''
+        AND pc.f9_dw005_hce_txn_ind LIKE '%0%'
+        AND pc.f9_dw005_net_txn_ind LIKE '%0%'
+        AND pc.fx_dw005_contc_less_flg LIKE '%Y%'
+        AND pc.f9_dw005_contc_txn_ind LIKE '%0%'
+        ${cardTypeWhere(filters, 'pc')}
     ),
     weekly_eligible AS (
       SELECT
@@ -88,11 +90,13 @@ async function getEligibleAndTransactors(startDate: string, endDate: string, env
         AND EXTRACT(DAYOFWEEK FROM dw4.f9_dw004_bus_dt) = 1
         AND dw4.fx_dw004_loc_stat IN ('G', 'N')
         AND dw4.f9_dw004_curr_dpd = 0
+        ${cycleDateWhere(filters, 'dw4')}
       GROUP BY week_start
     ),
     card_acct_map AS (
-      SELECT DISTINCT f9_dw005_crn AS crn, f9_dw005_loc_acct AS loc_acct
-      FROM ${TABLES.principal_card_updates}
+      SELECT DISTINCT pc2.f9_dw005_crn AS crn, pc2.f9_dw005_loc_acct AS loc_acct
+      FROM ${TABLES.principal_card_updates} pc2
+      WHERE 1=1 ${cardTypeWhere(filters, 'pc2')}
     ),
     weekly_transactors AS (
       SELECT
@@ -104,6 +108,8 @@ async function getEligibleAndTransactors(startDate: string, endDate: string, env
       WHERE dw7.f9_dw007_dt BETWEEN @startDate AND @endDate
         AND (dw7.fx_dw007_stat IS NULL OR TRIM(dw7.fx_dw007_stat) = '' OR dw7.fx_dw007_stat = ' ')
         AND dw7.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+        ${transactionTypeWhere(filters, 'dw7')}
+        ${amountRangeWhere(filters, 'dw7')}
       GROUP BY week_start
     )
     SELECT
@@ -119,7 +125,7 @@ async function getEligibleAndTransactors(startDate: string, endDate: string, env
   return runQuery<EligibleRow>(sql, { startDate, endDate }, env);
 }
 
-async function getSpendMetrics(startDate: string, endDate: string, env: Env) {
+async function getSpendMetrics(startDate: string, endDate: string, env: Env, filters: ParsedFilters) {
   const sql = `
     WITH valid_spend AS (
       SELECT
@@ -136,6 +142,8 @@ async function getSpendMetrics(startDate: string, endDate: string, env: Env) {
         AND (dw7.fx_dw007_stat IS NULL OR TRIM(dw7.fx_dw007_stat) = '' OR dw7.fx_dw007_stat = ' ')
         AND dw7.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
         AND dw7.f9_dw007_ori_amt > 0
+        ${transactionTypeWhere(filters, 'dw7')}
+        ${amountRangeWhere(filters, 'dw7')}
     )
     SELECT
       FORMAT_DATE('%Y-%m-%d', week_start) AS week_start,
@@ -153,7 +161,7 @@ async function getSpendMetrics(startDate: string, endDate: string, env: Env) {
   return runQuery<SpendRow>(sql, { startDate, endDate }, env);
 }
 
-async function getDecisionFunnel(startDate: string, endDate: string, env: Env) {
+async function getDecisionFunnel(startDate: string, endDate: string, env: Env, filters: ParsedFilters) {
   const sql = `
     SELECT
       FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(DATE(timestamp, 'Asia/Jakarta'), ISOWEEK)) AS week_start,
@@ -162,15 +170,16 @@ async function getDecisionFunnel(startDate: string, endDate: string, env: Env) {
       COUNTIF(decision = 'DECLINED') AS declined,
       COUNTIF(decision = 'WAITLISTED') AS waitlisted,
       ROUND(SAFE_DIVIDE(COUNTIF(decision = 'APPROVED'), COUNT(*)) * 100, 2) AS approval_rate_pct
-    FROM ${TABLES.decision_completed}
-    WHERE DATE(timestamp, 'Asia/Jakarta') BETWEEN @startDate AND @endDate
+    FROM ${TABLES.decision_completed} dc
+    WHERE DATE(dc.timestamp, 'Asia/Jakarta') BETWEEN @startDate AND @endDate
+      ${productTypeWhere(filters, 'dc')}
     GROUP BY week_start
     ORDER BY week_start
   `;
   return runQuery<DecisionRow>(sql, { startDate, endDate }, env);
 }
 
-async function getPortfolioSnapshot(snapshotDate: string, env: Env) {
+async function getPortfolioSnapshot(snapshotDate: string, env: Env, filters: ParsedFilters) {
   const dpdSql = `
     SELECT
       CASE
@@ -182,9 +191,10 @@ async function getPortfolioSnapshot(snapshotDate: string, env: Env) {
       END AS label,
       COUNT(DISTINCT p9_dw004_loc_acct) AS count,
       ROUND(SUM(f9_dw004_clo_bal / 100.0), 0) AS exposure_idr
-    FROM ${TABLES.financial_account_updates}
-    WHERE f9_dw004_bus_dt = @snapshotDate
-      AND f9_dw004_curr_dpd >= 0
+    FROM ${TABLES.financial_account_updates} dw4
+    WHERE dw4.f9_dw004_bus_dt = @snapshotDate
+      AND dw4.f9_dw004_curr_dpd >= 0
+      ${cycleDateWhere(filters, 'dw4')}
     GROUP BY label
     ORDER BY
       CASE label
@@ -200,8 +210,8 @@ async function getPortfolioSnapshot(snapshotDate: string, env: Env) {
     SELECT
       COUNT(DISTINCT p9_dw004_loc_acct) AS total_accounts,
       COUNT(DISTINCT CASE WHEN fx_dw004_loc_stat IN ('G', 'N') THEN p9_dw004_loc_acct END) AS active_accounts
-    FROM ${TABLES.financial_account_updates}
-    WHERE f9_dw004_bus_dt = @snapshotDate
+    FROM ${TABLES.financial_account_updates} dw4
+    WHERE dw4.f9_dw004_bus_dt = @snapshotDate
   `;
 
   const [dpdRows, summaryRows] = await Promise.all([
@@ -244,20 +254,20 @@ function buildKpi(
   return { metric, label, value, prevValue, unit, changePercent, direction };
 }
 
-async function computeKpis(env: Env) {
+async function computeKpis(env: Env, filters: ParsedFilters, urlStartDate?: string, urlEndDate?: string) {
   const { start, end } = getLastFullWeek();
-  // Go back 12 weeks for chart data
+  // Use URL params if provided, otherwise compute from period
   const extended = getExtendedRange(end, 12);
-  const startDate = toSqlDate(extended.start);
-  const endDate = toSqlDate(end);
-  const snapshotDate = toSqlDate(end);
+  const startDate = urlStartDate || toSqlDate(extended.start);
+  const endDate = urlEndDate || toSqlDate(end);
+  const snapshotDate = urlEndDate || toSqlDate(end);
 
   // Run all queries in parallel
   const [eligibleRows, spendRows, decisionRows, portfolio] = await Promise.all([
-    getEligibleAndTransactors(startDate, endDate, env),
-    getSpendMetrics(startDate, endDate, env),
-    getDecisionFunnel(startDate, endDate, env),
-    getPortfolioSnapshot(snapshotDate, env),
+    getEligibleAndTransactors(startDate, endDate, env, filters),
+    getSpendMetrics(startDate, endDate, env, filters),
+    getDecisionFunnel(startDate, endDate, env, filters),
+    getPortfolioSnapshot(snapshotDate, env, filters),
   ]);
 
   // Build KPI metrics
@@ -384,14 +394,23 @@ interface FnContext {
 export async function onRequest(context: FnContext): Promise<Response> {
   const { request, env } = context;
   const url = new URL(request.url);
-  const cycle = url.searchParams.get("cycle") || "weekly";
   const forceRefresh = request.method === "POST";
+  const startDate = url.searchParams.get("startDate") || undefined;
+  const endDate = url.searchParams.get("endDate") || undefined;
+  const filters = parseFilters(url);
+  const hasFilters = hasAnyFilter(filters);
 
   try {
-    const key = cacheKey("kpis", cycle, "latest");
+    const filterKey = hasFilters
+      ? Object.entries(filters)
+          .filter(([, v]) => v.length > 0)
+          .map(([k, v]) => `${k}=${v.sort().join("+")}`)
+          .join("&")
+      : "";
+    const key = cacheKey("kpis", startDate || "auto", `${endDate || "auto"}:${filterKey}`);
 
-    // Check cache first (unless force refresh)
-    if (!forceRefresh) {
+    // Check cache first (unless force refresh or filtered)
+    if (!forceRefresh && !hasFilters) {
       const cached = await getCached<unknown>(key, env.KPI_CACHE);
       if (cached) {
         return new Response(JSON.stringify(cached.data), {
@@ -404,11 +423,13 @@ export async function onRequest(context: FnContext): Promise<Response> {
       }
     }
 
-    // Query BigQuery
-    const result = await computeKpis(env);
+    // Query BigQuery with filters and date params
+    const result = await computeKpis(env, filters, startDate, endDate);
 
-    // Cache the result
-    await setCached(key, result, env.KPI_CACHE, 3600);
+    // Cache unfiltered results only
+    if (!hasFilters) {
+      await setCached(key, result, env.KPI_CACHE, 3600);
+    }
 
     return new Response(JSON.stringify(result), {
       headers: {

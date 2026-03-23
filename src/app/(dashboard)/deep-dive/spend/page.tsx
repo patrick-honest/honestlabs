@@ -11,8 +11,6 @@ import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-i
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { usePeriod } from "@/hooks/use-period";
 import { useApiParams } from "@/hooks/use-api-params";
-import { useFilters } from "@/hooks/use-filters";
-import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { getPeriodRange, getPeriodInsightLabels } from "@/lib/period-data";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { formatNumber } from "@/lib/utils";
@@ -52,7 +50,6 @@ const actionItems: ActionItem[] = [
 export default function SpendPage() {
   const { period } = usePeriod();
   const { apiParams } = useApiParams();
-  const { filters } = useFilters();
   const { locale } = useLanguage();
   const { currency } = useCurrency();
   const mccLang = localeToMccLang(locale);
@@ -146,8 +143,8 @@ export default function SpendPage() {
       avgTicket: r.avg_spend_per_txn_idr,
       txnPerUser: r.total_transactions / Math.max(r.eligible_count, 1),
     }));
-    return applyFilterToData(raw, filters);
-  }, [spendAnalysis, filters]);
+    return raw;
+  }, [spendAnalysis]);
 
   // Period-level summary (cumulative SAR for entire period)
   const periodSummary = spendAnalysis?.periodSummary as {
@@ -167,8 +164,8 @@ export default function SpendPage() {
       txn_count: ch.txn_count,
       spend_idr: ch.spend_idr,
     }));
-    return applyFilterToData(raw, filters);
-  }, [channelData, filters]);
+    return raw;
+  }, [channelData]);
 
   // Transform decline data for bar chart with labels
   const declineBarData = useMemo(() => {
@@ -179,8 +176,8 @@ export default function SpendPage() {
       count: d.cnt,
       description: d.description,
     }));
-    return applyFilterToData(raw, filters);
-  }, [declineData, filters]);
+    return raw;
+  }, [declineData]);
 
   // Transform QRIS merchant growth for line chart
   const qrisMerchantLineData = useMemo(() => {
@@ -189,8 +186,8 @@ export default function SpendPage() {
       date: row.month.replace("2025-", "").replace("2026-", "").replace("09", "Sep").replace("10", "Oct").replace("11", "Nov").replace("12", "Dec").replace("01", "Jan").replace("02", "Feb").replace("03", "Mar"),
       cumulative: row.cumulative_merchants,
     }));
-    return applyFilterToData(raw, filters);
-  }, [qrisMerchantData, filters]);
+    return raw;
+  }, [qrisMerchantData]);
 
   const channelInsights: ChartInsight[] = useMemo(() => [
     { text: "Offline leads in transaction count (75K) but QRIS is closing fast at 63.5K transactions — indicating strong QR adoption.", type: "neutral" },

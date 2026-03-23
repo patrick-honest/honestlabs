@@ -10,8 +10,6 @@ import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { usePeriod } from "@/hooks/use-period";
 import { useApiParams } from "@/hooks/use-api-params";
-import { useFilters } from "@/hooks/use-filters";
-import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange } from "@/lib/period-data";
 
@@ -54,7 +52,6 @@ const actionItems: ActionItem[] = [
 
 export default function PortfolioPage() {
   const { period } = usePeriod();
-  const { filters } = useFilters();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
   const { apiParams } = useApiParams();
 
@@ -94,8 +91,8 @@ export default function PortfolioPage() {
       delinquentAccounts: r.delinquent_accounts,
       delinquencyRate: r.delinquency_rate,
     }));
-    return applyFilterToData(raw, filters);
-  }, [apiData, filters]);
+    return raw;
+  }, [apiData]);
 
   const snapshotIsLive = !!snapshotTrend?.length;
   const latestSnap = snapshotTrend?.[snapshotTrend.length - 1] ?? null;
@@ -108,8 +105,8 @@ export default function PortfolioPage() {
       label: STATUS_LABELS[r.status] ?? r.status,
       accounts: r.accounts,
     }));
-    return applyFilterToData(raw, filters);
-  }, [apiData, filters]);
+    return raw;
+  }, [apiData]);
 
   const statusIsLive = !!statusBarData?.length;
 
@@ -120,8 +117,8 @@ export default function PortfolioPage() {
       label: r.bucket,
       accounts: r.accounts,
     }));
-    return applyFilterToData(raw, filters);
-  }, [apiData, filters]);
+    return raw;
+  }, [apiData]);
 
   const creditLimitIsLive = !!creditLimitBarData?.length;
 

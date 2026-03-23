@@ -11,9 +11,7 @@ import { DashboardLineChart } from "@/components/charts/line-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { usePeriod } from "@/hooks/use-period";
 import { useApiParams } from "@/hooks/use-api-params";
-import { useFilters } from "@/hooks/use-filters";
 import { getPeriodRange, getPeriodInsightLabels } from "@/lib/period-data";
-import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 
 const AS_OF = "Mar 15, 2026";
@@ -49,7 +47,6 @@ const actionItems: ActionItem[] = [
 export default function ReferralPage() {
   const { period } = usePeriod();
   const { apiParams } = useApiParams();
-  const { filters } = useFilters();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
 
@@ -64,32 +61,32 @@ export default function ReferralPage() {
   // Weekly funnel data
   const funnelData = useMemo(() => {
     if (!apiData?.funnel?.length) return null;
-    return applyFilterToData(apiData.funnel as { week_start: string; started: number; approved: number; conversion_rate: number }[], filters);
-  }, [apiData, filters]);
+    return apiData.funnel as { week_start: string; started: number; approved: number; conversion_rate: number }[];
+  }, [apiData]);
 
   // By channel data
   const byChannel = useMemo(() => {
     if (!apiData?.byChannel?.length) return null;
-    return applyFilterToData(apiData.byChannel as { referring_source: string; referring_medium: string; started_count: number; approved_count: number; conversion_rate: number }[], filters);
-  }, [apiData, filters]);
+    return apiData.byChannel as { referring_source: string; referring_medium: string; started_count: number; approved_count: number; conversion_rate: number }[];
+  }, [apiData]);
 
   // Monthly funnel trend
   const funnelTrend = useMemo(() => {
     if (!apiData?.funnelTrend?.length) return null;
-    return applyFilterToData(apiData.funnelTrend as { month: string; shared: number; started: number; approved: number }[], filters);
-  }, [apiData, filters]);
+    return apiData.funnelTrend as { month: string; shared: number; started: number; approved: number }[];
+  }, [apiData]);
 
   // Approval rate trend
   const approvalRate = useMemo(() => {
     if (!apiData?.approvalRate?.length) return null;
-    return applyFilterToData(apiData.approvalRate as { month: string; started: number; approved: number; rate: number }[], filters);
-  }, [apiData, filters]);
+    return apiData.approvalRate as { month: string; started: number; approved: number; rate: number }[];
+  }, [apiData]);
 
   // Per-user distribution
   const perUser = useMemo(() => {
     if (!apiData?.perUser?.length) return null;
-    return applyFilterToData(apiData.perUser as { bucket: string; users: number }[], filters);
-  }, [apiData, filters]);
+    return apiData.perUser as { bucket: string; users: number }[];
+  }, [apiData]);
 
   // KPI summary
   const kpiSummary = useMemo(() => {
@@ -134,7 +131,7 @@ export default function ReferralPage() {
           <MetricCard
             metricKey="referral-started"
             label="Referrals Started"
-            value={applyFilterToMetric(kpiSummary.totalStarted, filters, false)}
+            value={kpiSummary.totalStarted}
             unit="count"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
@@ -143,7 +140,7 @@ export default function ReferralPage() {
           <MetricCard
             metricKey="referral-approved"
             label="Referrals Approved"
-            value={applyFilterToMetric(kpiSummary.totalApproved, filters, false)}
+            value={kpiSummary.totalApproved}
             unit="count"
             asOf={AS_OF}
             dataRange={DATA_RANGE}

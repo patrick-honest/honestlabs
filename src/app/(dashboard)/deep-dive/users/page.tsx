@@ -11,8 +11,6 @@ import { HorizontalBar } from "@/components/charts/horizontal-bar";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { usePeriod } from "@/hooks/use-period";
 import { useApiParams } from "@/hooks/use-api-params";
-import { useFilters } from "@/hooks/use-filters";
-import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange } from "@/lib/period-data";
 
@@ -56,7 +54,6 @@ const actionItems: ActionItem[] = [
 export default function UsersDeepDivePage() {
   const { period } = usePeriod();
   const { apiParams } = useApiParams();
-  const { filters } = useFilters();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
   const { data: apiData } = useSWR(
@@ -72,8 +69,8 @@ export default function UsersDeepDivePage() {
       label: STATUS_LABELS[r.status] ?? r.status,
       accounts: r.accounts,
     }));
-    return applyFilterToData(raw, filters);
-  }, [apiData, filters]);
+    return raw;
+  }, [apiData]);
   const statusIsLive = !!statusBarData?.length;
 
   // KPI values from status breakdown
@@ -103,8 +100,8 @@ export default function UsersDeepDivePage() {
       label: r.manufacturer,
       users: r.users,
     }));
-    return applyFilterToData(raw, filters);
-  }, [apiData, filters]);
+    return raw;
+  }, [apiData]);
   const deviceIsLive = !!deviceBarData?.length;
 
   const totalDeviceUsers = useMemo(() => {
@@ -119,21 +116,21 @@ export default function UsersDeepDivePage() {
       label: r.os,
       users: r.users,
     }));
-    return applyFilterToData(raw, filters);
-  }, [apiData, filters]);
+    return raw;
+  }, [apiData]);
   const osIsLive = !!osBarData?.length;
 
   // --- Geographic distribution (horizontal bar) ---
   const geoBarData = useMemo(() => {
     if (!apiData?.geoDeepDive?.length) return null;
-    const rows = applyFilterToData(apiData.geoDeepDive as { province: string; users: number }[], filters);
+    const rows = apiData.geoDeepDive as { province: string; users: number }[];
     const maxVal = Math.max(...rows.map((r) => r.users));
     return rows.map((r) => ({
       label: r.province,
       value: r.users,
       maxValue: maxVal,
     }));
-  }, [apiData, filters]);
+  }, [apiData]);
   const geoIsLive = !!geoBarData?.length;
 
   // --- Account growth trend (line chart) ---
@@ -144,8 +141,8 @@ export default function UsersDeepDivePage() {
       totalAccounts: r.total_accounts,
       newAccounts: r.new_accounts ?? 0,
     }));
-    return applyFilterToData(raw, filters);
-  }, [apiData, filters]);
+    return raw;
+  }, [apiData]);
   const growthIsLive = !!growthTrend?.length;
 
   return (
@@ -158,7 +155,7 @@ export default function UsersDeepDivePage() {
           <MetricCard
             metricKey="users_total_accounts"
             label="Total Accounts"
-            value={applyFilterToMetric(totalAccounts, filters, false)}
+            value={totalAccounts}
             unit="count"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
@@ -167,7 +164,7 @@ export default function UsersDeepDivePage() {
           <MetricCard
             metricKey="users_active_accounts"
             label="Active Accounts"
-            value={applyFilterToMetric(activeAccounts, filters, false)}
+            value={activeAccounts}
             unit="count"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
@@ -176,7 +173,7 @@ export default function UsersDeepDivePage() {
           <MetricCard
             metricKey="users_blocked_accounts"
             label="Blocked / Suspended"
-            value={applyFilterToMetric(blockedAccounts, filters, false)}
+            value={blockedAccounts}
             unit="count"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
@@ -185,7 +182,7 @@ export default function UsersDeepDivePage() {
           <MetricCard
             metricKey="users_device_users"
             label="Users with Device Data"
-            value={applyFilterToMetric(totalDeviceUsers, filters, false)}
+            value={totalDeviceUsers}
             unit="count"
             asOf={AS_OF}
             dataRange={DATA_RANGE}

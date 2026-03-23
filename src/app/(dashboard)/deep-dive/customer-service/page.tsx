@@ -11,9 +11,7 @@ import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { HorizontalBar } from "@/components/charts/horizontal-bar";
 import { usePeriod } from "@/hooks/use-period";
 import { useApiParams } from "@/hooks/use-api-params";
-import { useFilters } from "@/hooks/use-filters";
 import { getPeriodRange, getPeriodInsightLabels } from "@/lib/period-data";
-import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 
 const AS_OF = "Mar 19, 2026";
@@ -23,7 +21,6 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json());
 export default function CustomerServicePage() {
   const { period } = usePeriod();
   const { apiParams } = useApiParams();
-  const { filters } = useFilters();
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
@@ -82,17 +79,17 @@ export default function CustomerServicePage() {
       avg_first_response_hrs: r.avg_first_response_hrs,
       avg_resolution_hrs: r.avg_resolution_hrs,
     }));
-    return applyFilterToData(raw, filters);
-  }, [csData, filters]);
+    return raw;
+  }, [csData]);
 
   // --- Transform contact reasons ---
   const contactReasons = useMemo(() => {
     if (!csData?.topContactReasons?.length) return null;
-    return applyFilterToData(csData.topContactReasons as {
+    return csData.topContactReasons as {
       reason: string;
       ticket_count: number;
-    }[], filters);
-  }, [csData, filters]);
+    }[];
+  }, [csData]);
 
   // --- KPI values from latest week ---
   const latestWeek = weeklyTrend?.[weeklyTrend.length - 1] ?? null;
@@ -131,7 +128,7 @@ export default function CustomerServicePage() {
             <MetricCard
               metricKey="cs_total_tickets"
               label="Total Tickets"
-              value={applyFilterToMetric(totals.totalTickets, filters, false)}
+              value={totals.totalTickets}
               prevValue={null}
               unit="count"
               asOf={AS_OF}

@@ -10,8 +10,6 @@ import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { usePeriod } from "@/hooks/use-period";
 import { useApiParams } from "@/hooks/use-api-params";
-import { useFilters } from "@/hooks/use-filters";
-import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange } from "@/lib/period-data";
 
@@ -56,7 +54,6 @@ const actionItems: ActionItem[] = [
 export default function RepaymentsPage() {
   const { period } = usePeriod();
   const { apiParams } = useApiParams();
-  const { filters } = useFilters();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
@@ -84,8 +81,8 @@ export default function RepaymentsPage() {
       totalAmountIdr: r.total_amount_idr,
       uniqueAccounts: r.unique_accounts,
     }));
-    return applyFilterToData(raw, filters);
-  }, [apiData, filters]);
+    return raw;
+  }, [apiData]);
 
   const weeklyIsLive = !!weeklyTrend?.length;
   const latestWeek = weeklyTrend?.[weeklyTrend.length - 1] ?? null;
@@ -103,8 +100,8 @@ export default function RepaymentsPage() {
       count: r.count,
       totalAmountIdr: r.total_amount_idr,
     }));
-    return applyFilterToData(raw, filters);
-  }, [apiData, filters]);
+    return raw;
+  }, [apiData]);
 
   const volumeIsLive = !!volumeTrend?.length;
 
@@ -120,8 +117,8 @@ export default function RepaymentsPage() {
       count: r.count,
       amount: r.amount,
     }));
-    return applyFilterToData(raw, filters);
-  }, [apiData, filters]);
+    return raw;
+  }, [apiData]);
 
   const vendorIsLive = !!vendorData?.length;
 
@@ -137,8 +134,8 @@ export default function RepaymentsPage() {
       accounts: r.accounts,
       pct: r.pct,
     }));
-    return applyFilterToData(raw, filters);
-  }, [apiData, filters]);
+    return raw;
+  }, [apiData]);
 
   const timelinessIsLive = !!timelinessData?.length;
 
@@ -152,8 +149,8 @@ export default function RepaymentsPage() {
       date: r.month,
       avgRatio: r.avg_ratio,
     }));
-    return applyFilterToData(raw, filters);
-  }, [apiData, filters]);
+    return raw;
+  }, [apiData]);
 
   const ratioIsLive = !!ratioData?.length;
 

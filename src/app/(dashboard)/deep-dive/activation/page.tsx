@@ -11,8 +11,6 @@ import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-i
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { usePeriod } from "@/hooks/use-period";
 import { useApiParams } from "@/hooks/use-api-params";
-import { useFilters } from "@/hooks/use-filters";
-import { applyFilterToData } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange, getPeriodInsightLabels, scaleTrendData } from "@/lib/period-data";
 
@@ -45,7 +43,6 @@ const actionItems: ActionItem[] = [
 
 export default function ActivationPage() {
   const { period } = usePeriod();
-  const { filters } = useFilters();
   const { apiParams } = useApiParams();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
@@ -117,9 +114,9 @@ export default function ActivationPage() {
     };
   }, [apiData]);
 
-  const periodActivationRate = useMemo(() => apiActivationRate?.length ? applyFilterToData(scaleTrendData(apiActivationRate, period), filters) : null, [period, filters, apiActivationRate]);
-  const periodActivationByProduct = useMemo(() => apiActivationByProduct?.length ? applyFilterToData(scaleTrendData(apiActivationByProduct, period, "product"), filters) : null, [period, filters, apiActivationByProduct]);
-  const periodDeliveryToActivation = useMemo(() => apiDaysToFirstTxn?.length ? applyFilterToData(scaleTrendData(apiDaysToFirstTxn, period, "days"), filters) : null, [period, filters, apiDaysToFirstTxn]);
+  const periodActivationRate = useMemo(() => apiActivationRate?.length ? scaleTrendData(apiActivationRate, period) : null, [period, apiActivationRate]);
+  const periodActivationByProduct = useMemo(() => apiActivationByProduct?.length ? scaleTrendData(apiActivationByProduct, period, "product") : null, [period, apiActivationByProduct]);
+  const periodDeliveryToActivation = useMemo(() => apiDaysToFirstTxn?.length ? scaleTrendData(apiDaysToFirstTxn, period, "days") : null, [period, apiDaysToFirstTxn]);
 
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
 

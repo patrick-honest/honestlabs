@@ -11,9 +11,7 @@ import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { HorizontalBar } from "@/components/charts/horizontal-bar";
 import { usePeriod } from "@/hooks/use-period";
 import { useApiParams } from "@/hooks/use-api-params";
-import { useFilters } from "@/hooks/use-filters";
 import { getPeriodRange } from "@/lib/period-data";
-import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { formatNumber } from "@/lib/utils";
 
@@ -51,7 +49,6 @@ const actionItems: ActionItem[] = [
 export default function TransactionAuthPage() {
   const { period } = usePeriod();
   const { apiParams } = useApiParams();
-  const { filters } = useFilters();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
@@ -91,8 +88,8 @@ export default function TransactionAuthPage() {
       avgTicket: r.avg_ticket_idr,
       foreignPct: r.foreign_txn_pct,
     }));
-    return applyFilterToData(raw, filters);
-  }, [apiData, filters]);
+    return raw;
+  }, [apiData]);
 
   // Latest KPI values from trend data
   const latestWeek = weeklyTrend?.[weeklyTrend.length - 1];
@@ -101,13 +98,13 @@ export default function TransactionAuthPage() {
   // Top merchants data
   const topMerchants = useMemo(() => {
     if (!apiData?.topMerchants?.length) return null;
-    return applyFilterToData(apiData.topMerchants as {
+    return apiData.topMerchants as {
       merchant_name: string;
       txn_count: number;
       total_spend_idr: number;
       unique_cards: number;
-    }[], filters);
-  }, [apiData, filters]);
+    }[];
+  }, [apiData]);
 
   const maxMerchantTxn = topMerchants ? Math.max(...topMerchants.map(m => m.txn_count)) : 0;
 

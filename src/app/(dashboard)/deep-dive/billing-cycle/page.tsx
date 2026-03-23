@@ -11,8 +11,6 @@ import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banne
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { usePeriod } from "@/hooks/use-period";
 import { useApiParams } from "@/hooks/use-api-params";
-import { useFilters } from "@/hooks/use-filters";
-import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
 
@@ -26,7 +24,6 @@ export default function BillingCyclePage() {
   const { period, dateRange } = usePeriod();
   const { apiParams } = useApiParams();
   const { isDark } = useTheme();
-  const { filters } = useFilters();
 
   // Fetch real data from BigQuery
   const { data: apiData } = useSWR(
@@ -67,8 +64,8 @@ export default function BillingCyclePage() {
         "Cycle 26th": c26?.revolve_rate ?? 0,
       };
     });
-    return applyFilterToData(raw, filters);
-  }, [apiData, filters]);
+    return raw;
+  }, [apiData]);
 
   // ── Utilization Distribution ───────────────────────────────────────
 
@@ -84,8 +81,8 @@ export default function BillingCyclePage() {
         "Cycle 26th": c26?.pct ?? 0,
       };
     });
-    return applyFilterToData(raw, filters);
-  }, [apiData, filters]);
+    return raw;
+  }, [apiData]);
 
   // ── DPD Distribution ───────────────────────────────────────────────
 
@@ -101,8 +98,8 @@ export default function BillingCyclePage() {
         "Cycle 26th": c26?.pct ?? 0,
       };
     });
-    return applyFilterToData(raw, filters);
-  }, [apiData, filters]);
+    return raw;
+  }, [apiData]);
 
   // ── Balance Trend ──────────────────────────────────────────────────
 
@@ -118,8 +115,8 @@ export default function BillingCyclePage() {
         "Cycle 26th": Math.round((c26?.avg_balance_idr ?? 0) / 1000),
       };
     });
-    return applyFilterToData(raw, filters);
-  }, [apiData, filters]);
+    return raw;
+  }, [apiData]);
 
   // ── Payment Behavior ───────────────────────────────────────────────
 
@@ -137,8 +134,8 @@ export default function BillingCyclePage() {
         c26_accounts: c26?.accounts ?? 0,
       };
     }).filter((d) => d["Cycle 4th"] > 0 || d["Cycle 26th"] > 0);
-    return applyFilterToData(raw, filters);
-  }, [apiData, filters]);
+    return raw;
+  }, [apiData]);
 
   // ── Insights ───────────────────────────────────────────────────────
 
@@ -178,7 +175,7 @@ export default function BillingCyclePage() {
         <MetricCard
           metricKey="billing_active_accounts"
           label="Active Accounts"
-          value={applyFilterToMetric(totalActive, filters, false)}
+          value={totalActive}
           unit="count"
           asOf={apiData?.asOf ?? ""}
           dataRange={apiData?.dataRange ?? { start: "", end: "" }}
@@ -205,7 +202,7 @@ export default function BillingCyclePage() {
         <MetricCard
           metricKey="billing_avg_balance"
           label="Avg Balance"
-          value={applyFilterToMetric(avgBalance, filters, false)}
+          value={avgBalance}
           unit="idr"
           asOf={apiData?.asOf ?? ""}
           dataRange={apiData?.dataRange ?? { start: "", end: "" }}
