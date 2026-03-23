@@ -68,59 +68,79 @@ interface SummaryRow {
 // ---------------------------------------------------------------------------
 
 async function getEligibleAndTransactors(startDate: string, endDate: string, env: Env, filters: ParsedFilters) {
+  // Cohort-based Spend Active Rate:
+  // For each ISOWEEK cohort of users who become first-time eligible, what %
+  // transacted within 7 days of their individual first-eligible date.
+  // Only includes cohorts where the 7+6-day observation window has fully elapsed.
   const sql = `
-    WITH card_unblocked AS (
-      SELECT DISTINCT pc.f9_dw005_loc_acct AS loc_acct
-      FROM ${TABLES.principal_card_updates} pc
-      WHERE pc.f9_dw005_1st_unblk_all_mtd_tms IS NOT NULL
-        AND TRIM(CAST(pc.f9_dw005_1st_unblk_all_mtd_tms AS STRING)) != ''
-        AND pc.f9_dw005_hce_txn_ind LIKE '%0%'
-        AND pc.f9_dw005_net_txn_ind LIKE '%0%'
-        AND pc.fx_dw005_contc_less_flg LIKE '%Y%'
-        AND pc.f9_dw005_contc_txn_ind LIKE '%0%'
-        ${cardTypeWhere(filters, 'pc')}
+    WITH regular_users AS (
+      SELECT DISTINCT dc.user_id, loc.external_id AS loc_acct
+      FROM ${TABLES.decision_completed} dc
+      INNER JOIN ${TABLES.cms_line_of_credit} loc ON dc.user_id = loc.user_id
+      WHERE UPPER(dc.decision) = 'APPROVED'
+        AND (dc.is_prepaid_card_applicable IS NULL OR dc.is_prepaid_card_applicable = FALSE)
+        AND (dc.is_account_opening_fee_applicable IS NULL OR dc.is_account_opening_fee_applicable = FALSE)
     ),
-    weekly_eligible AS (
+    eligible_check AS (
       SELECT
-        DATE_TRUNC(dw4.f9_dw004_bus_dt, ISOWEEK) AS week_start,
-        COUNT(DISTINCT dw4.p9_dw004_loc_acct) AS eligible_count
+        dw4.f9_dw004_bus_dt AS eligible_date,
+        dw4.p9_dw004_prin_crn AS crn,
+        ru.user_id
       FROM ${TABLES.financial_account_updates} dw4
-      JOIN card_unblocked cu ON dw4.p9_dw004_loc_acct = cu.loc_acct
-      WHERE dw4.f9_dw004_bus_dt BETWEEN @startDate AND @endDate
-        AND EXTRACT(DAYOFWEEK FROM dw4.f9_dw004_bus_dt) = 1
-        AND dw4.fx_dw004_loc_stat IN ('G', 'N')
-        AND dw4.f9_dw004_curr_dpd = 0
+      INNER JOIN regular_users ru ON dw4.p9_dw004_loc_acct = ru.loc_acct
+      INNER JOIN ${TABLES.principal_card_updates} dw5
+        ON dw4.p9_dw004_loc_acct = dw5.f9_dw005_loc_acct
+        AND CAST(DATETIME(dw5.f9_dw005_upd_tms, 'Asia/Jakarta') AS DATE) <= dw4.f9_dw004_bus_dt
+      WHERE dw4.fx_dw004_loc_stat IN ('G', 'N')
+        AND dw4.f9_dw004_curr_dpd >= 0
+        AND TRIM(CAST(dw5.f9_dw005_1st_unblk_all_mtd_tms AS STRING)) != ''
+        AND (dw5.fx_dw005_crd_stat IS NULL OR TRIM(CAST(dw5.fx_dw005_crd_stat AS STRING)) != '')
+        AND dw5.f9_dw005_hce_txn_ind LIKE '%0%'
+        AND dw5.f9_dw005_net_txn_ind LIKE '%0%'
+        AND dw5.fx_dw005_contc_less_flg LIKE '%Y%'
+        AND dw5.f9_dw005_contc_txn_ind LIKE '%0%'
+        ${cardTypeWhere(filters, 'dw5')}
         ${cycleDateWhere(filters, 'dw4')}
-      GROUP BY week_start
+      QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY dw4.p9_dw004_loc_acct, dw4.f9_dw004_bus_dt
+        ORDER BY dw5.f9_dw005_upd_tms DESC
+      ) = 1
     ),
-    card_acct_map AS (
-      SELECT DISTINCT pc2.f9_dw005_crn AS crn, pc2.f9_dw005_loc_acct AS loc_acct
-      FROM ${TABLES.principal_card_updates} pc2
-      WHERE 1=1 ${cardTypeWhere(filters, 'pc2')}
+    first_eligible AS (
+      SELECT user_id, crn, MIN(eligible_date) AS first_eligible_date
+      FROM eligible_check
+      GROUP BY user_id, crn
+      QUALIFY ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY MIN(eligible_date)) = 1
     ),
-    weekly_transactors AS (
+    weekly_cohort AS (
       SELECT
-        DATE_TRUNC(dw7.f9_dw007_dt, ISOWEEK) AS week_start,
-        COUNT(DISTINCT cam.loc_acct) AS transactor_count,
-        COUNT(*) AS total_transactions
-      FROM ${TABLES.authorized_transaction} dw7
-      JOIN card_acct_map cam ON dw7.f9_dw007_prin_crn = cam.crn
-      WHERE dw7.f9_dw007_dt BETWEEN @startDate AND @endDate
-        AND (dw7.fx_dw007_stat IS NULL OR TRIM(dw7.fx_dw007_stat) = '' OR dw7.fx_dw007_stat = ' ')
-        AND dw7.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
-        ${transactionTypeWhere(filters, 'dw7')}
-        ${amountRangeWhere(filters, 'dw7')}
-      GROUP BY week_start
+        DATE_TRUNC(first_eligible_date, ISOWEEK) AS week_start,
+        user_id, first_eligible_date, crn
+      FROM first_eligible
+      WHERE first_eligible_date BETWEEN @startDate AND @endDate
+        AND DATE_ADD(DATE_TRUNC(first_eligible_date, ISOWEEK), INTERVAL 13 DAY) <= CURRENT_DATE('Asia/Jakarta')
+    ),
+    transactors AS (
+      SELECT DISTINCT wc.user_id, wc.week_start
+      FROM weekly_cohort wc
+      INNER JOIN ${TABLES.authorized_transaction} t
+        ON wc.crn = t.f9_dw007_prin_crn
+        AND t.f9_dw007_dt BETWEEN wc.first_eligible_date AND DATE_ADD(wc.first_eligible_date, INTERVAL 7 DAY)
+      WHERE (t.fx_dw007_stat IS NULL OR t.fx_dw007_stat = '' OR t.fx_dw007_stat = ' ')
+        AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+        ${transactionTypeWhere(filters, 't')}
+        ${amountRangeWhere(filters, 't')}
     )
     SELECT
-      FORMAT_DATE('%Y-%m-%d', e.week_start) AS week_start,
-      e.eligible_count,
-      COALESCE(t.transactor_count, 0) AS transactor_count,
-      COALESCE(t.total_transactions, 0) AS total_transactions,
-      ROUND(SAFE_DIVIDE(COALESCE(t.transactor_count, 0), e.eligible_count) * 100, 2) AS spend_active_rate
-    FROM weekly_eligible e
-    LEFT JOIN weekly_transactors t ON e.week_start = t.week_start
-    ORDER BY e.week_start
+      FORMAT_DATE('%Y-%m-%d', wc.week_start + 7) AS week_start,
+      COUNT(DISTINCT wc.user_id) AS eligible_count,
+      COUNT(DISTINCT tr.user_id) AS transactor_count,
+      COUNT(DISTINCT tr.user_id) AS total_transactions,
+      ROUND(COUNT(DISTINCT tr.user_id) * 100.0 / COUNT(DISTINCT wc.user_id), 2) AS spend_active_rate
+    FROM weekly_cohort wc
+    LEFT JOIN transactors tr ON wc.user_id = tr.user_id AND wc.week_start = tr.week_start
+    GROUP BY wc.week_start
+    ORDER BY wc.week_start
   `;
   return runQuery<EligibleRow>(sql, { startDate, endDate }, env);
 }

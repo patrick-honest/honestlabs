@@ -264,7 +264,7 @@ export default function SpendPage() {
           {/* Spend Active Rate Trend */}
           <ChartCard
             title="Spend Active Rate Trend"
-            subtitle="% of cumulative eligible accounts (EoP) with at least 1 authorized transaction in period"
+            subtitle="Cohort-based: % of newly first-time eligible users who transacted within 7 days of becoming eligible"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
             liveData={trendIsLive}

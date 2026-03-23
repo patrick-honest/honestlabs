@@ -61,7 +61,7 @@ interface PeriodContextValue {
 
 // ── Constants ────────────────────────────────────────────────────────
 
-export const TODAY = new Date(2026, 2, 16); // Mar 16, 2026 (Monday)
+export const TODAY = new Date(); // Always use the actual current date
 
 /** User-friendly preset labels per period type */
 const PRESET_LABELS: Record<Cycle, Record<TimeRangePreset, string>> = {
