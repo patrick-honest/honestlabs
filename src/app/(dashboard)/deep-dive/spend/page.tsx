@@ -744,7 +744,9 @@ export default function SpendPage() {
 
         <p className="text-xs text-[var(--text-muted)] leading-relaxed">
           <span className="font-semibold text-[var(--text-secondary)]">Avg Transactions per User:</span>{" "}
-          Total authorized transaction count &divide; number of eligible users in the selected period. Follows global time range.
+          Total authorized transaction count &divide; number of distinct transactors (accounts with &ge;1 transaction) in the selected period.
+          The KPI card uses the period summary denominator (eligible users). The Transaction Frequency chart uses weekly transactor count as denominator for a more accurate per-transactor view.
+          Follows global time range.
         </p>
 
         <p className="text-xs text-[var(--text-muted)] leading-relaxed">
