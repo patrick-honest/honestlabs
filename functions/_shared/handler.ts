@@ -50,12 +50,8 @@ export function createHandler(options: HandlerOptions) {
   return async function onRequest(context: { request: Request; env: Env }): Promise<Response> {
     const { request, env } = context;
     const url = new URL(request.url);
-    const rawStartDate = url.searchParams.get("startDate");
+    const startDate = url.searchParams.get("startDate");
     const endDate = url.searchParams.get("endDate");
-    const period = url.searchParams.get("period") || "monthly";
-
-    // Extend start date to include 6 periods of chart context
-    const startDate = rawStartDate ? extendStartDate(rawStartDate, period) : null;
 
     if (!startDate || !endDate) {
       return new Response(
