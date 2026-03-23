@@ -1,10 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
 import { Header } from "@/components/layout/header";
 import { MetricCard } from "@/components/dashboard/metric-card";
+import { ChartCard } from "@/components/dashboard/chart-card";
+import { DashboardLineChart } from "@/components/charts/line-chart";
+import { DashboardBarChart } from "@/components/charts/bar-chart";
+import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { Newspaper, TrendingUp, TrendingDown, AlertTriangle, Sparkles, ArrowRight, Info, X } from "lucide-react";
 import { usePeriod } from "@/hooks/use-period";
 import { useTheme } from "@/hooks/use-theme";
@@ -192,6 +196,49 @@ const NEWS = [
   { title: "Indonesian credit card spending up 12% YoY in Feb", date: "Mar 14", source: "CNBC ID" },
   { title: "OJK announces new digital lending guidelines for 2026", date: "Mar 12", source: "Kontan" },
 ];
+
+// ── Dashboard Charts (extracted for clean JSX typing) ────────────────────────
+
+function DashboardCharts({ chartData, dataRange, isLive }: { chartData: Record<string, unknown>; dataRange: { start: string; end: string; label?: string }; isLive: boolean }) {
+  const eligible = chartData.eligible as { date: string; eligible: number; transactors: number; rate: number }[] | undefined;
+  const spend = chartData.spend as { date: string; total: number }[] | undefined;
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {eligible && eligible.length > 0 && (
+        <ChartCard
+          title="Spend Active Rate Trend"
+          subtitle="% of eligible accounts transacting each week"
+          asOf={dataRange.end}
+          dataRange={dataRange}
+          liveData={isLive}
+        >
+          <DashboardLineChart
+            data={eligible.map((r) => ({ date: r.date, rate: r.rate }))}
+            lines={[{ key: "rate", color: "#22c55e", label: "SAR %" }]}
+            valueType="percent"
+            height={280}
+          />
+        </ChartCard>
+      )}
+      {spend && spend.length > 0 && (
+        <ChartCard
+          title="Weekly Total Spend"
+          subtitle="Total transaction volume (IDR)"
+          asOf={dataRange.end}
+          dataRange={dataRange}
+          liveData={isLive}
+        >
+          <DashboardBarChart
+            data={spend.map((r) => ({ week: r.date, spend: r.total }))}
+            bars={[{ key: "spend", color: "#6366f1", label: "Total Spend (IDR)" }]}
+            xAxisKey="week"
+            height={280}
+          />
+        </ChartCard>
+      )}
+    </div>
+  );
+}
 
 // ── Page ────────────────────────────────────────────────────────────────────
 
@@ -469,10 +516,14 @@ export default function DashboardPage() {
         {/* ════════════════════════════════════════════════════════════════ */}
         {/* 4. TWO KEY CHARTS                                              */}
         {/* ════════════════════════════════════════════════════════════════ */}
-        <SampleDataBanner
-          dataset="mart_finexus"
-          reason="KPI data requires financial_account_updates (DW004) and authorized_transaction (DW007)"
-        />
+        {apiData?.chartData ? (
+          <DashboardCharts chartData={apiData.chartData as Record<string, unknown>} dataRange={DATA_RANGE} isLive={kpisAreLive} />
+        ) : !loading ? (
+          <SampleDataBanner
+            dataset="mart_finexus"
+            reason="KPI data requires financial_account_updates (DW004) and authorized_transaction (DW007)"
+          />
+        ) : null}
 
         {/* ════════════════════════════════════════════════════════════════ */}
         {/* 5. INVESTOR SNAPSHOT                                            */}
