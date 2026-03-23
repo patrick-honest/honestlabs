@@ -342,10 +342,35 @@ function UnifiedTimeSelector({
 
               <div className="w-px bg-[var(--border)]" />
 
-              {/* Right column: Fixed periods */}
+              {/* Middle column: To Date */}
               <div className="flex-1 min-w-0">
-                <p className={cn("text-[8px] font-semibold uppercase tracking-wider mb-1 px-1", isDark ? "text-[#7C4DFF]/60" : "text-[#D00083]/50")}>Fixed Periods</p>
-                {TIME_OPTION_DEFS.map((opt) => {
+                <p className={cn("text-[8px] font-semibold uppercase tracking-wider mb-1 px-1", isDark ? "text-[#7C4DFF]/60" : "text-[#D00083]/50")}>To Date</p>
+                {TIME_OPTION_DEFS.filter(o => o.timeRange === "xtd").map((opt) => {
+                  const isActive = opt.period === period && opt.timeRange === timeRange;
+                  return (
+                    <button
+                      key={`${opt.period}-${opt.timeRange}`}
+                      onClick={() => { onSelectRange(opt.period, opt.timeRange); setOpen(false); }}
+                      className={cn(
+                        "flex w-full items-center gap-1 rounded-md px-2 py-1 text-[10px] transition-colors text-left",
+                        isActive
+                          ? isDark ? "text-[#7C4DFF] bg-[#5B22FF]/10 font-medium" : "text-[#D00083] bg-[#D00083]/5 font-medium"
+                          : "text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
+                      )}
+                    >
+                      {isActive && <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", isDark ? "bg-[#5B22FF]" : "bg-[#D00083]")} />}
+                      {tTime(opt.tKey)}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="w-px bg-[var(--border)]" />
+
+              {/* Right column: Last Full */}
+              <div className="flex-1 min-w-0">
+                <p className={cn("text-[8px] font-semibold uppercase tracking-wider mb-1 px-1", isDark ? "text-[#7C4DFF]/60" : "text-[#D00083]/50")}>Last Full</p>
+                {TIME_OPTION_DEFS.filter(o => o.timeRange === "last_full").map((opt) => {
                   const isActive = opt.period === period && opt.timeRange === timeRange;
                   return (
                     <button
