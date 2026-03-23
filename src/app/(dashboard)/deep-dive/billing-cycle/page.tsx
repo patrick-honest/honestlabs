@@ -44,15 +44,15 @@ export default function BillingCyclePage() {
     return apiData?.overview?.length ? apiData.overview : null;
   }, [apiData]);
 
-  const cycle4 = useMemo(() => overview?.find((r: { cycle_day: number }) => r.cycle_day === 4) ?? null, [overview]);
-  const cycle26 = useMemo(() => overview?.find((r: { cycle_day: number }) => r.cycle_day === 26) ?? null, [overview]);
+  const cycle10 = useMemo(() => overview?.find((r: { cycle_day: number }) => r.cycle_day === 10) ?? null, [overview]);
+  const cycle16 = useMemo(() => overview?.find((r: { cycle_day: number }) => r.cycle_day === 16) ?? null, [overview]);
 
-  const totalActive = (cycle4?.total_accounts ?? 0) + (cycle26?.total_accounts ?? 0);
-  const totalRevolving = (cycle4?.revolving ?? 0) + (cycle26?.revolving ?? 0);
-  const totalWithBalance = (cycle4?.with_balance ?? 0) + (cycle26?.with_balance ?? 0);
+  const totalActive = (cycle10?.total_accounts ?? 0) + (cycle16?.total_accounts ?? 0);
+  const totalRevolving = (cycle10?.revolving ?? 0) + (cycle16?.revolving ?? 0);
+  const totalWithBalance = (cycle10?.with_balance ?? 0) + (cycle16?.with_balance ?? 0);
   const overallRevolveRate = totalWithBalance > 0 ? (totalRevolving / totalWithBalance * 100) : 0;
-  const avgUtilization = ((cycle4?.avg_utilization ?? 0) + (cycle26?.avg_utilization ?? 0)) / 2;
-  const avgBalance = ((cycle4?.avg_balance_idr ?? 0) + (cycle26?.avg_balance_idr ?? 0)) / 2;
+  const avgUtilization = ((cycle10?.avg_utilization ?? 0) + (cycle16?.avg_utilization ?? 0)) / 2;
+  const avgBalance = ((cycle10?.avg_balance_idr ?? 0) + (cycle16?.avg_balance_idr ?? 0)) / 2;
 
   // ── Revolve Rate Trend ─────────────────────────────────────────────
 
@@ -60,12 +60,12 @@ export default function BillingCyclePage() {
     if (!apiData?.revolveTrend?.length) return [];
     const months = [...new Set(apiData.revolveTrend.map((r: { month: string }) => r.month))].sort();
     const raw = months.map((m) => {
-      const c4 = apiData.revolveTrend.find((r: { month: string; cycle_day: number }) => r.month === m && r.cycle_day === 4);
-      const c26 = apiData.revolveTrend.find((r: { month: string; cycle_day: number }) => r.month === m && r.cycle_day === 26);
+      const c4 = apiData.revolveTrend.find((r: { month: string; cycle_day: number }) => r.month === m && r.cycle_day === 10);
+      const c26 = apiData.revolveTrend.find((r: { month: string; cycle_day: number }) => r.month === m && r.cycle_day === 16);
       return {
         date: (m as string).replace("2025-", "").replace("2026-", ""),
-        "Cycle 4th": c4?.revolve_rate ?? 0,
-        "Cycle 26th": c26?.revolve_rate ?? 0,
+        "Cycle 10th": c4?.revolve_rate ?? 0,
+        "Cycle 16th": c26?.revolve_rate ?? 0,
       };
     });
     return raw;
@@ -77,12 +77,12 @@ export default function BillingCyclePage() {
     if (!apiData?.utilizationDistribution?.length) return [];
     const buckets = ["No Balance", "0-25%", "25-50%", "50-75%", "75-100%", ">100%"];
     const raw = buckets.map((b) => {
-      const c4 = apiData.utilizationDistribution.find((r: { cycle_day: number; bucket: string }) => r.cycle_day === 4 && r.bucket === b);
-      const c26 = apiData.utilizationDistribution.find((r: { cycle_day: number; bucket: string }) => r.cycle_day === 26 && r.bucket === b);
+      const c4 = apiData.utilizationDistribution.find((r: { cycle_day: number; bucket: string }) => r.cycle_day === 10 && r.bucket === b);
+      const c26 = apiData.utilizationDistribution.find((r: { cycle_day: number; bucket: string }) => r.cycle_day === 16 && r.bucket === b);
       return {
         bucket: b,
-        "Cycle 4th": c4?.pct ?? 0,
-        "Cycle 26th": c26?.pct ?? 0,
+        "Cycle 10th": c4?.pct ?? 0,
+        "Cycle 16th": c26?.pct ?? 0,
       };
     });
     return raw;
@@ -94,12 +94,12 @@ export default function BillingCyclePage() {
     if (!apiData?.dpdDistribution?.length) return [];
     const buckets = ["Current", "1-30 DPD", "31-60 DPD", "61-90 DPD", "90+ DPD"];
     const raw = buckets.map((b) => {
-      const c4 = apiData.dpdDistribution.find((r: { cycle_day: number; bucket: string }) => r.cycle_day === 4 && r.bucket === b);
-      const c26 = apiData.dpdDistribution.find((r: { cycle_day: number; bucket: string }) => r.cycle_day === 26 && r.bucket === b);
+      const c4 = apiData.dpdDistribution.find((r: { cycle_day: number; bucket: string }) => r.cycle_day === 10 && r.bucket === b);
+      const c26 = apiData.dpdDistribution.find((r: { cycle_day: number; bucket: string }) => r.cycle_day === 16 && r.bucket === b);
       return {
         bucket: b,
-        "Cycle 4th": c4?.pct ?? 0,
-        "Cycle 26th": c26?.pct ?? 0,
+        "Cycle 10th": c4?.pct ?? 0,
+        "Cycle 16th": c26?.pct ?? 0,
       };
     });
     return raw;
@@ -111,12 +111,12 @@ export default function BillingCyclePage() {
     if (!apiData?.balanceTrend?.length) return [];
     const months = [...new Set(apiData.balanceTrend.map((r: { month: string }) => r.month))].sort();
     const raw = months.map((m) => {
-      const c4 = apiData.balanceTrend.find((r: { month: string; cycle_day: number }) => r.month === m && r.cycle_day === 4);
-      const c26 = apiData.balanceTrend.find((r: { month: string; cycle_day: number }) => r.month === m && r.cycle_day === 26);
+      const c4 = apiData.balanceTrend.find((r: { month: string; cycle_day: number }) => r.month === m && r.cycle_day === 10);
+      const c26 = apiData.balanceTrend.find((r: { month: string; cycle_day: number }) => r.month === m && r.cycle_day === 16);
       return {
         date: (m as string).replace("2025-", "").replace("2026-", ""),
-        "Cycle 4th": Math.round((c4?.avg_balance_idr ?? 0) / 1000),
-        "Cycle 26th": Math.round((c26?.avg_balance_idr ?? 0) / 1000),
+        "Cycle 10th": Math.round((c4?.avg_balance_idr ?? 0) / 1000),
+        "Cycle 16th": Math.round((c26?.avg_balance_idr ?? 0) / 1000),
       };
     });
     return raw;
@@ -128,16 +128,16 @@ export default function BillingCyclePage() {
     if (!apiData?.paymentBehavior?.length) return [];
     const behaviors = ["Paid in Full", "Min Payment Made", "Below Min Due", "Past Due", "Other"];
     const raw = behaviors.map((b) => {
-      const c4 = apiData.paymentBehavior.find((r: { cycle_day: number; behavior: string }) => r.cycle_day === 4 && r.behavior === b);
-      const c26 = apiData.paymentBehavior.find((r: { cycle_day: number; behavior: string }) => r.cycle_day === 26 && r.behavior === b);
+      const c4 = apiData.paymentBehavior.find((r: { cycle_day: number; behavior: string }) => r.cycle_day === 10 && r.behavior === b);
+      const c26 = apiData.paymentBehavior.find((r: { cycle_day: number; behavior: string }) => r.cycle_day === 16 && r.behavior === b);
       return {
         behavior: b,
-        "Cycle 4th": c4?.pct ?? 0,
-        "Cycle 26th": c26?.pct ?? 0,
+        "Cycle 10th": c4?.pct ?? 0,
+        "Cycle 16th": c26?.pct ?? 0,
         c4_accounts: c4?.accounts ?? 0,
         c26_accounts: c26?.accounts ?? 0,
       };
-    }).filter((d) => d["Cycle 4th"] > 0 || d["Cycle 26th"] > 0);
+    }).filter((d) => d["Cycle 10th"] > 0 || d["Cycle 16th"] > 0);
     return raw;
   }, [apiData]);
 
@@ -145,22 +145,22 @@ export default function BillingCyclePage() {
 
   const overviewInsights: ChartInsight[] = useMemo(() => [
     {
-      text: `Cycle 26th has ${((cycle26?.revolve_rate ?? 0)).toFixed(1)}% revolve rate vs ${((cycle4?.revolve_rate ?? 0)).toFixed(1)}% for Cycle 4th — significantly higher revolving behavior.`,
-      type: cycle26?.revolve_rate > cycle4?.revolve_rate ? "negative" : "positive",
+      text: `Cycle 16th has ${((cycle16?.revolve_rate ?? 0)).toFixed(1)}% revolve rate vs ${((cycle10?.revolve_rate ?? 0)).toFixed(1)}% for Cycle 10th — significantly higher revolving behavior.`,
+      type: cycle16?.revolve_rate > cycle10?.revolve_rate ? "negative" : "positive",
     },
     {
-      text: `Cycle 4th accounts outnumber Cycle 26th ${((cycle4?.total_accounts ?? 0) / 1000).toFixed(0)}K to ${((cycle26?.total_accounts ?? 0) / 1000).toFixed(0)}K (${(((cycle4?.total_accounts ?? 0) / totalActive) * 100).toFixed(0)}% vs ${(((cycle26?.total_accounts ?? 0) / totalActive) * 100).toFixed(0)}%).`,
+      text: `Cycle 10th accounts outnumber Cycle 16th ${((cycle10?.total_accounts ?? 0) / 1000).toFixed(0)}K to ${((cycle16?.total_accounts ?? 0) / 1000).toFixed(0)}K (${(((cycle10?.total_accounts ?? 0) / totalActive) * 100).toFixed(0)}% vs ${(((cycle16?.total_accounts ?? 0) / totalActive) * 100).toFixed(0)}%).`,
       type: "neutral",
     },
     {
-      text: `Average outstanding balance: Cycle 4th IDR ${((cycle4?.avg_balance_idr ?? 0) / 1e6).toFixed(1)}M vs Cycle 26th IDR ${((cycle26?.avg_balance_idr ?? 0) / 1e6).toFixed(1)}M.`,
+      text: `Average outstanding balance: Cycle 10th IDR ${((cycle10?.avg_balance_idr ?? 0) / 1e6).toFixed(1)}M vs Cycle 16th IDR ${((cycle16?.avg_balance_idr ?? 0) / 1e6).toFixed(1)}M.`,
       type: "neutral",
     },
     {
       text: "The cycle-day difference in revolve rate may reflect different user demographics or onboarding cohorts assigned to each cycle.",
       type: "hypothesis",
     },
-  ], [cycle4, cycle26, totalActive]);
+  ], [cycle10, cycle16, totalActive]);
 
   return (
     <div className="space-y-6 mt-4">
@@ -229,8 +229,8 @@ export default function BillingCyclePage() {
               data={aggregateByIncrement(revolveTrendData, increment, "date")}
               xAxisKey="date"
               lines={[
-                { key: "Cycle 4th", label: "Cycle 4th", color: isDark ? "#7C4DFF" : "#D00083" },
-                { key: "Cycle 26th", label: "Cycle 26th", color: isDark ? "#06D6A0" : "#059669" },
+                { key: "Cycle 10th", label: "Cycle 10th", color: isDark ? "#7C4DFF" : "#D00083" },
+                { key: "Cycle 16th", label: "Cycle 16th", color: isDark ? "#06D6A0" : "#059669" },
               ]}
               height={280}
             />
@@ -245,8 +245,8 @@ export default function BillingCyclePage() {
               data={utilizationData}
               xAxisKey="bucket"
               bars={[
-                { key: "Cycle 4th", label: "Cycle 4th", color: isDark ? "#7C4DFF" : "#D00083" },
-                { key: "Cycle 26th", label: "Cycle 26th", color: isDark ? "#06D6A0" : "#059669" },
+                { key: "Cycle 10th", label: "Cycle 10th", color: isDark ? "#7C4DFF" : "#D00083" },
+                { key: "Cycle 16th", label: "Cycle 16th", color: isDark ? "#06D6A0" : "#059669" },
               ]}
               height={280}
             />
@@ -264,8 +264,8 @@ export default function BillingCyclePage() {
               data={dpdData}
               xAxisKey="bucket"
               bars={[
-                { key: "Cycle 4th", label: "Cycle 4th", color: isDark ? "#7C4DFF" : "#D00083" },
-                { key: "Cycle 26th", label: "Cycle 26th", color: isDark ? "#06D6A0" : "#059669" },
+                { key: "Cycle 10th", label: "Cycle 10th", color: isDark ? "#7C4DFF" : "#D00083" },
+                { key: "Cycle 16th", label: "Cycle 16th", color: isDark ? "#06D6A0" : "#059669" },
               ]}
               height={280}
             />
@@ -280,8 +280,8 @@ export default function BillingCyclePage() {
               data={aggregateByIncrement(balanceTrendData, increment, "date")}
               xAxisKey="date"
               lines={[
-                { key: "Cycle 4th", label: "Cycle 4th", color: isDark ? "#7C4DFF" : "#D00083" },
-                { key: "Cycle 26th", label: "Cycle 26th", color: isDark ? "#06D6A0" : "#059669" },
+                { key: "Cycle 10th", label: "Cycle 10th", color: isDark ? "#7C4DFF" : "#D00083" },
+                { key: "Cycle 16th", label: "Cycle 16th", color: isDark ? "#06D6A0" : "#059669" },
               ]}
               height={280}
             />
@@ -298,8 +298,8 @@ export default function BillingCyclePage() {
             data={paymentBehaviorData}
             xAxisKey="behavior"
             bars={[
-              { key: "Cycle 4th", label: "Cycle 4th", color: isDark ? "#7C4DFF" : "#D00083" },
-              { key: "Cycle 26th", label: "Cycle 26th", color: isDark ? "#06D6A0" : "#059669" },
+              { key: "Cycle 10th", label: "Cycle 10th", color: isDark ? "#7C4DFF" : "#D00083" },
+              { key: "Cycle 16th", label: "Cycle 16th", color: isDark ? "#06D6A0" : "#059669" },
             ]}
             height={300}
           />
@@ -319,53 +319,53 @@ export default function BillingCyclePage() {
             <thead>
               <tr className="text-[10px] text-[var(--text-muted)] border-b border-[var(--border)]">
                 <th className="pb-2 text-left font-medium w-40">Metric</th>
-                <th className="pb-2 text-right font-medium">Cycle 4th</th>
-                <th className="pb-2 text-right font-medium">Cycle 26th</th>
+                <th className="pb-2 text-right font-medium">Cycle 10th</th>
+                <th className="pb-2 text-right font-medium">Cycle 16th</th>
                 <th className="pb-2 text-right font-medium">Combined</th>
               </tr>
             </thead>
             <tbody className="text-[var(--text-secondary)]">
               <tr className="border-b border-[var(--border)]/30">
                 <td className="py-2 font-medium">Active Accounts</td>
-                <td className="py-2 text-right font-mono">{(cycle4?.total_accounts ?? 0).toLocaleString()}</td>
-                <td className="py-2 text-right font-mono">{(cycle26?.total_accounts ?? 0).toLocaleString()}</td>
+                <td className="py-2 text-right font-mono">{(cycle10?.total_accounts ?? 0).toLocaleString()}</td>
+                <td className="py-2 text-right font-mono">{(cycle16?.total_accounts ?? 0).toLocaleString()}</td>
                 <td className="py-2 text-right font-mono font-semibold text-[var(--text-primary)]">{totalActive.toLocaleString()}</td>
               </tr>
               <tr className="border-b border-[var(--border)]/30">
                 <td className="py-2 font-medium">With Balance</td>
-                <td className="py-2 text-right font-mono">{(cycle4?.with_balance ?? 0).toLocaleString()}</td>
-                <td className="py-2 text-right font-mono">{(cycle26?.with_balance ?? 0).toLocaleString()}</td>
+                <td className="py-2 text-right font-mono">{(cycle10?.with_balance ?? 0).toLocaleString()}</td>
+                <td className="py-2 text-right font-mono">{(cycle16?.with_balance ?? 0).toLocaleString()}</td>
                 <td className="py-2 text-right font-mono font-semibold text-[var(--text-primary)]">{totalWithBalance.toLocaleString()}</td>
               </tr>
               <tr className="border-b border-[var(--border)]/30">
                 <td className="py-2 font-medium">Revolving</td>
-                <td className="py-2 text-right font-mono">{(cycle4?.revolving ?? 0).toLocaleString()}</td>
-                <td className="py-2 text-right font-mono">{(cycle26?.revolving ?? 0).toLocaleString()}</td>
+                <td className="py-2 text-right font-mono">{(cycle10?.revolving ?? 0).toLocaleString()}</td>
+                <td className="py-2 text-right font-mono">{(cycle16?.revolving ?? 0).toLocaleString()}</td>
                 <td className="py-2 text-right font-mono font-semibold text-[var(--text-primary)]">{totalRevolving.toLocaleString()}</td>
               </tr>
               <tr className="border-b border-[var(--border)]/30">
                 <td className="py-2 font-medium">Revolve Rate</td>
-                <td className="py-2 text-right font-mono">{(cycle4?.revolve_rate ?? 0).toFixed(1)}%</td>
-                <td className="py-2 text-right font-mono">{(cycle26?.revolve_rate ?? 0).toFixed(1)}%</td>
+                <td className="py-2 text-right font-mono">{(cycle10?.revolve_rate ?? 0).toFixed(1)}%</td>
+                <td className="py-2 text-right font-mono">{(cycle16?.revolve_rate ?? 0).toFixed(1)}%</td>
                 <td className="py-2 text-right font-mono font-semibold text-[var(--text-primary)]">{overallRevolveRate.toFixed(1)}%</td>
               </tr>
               <tr className="border-b border-[var(--border)]/30">
                 <td className="py-2 font-medium">Avg Utilization</td>
-                <td className="py-2 text-right font-mono">{(cycle4?.avg_utilization ?? 0).toFixed(1)}%</td>
-                <td className="py-2 text-right font-mono">{(cycle26?.avg_utilization ?? 0).toFixed(1)}%</td>
+                <td className="py-2 text-right font-mono">{(cycle10?.avg_utilization ?? 0).toFixed(1)}%</td>
+                <td className="py-2 text-right font-mono">{(cycle16?.avg_utilization ?? 0).toFixed(1)}%</td>
                 <td className="py-2 text-right font-mono font-semibold text-[var(--text-primary)]">{avgUtilization.toFixed(1)}%</td>
               </tr>
               <tr className="border-b border-[var(--border)]/30">
                 <td className="py-2 font-medium">Avg Balance (IDR)</td>
-                <td className="py-2 text-right font-mono">Rp {((cycle4?.avg_balance_idr ?? 0) / 1e6).toFixed(1)}M</td>
-                <td className="py-2 text-right font-mono">Rp {((cycle26?.avg_balance_idr ?? 0) / 1e6).toFixed(1)}M</td>
+                <td className="py-2 text-right font-mono">Rp {((cycle10?.avg_balance_idr ?? 0) / 1e6).toFixed(1)}M</td>
+                <td className="py-2 text-right font-mono">Rp {((cycle16?.avg_balance_idr ?? 0) / 1e6).toFixed(1)}M</td>
                 <td className="py-2 text-right font-mono font-semibold text-[var(--text-primary)]">Rp {(avgBalance / 1e6).toFixed(1)}M</td>
               </tr>
               <tr>
                 <td className="py-2 font-medium">Avg DPD (delinquent only)</td>
-                <td className="py-2 text-right font-mono">{(cycle4?.avg_dpd ?? 0).toFixed(1)}</td>
-                <td className="py-2 text-right font-mono">{(cycle26?.avg_dpd ?? 0).toFixed(1)}</td>
-                <td className="py-2 text-right font-mono font-semibold text-[var(--text-primary)]">{(((cycle4?.avg_dpd ?? 0) + (cycle26?.avg_dpd ?? 0)) / 2).toFixed(1)}</td>
+                <td className="py-2 text-right font-mono">{(cycle10?.avg_dpd ?? 0).toFixed(1)}</td>
+                <td className="py-2 text-right font-mono">{(cycle16?.avg_dpd ?? 0).toFixed(1)}</td>
+                <td className="py-2 text-right font-mono font-semibold text-[var(--text-primary)]">{(((cycle10?.avg_dpd ?? 0) + (cycle16?.avg_dpd ?? 0)) / 2).toFixed(1)}</td>
               </tr>
             </tbody>
           </table>

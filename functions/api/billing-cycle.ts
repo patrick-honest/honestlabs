@@ -11,7 +11,7 @@ async function queryBillingCycle(startDate: string, endDate: string, env: Env, f
     //   avg_utilization, avg_balance_idr, avg_limit_idr, avg_dpd
     runQuery(
       `SELECT
-        EXTRACT(DAY FROM f9_dw004_stmt_due_dt) AS cycle_day,
+        CAST(f9_dw004_cycc_day AS INT64) AS cycle_day,
         COUNT(DISTINCT p9_dw004_loc_acct) AS total_accounts,
         COUNTIF(f9_dw004_clo_bal > 0) AS with_balance,
         COUNTIF(f9_dw004_clo_bal > 0 AND f9_dw004_curr_min_rpmt > 0) AS revolving,
@@ -46,7 +46,7 @@ async function queryBillingCycle(startDate: string, endDate: string, env: Env, f
       `WITH monthly AS (
         SELECT
           FORMAT_DATE('%Y-%m', f9_dw004_bus_dt) AS month,
-          EXTRACT(DAY FROM f9_dw004_stmt_due_dt) AS cycle_day,
+          CAST(f9_dw004_cycc_day AS INT64) AS cycle_day,
           p9_dw004_loc_acct,
           ROW_NUMBER() OVER (
             PARTITION BY p9_dw004_loc_acct, FORMAT_DATE('%Y-%m', f9_dw004_bus_dt)
@@ -81,7 +81,7 @@ async function queryBillingCycle(startDate: string, endDate: string, env: Env, f
     runQuery(
       `WITH util AS (
         SELECT
-          EXTRACT(DAY FROM f9_dw004_stmt_due_dt) AS cycle_day,
+          CAST(f9_dw004_cycc_day AS INT64) AS cycle_day,
           CASE
             WHEN f9_dw004_loc_lmt <= 0 OR f9_dw004_clo_bal <= 0 THEN 'No Balance'
             WHEN f9_dw004_clo_bal * 100.0 / f9_dw004_loc_lmt <= 25 THEN '0-25%'
@@ -119,7 +119,7 @@ async function queryBillingCycle(startDate: string, endDate: string, env: Env, f
     runQuery(
       `WITH dpd AS (
         SELECT
-          EXTRACT(DAY FROM f9_dw004_stmt_due_dt) AS cycle_day,
+          CAST(f9_dw004_cycc_day AS INT64) AS cycle_day,
           CASE
             WHEN f9_dw004_curr_dpd = 0 THEN 'Current'
             WHEN f9_dw004_curr_dpd BETWEEN 1 AND 30 THEN '1-30 DPD'
@@ -157,7 +157,7 @@ async function queryBillingCycle(startDate: string, endDate: string, env: Env, f
       `WITH monthly AS (
         SELECT
           FORMAT_DATE('%Y-%m', f9_dw004_bus_dt) AS month,
-          EXTRACT(DAY FROM f9_dw004_stmt_due_dt) AS cycle_day,
+          CAST(f9_dw004_cycc_day AS INT64) AS cycle_day,
           p9_dw004_loc_acct,
           f9_dw004_clo_bal,
           f9_dw004_loc_lmt,
@@ -190,7 +190,7 @@ async function queryBillingCycle(startDate: string, endDate: string, env: Env, f
     runQuery(
       `WITH pay_behavior AS (
         SELECT
-          EXTRACT(DAY FROM f9_dw004_stmt_due_dt) AS cycle_day,
+          CAST(f9_dw004_cycc_day AS INT64) AS cycle_day,
           CASE
             WHEN f9_dw004_clo_bal <= 0 THEN 'Paid in Full'
             WHEN f9_dw004_curr_min_rpmt <= 0 AND f9_dw004_clo_bal > 0 THEN 'Below Min Due'
