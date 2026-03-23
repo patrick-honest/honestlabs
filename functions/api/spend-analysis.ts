@@ -334,7 +334,7 @@ async function querySpendAnalysis(startDate: string, endDate: string, env: Env, 
               ELSE 'Offline'
             END AS channel,
             CAST(t.f9_dw007_amt_req AS FLOAT64)/100 AS amount
-          ) ORDER BY t.f9_dw007_dt, t.f9_dw007_txn_seq LIMIT 1)[OFFSET(0)] AS first
+          ) ORDER BY t.f9_dw007_dt, t.p9_dw007_seq LIMIT 1)[OFFSET(0)] AS first
         FROM ${TABLES.authorized_transaction} t
         INNER JOIN card_map cm ON t.f9_dw007_prin_crn = cm.crn
         WHERE (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '' OR t.fx_dw007_stat = ' ')
