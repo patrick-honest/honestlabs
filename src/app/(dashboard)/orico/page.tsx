@@ -6,7 +6,7 @@ import { ChartCard } from "@/components/dashboard/chart-card";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { DashboardLineChart } from "@/components/charts/line-chart";
-import { DashboardBarChart } from "@/components/charts/bar-chart";
+
 import { Header } from "@/components/layout/header";
 import { usePeriod } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
@@ -973,14 +973,13 @@ export default function OricoPageContent() {
               onRefresh={handleRefresh}
               query={Q_APPROVED}
             >
-              <DashboardBarChart
+              <DashboardLineChart
                 data={pApprovedBySegment}
-                bars={[
+                lines={[
                   { key: "Regular", color: "#3b82f6", label: "Regular" },
                   { key: "RP1", color: "#8b5cf6", label: "RP1" },
                   { key: "AOF", color: "#06b6d4", label: "AOF" },
                 ]}
-                stacked
                 height={320}
               />
               <ChartInsights insights={approvedInsights} />
@@ -996,14 +995,13 @@ export default function OricoPageContent() {
               query={Q_ACCEPTED}
             >
               <div className="space-y-4">
-                <DashboardBarChart
+                <DashboardLineChart
                   data={pAcceptedCumulative}
-                  bars={[
+                  lines={[
                     { key: "Regular", color: "#3b82f6", label: "Regular" },
                     { key: "RP1", color: "#8b5cf6", label: "RP1" },
                     { key: "AOF", color: "#06b6d4", label: "AOF" },
                   ]}
-                  stacked
                   height={280}
                 />
                 <DashboardLineChart
@@ -1028,14 +1026,13 @@ export default function OricoPageContent() {
               onRefresh={handleRefresh}
               query={Q_ACTIVE}
             >
-              <DashboardBarChart
+              <DashboardLineChart
                 data={pActivePortfolio}
-                bars={[
+                lines={[
                   { key: "Regular", color: "#3b82f6", label: "Regular" },
                   { key: "RP1", color: "#8b5cf6", label: "RP1" },
                   { key: "AOF", color: "#06b6d4", label: "AOF" },
                 ]}
-                stacked
                 height={320}
               />
               <ChartInsights insights={activePortfolioInsights} />
@@ -1196,9 +1193,9 @@ export default function OricoPageContent() {
                 dataRange={DATA_RANGE}
                 onRefresh={handleRefresh}
               >
-                <DashboardBarChart
+                <DashboardLineChart
                   data={pRp1Topup}
-                  bars={[
+                  lines={[
                     { key: "totalRp1", color: "#475569", label: "Total RP1" },
                     { key: "topupRp1", color: "#8b5cf6", label: "Topped Up" },
                   ]}
@@ -1228,9 +1225,9 @@ export default function OricoPageContent() {
                 {/* Regular */}
                 <div>
                   <h4 className="text-xs font-semibold text-[var(--text-secondary)] mb-2 uppercase tracking-wider">Regular</h4>
-                  <DashboardBarChart
+                  <DashboardLineChart
                     data={pOnboardingFunnel}
-                    bars={[
+                    lines={[
                       { key: "approvedReg", color: "#3b82f6", label: "Approved" },
                       { key: "acceptedReg", color: "#22c55e", label: "Accepted" },
                     ]}
@@ -1240,9 +1237,9 @@ export default function OricoPageContent() {
                 {/* RP1 */}
                 <div>
                   <h4 className="text-xs font-semibold text-[var(--text-secondary)] mb-2 uppercase tracking-wider">RP1</h4>
-                  <DashboardBarChart
+                  <DashboardLineChart
                     data={pOnboardingFunnel}
-                    bars={[
+                    lines={[
                       { key: "approvedRP1", color: "#8b5cf6", label: "Approved" },
                       { key: "acceptedRP1", color: "#22c55e", label: "Accepted" },
                     ]}
@@ -1252,9 +1249,9 @@ export default function OricoPageContent() {
                 {/* AOF */}
                 <div>
                   <h4 className="text-xs font-semibold text-[var(--text-secondary)] mb-2 uppercase tracking-wider">AOF</h4>
-                  <DashboardBarChart
+                  <DashboardLineChart
                     data={pOnboardingFunnel}
-                    bars={[
+                    lines={[
                       { key: "approvedAOF", color: "#06b6d4", label: "Approved" },
                       { key: "acceptedAOF", color: "#22c55e", label: "Accepted" },
                     ]}

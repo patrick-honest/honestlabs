@@ -35,19 +35,19 @@ export const navigation: NavItem[] = [
     divider: "Deep Dive", dividerTKey: "deepDive",
     children: [
       { label: "Acquisition", tKey: "acquisition", href: "/deep-dive/acquisition", icon: "UserPlus" },
-      { label: "Activation", tKey: "activation", href: "/deep-dive/activation", icon: "Zap" },
       { label: "Referrals", tKey: "referrals", href: "/deep-dive/referral", icon: "Users" },
       { label: "Channel Quality", tKey: "channelQuality", href: "/channel-quality", icon: "Target" },
     ],
   },
 
-  // ── Deep Dive: Revenue ──
+  // ── Deep Dive: Spend & Revenue ──
   {
     label: "Spend & Revenue", tKey: "spendRevenue",
     href: "#",
     icon: "Wallet",
     children: [
       { label: "Spend", tKey: "spend", href: "/deep-dive/spend", icon: "Wallet" },
+      { label: "Activation", tKey: "activation", href: "/deep-dive/activation", icon: "Zap" },
       { label: "Txn Auth", tKey: "txnAuth", href: "/deep-dive/transaction-auth", icon: "ShieldCheck" },
       { label: "Points", tKey: "points", href: "/deep-dive/points-program", icon: "Star" },
       { label: "Credit Line", tKey: "creditLine", href: "/deep-dive/credit-line", icon: "TrendingUp" },
