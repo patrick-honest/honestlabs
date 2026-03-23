@@ -390,7 +390,7 @@ export default function QrisExperimentPage() {
   const { data: apiData, isLoading } = useSWR<ApiData>(
     apiUrl,
     fetcher,
-    { revalidateOnFocus: false, dedupingInterval: 300_000 },
+    { revalidateOnFocus: false, dedupingInterval: 30_000 },
   );
 
   const { test, control } = useMemo(() => {

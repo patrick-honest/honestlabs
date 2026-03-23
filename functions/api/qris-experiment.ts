@@ -1,7 +1,6 @@
 import { runQuery, TABLES } from "../_shared/bigquery-client";
-import { createHandler } from "../_shared/handler";
 import type { Env } from "../_shared/bigquery-auth";
-import type { ParsedFilters } from "../_shared/filters";
+import { getCached, setCached, cacheKey } from "../_shared/cache";
 
 // ---------------------------------------------------------------------------
 // Revenue rate constants
@@ -50,10 +49,10 @@ async function queryQrisExperiment(
   startDate: string,
   endDate: string,
   env: Env,
-  _filters: ParsedFilters,
 ) {
-  // The experiment has a fixed start date; use the earlier of global startDate or experiment start
+  // Cohort/contamination always uses experiment start; transaction filters use the user's selected period
   const experimentStart = "2026-02-09";
+  // Clamp startDate: can't look before experiment start for experiment data
   const effectiveStart = startDate < experimentStart ? experimentStart : startDate;
 
   const [
@@ -633,8 +632,44 @@ async function queryQrisExperiment(
   };
 }
 
-export const onRequest = createHandler({
-  section: "qris-experiment",
-  queryFn: queryQrisExperiment,
-  cacheTtl: 1800,
-});
+/**
+ * Custom handler for QRIS experiment — does NOT extend startDate backwards.
+ * The experiment has a fixed start date (2026-02-09); the user's selected
+ * period should directly filter transactions, not be extended for chart context.
+ */
+export async function onRequest(context: { request: Request; env: Env }): Promise<Response> {
+  const { request, env } = context;
+  const url = new URL(request.url);
+  const startDate = url.searchParams.get("startDate");
+  const endDate = url.searchParams.get("endDate");
+
+  if (!startDate || !endDate) {
+    return new Response(
+      JSON.stringify({ error: "Missing startDate or endDate query parameters" }),
+      { status: 400, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  try {
+    const key = cacheKey("qris-experiment", "query", `${startDate}:${endDate}`);
+    const cached = await getCached<unknown>(key, env.KPI_CACHE);
+    if (cached && cached.fresh) {
+      return new Response(JSON.stringify(cached.data), {
+        headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=300", "X-Cache": "HIT-FRESH" },
+      });
+    }
+
+    const result = await queryQrisExperiment(startDate, endDate, env);
+    await setCached(key, result, env.KPI_CACHE, 1800);
+
+    return new Response(JSON.stringify(result), {
+      headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=300", "X-Cache": "MISS" },
+    });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    return new Response(
+      JSON.stringify({ error: "Failed to fetch qris-experiment data", message: msg }),
+      { status: 500, headers: { "Content-Type": "application/json" } },
+    );
+  }
+}
