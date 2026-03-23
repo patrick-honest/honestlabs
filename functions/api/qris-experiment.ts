@@ -359,7 +359,7 @@ async function queryQrisExperiment(
         SELECT a.grp,
           SUM(CAST(d.f9_dw004_tot_int AS FLOAT64) / 100) AS interest_idr,
           SUM(CAST(d.f9_dw004_bil_fee_chrg_1 AS FLOAT64) / 100) AS admin_fees_idr,
-          SUM(CAST(d.f9_dw004_bil_chrg_fee AS FLOAT64) / 100) AS charge_fees_idr
+          SUM(CAST(d.f9_dw004_bil_fee_chrg_2 AS FLOAT64) / 100) AS late_penalty_fees_idr
         FROM acct_map a
         JOIN ${TABLES.financial_account_updates} d ON d.p9_dw004_loc_acct = a.loc_acct
         WHERE d.f9_dw004_bus_dt = (
@@ -388,13 +388,13 @@ async function queryQrisExperiment(
         cs.sz AS cohort_size,
         ROUND(f.interest_idr, 0) AS interest_idr,
         ROUND(f.admin_fees_idr, 0) AS admin_fees_idr,
-        ROUND(f.charge_fees_idr, 0) AS charge_fees_idr,
+        ROUND(f.late_penalty_fees_idr, 0) AS late_penalty_fees_idr,
         tr.card_interchange_idr,
         tr.qris_revenue_idr,
-        ROUND(f.interest_idr + f.admin_fees_idr + f.charge_fees_idr, 0) AS fee_revenue_idr,
+        ROUND(f.interest_idr + f.admin_fees_idr + f.late_penalty_fees_idr, 0) AS fee_revenue_idr,
         ROUND(tr.card_interchange_idr + tr.qris_revenue_idr, 0) AS txn_revenue_idr,
-        ROUND(f.interest_idr + f.admin_fees_idr + f.charge_fees_idr + tr.card_interchange_idr + tr.qris_revenue_idr, 0) AS total_revenue_idr,
-        ROUND((f.interest_idr + f.admin_fees_idr + f.charge_fees_idr + tr.card_interchange_idr + tr.qris_revenue_idr) / cs.sz, 0) AS rpu_idr
+        ROUND(f.interest_idr + f.admin_fees_idr + f.late_penalty_fees_idr + tr.card_interchange_idr + tr.qris_revenue_idr, 0) AS total_revenue_idr,
+        ROUND((f.interest_idr + f.admin_fees_idr + f.late_penalty_fees_idr + tr.card_interchange_idr + tr.qris_revenue_idr) / cs.sz, 0) AS rpu_idr
       FROM financials f
       JOIN txn_revenue tr ON f.grp = tr.grp
       JOIN cohort_size cs ON f.grp = cs.grp
@@ -435,7 +435,7 @@ async function queryQrisExperiment(
         SELECT a.grp,
           ROUND(SUM(CAST(d.f9_dw004_bil_fee_chrg_1 AS FLOAT64) / 100), 0) AS admin_fee_revenue,
           ROUND(SUM(CAST(d.f9_dw004_tot_int AS FLOAT64) / 100), 0) AS interest_revenue,
-          ROUND(SUM(CAST(d.f9_dw004_bil_chrg_fee AS FLOAT64) / 100), 0) AS charge_fee_revenue
+          ROUND(SUM(CAST(d.f9_dw004_bil_fee_chrg_2 AS FLOAT64) / 100), 0) AS late_penalty_fee_revenue
         FROM acct_map a
         JOIN ${TABLES.financial_account_updates} d ON d.p9_dw004_loc_acct = a.loc_acct
         WHERE d.f9_dw004_bus_dt = (
@@ -464,12 +464,12 @@ async function queryQrisExperiment(
         cs.sz AS cohort_size,
         f.admin_fee_revenue,
         f.interest_revenue,
-        f.charge_fee_revenue,
+        f.late_penalty_fee_revenue,
         tr.card_interchange_revenue,
         tr.qris_mdr_revenue,
-        ROUND(f.admin_fee_revenue + f.interest_revenue + f.charge_fee_revenue
+        ROUND(f.admin_fee_revenue + f.interest_revenue + f.late_penalty_fee_revenue
           + tr.card_interchange_revenue + tr.qris_mdr_revenue, 0) AS total_revenue,
-        ROUND((f.admin_fee_revenue + f.interest_revenue + f.charge_fee_revenue
+        ROUND((f.admin_fee_revenue + f.interest_revenue + f.late_penalty_fee_revenue
           + tr.card_interchange_revenue + tr.qris_mdr_revenue) / cs.sz, 0) AS arpu
       FROM financials f
       JOIN txn_rev tr ON f.grp = tr.grp
@@ -519,7 +519,7 @@ async function queryQrisExperiment(
         SELECT md.month, a.grp, cs.sz AS cohort_size,
           ROUND(SUM(CAST(d.f9_dw004_tot_int AS FLOAT64) / 100), 0) AS interest_idr,
           ROUND(SUM(CAST(d.f9_dw004_bil_fee_chrg_1 AS FLOAT64) / 100), 0) AS admin_fees_idr,
-          ROUND(SUM(CAST(d.f9_dw004_bil_chrg_fee AS FLOAT64) / 100), 0) AS charge_fees_idr,
+          ROUND(SUM(CAST(d.f9_dw004_bil_fee_chrg_2 AS FLOAT64) / 100), 0) AS late_penalty_fees_idr,
           COUNTIF(CAST(d.f9_dw004_os_bill_amt AS FLOAT64) > 0) AS with_balance,
           COUNTIF(CAST(d.f9_dw004_os_bill_amt AS FLOAT64) > CAST(d.f9_dw004_curr_min_rpmt AS FLOAT64)
             AND CAST(d.f9_dw004_curr_min_rpmt AS FLOAT64) > 0) AS revolvers
@@ -549,13 +549,13 @@ async function queryQrisExperiment(
         f.month, f.grp, f.cohort_size,
         f.revolvers,
         ROUND(SAFE_DIVIDE(f.revolvers, f.with_balance) * 100, 1) AS revolve_rate_pct,
-        ROUND(SAFE_DIVIDE(f.interest_idr + f.admin_fees_idr + f.charge_fees_idr, f.cohort_size), 0) AS fee_rpu,
+        ROUND(SAFE_DIVIDE(f.interest_idr + f.admin_fees_idr + f.late_penalty_fees_idr, f.cohort_size), 0) AS fee_rpu,
         ROUND(SAFE_DIVIDE(COALESCE(tx.card_interchange_idr, 0) + COALESCE(tx.qris_revenue_idr, 0), f.cohort_size), 0) AS txn_rpu,
         ROUND(SAFE_DIVIDE(
-          f.interest_idr + f.admin_fees_idr + f.charge_fees_idr
+          f.interest_idr + f.admin_fees_idr + f.late_penalty_fees_idr
           + COALESCE(tx.card_interchange_idr, 0) + COALESCE(tx.qris_revenue_idr, 0),
           f.cohort_size), 0) AS total_rpu,
-        f.interest_idr, f.admin_fees_idr, f.charge_fees_idr,
+        f.interest_idr, f.admin_fees_idr, f.late_penalty_fees_idr,
         COALESCE(tx.card_interchange_idr, 0) AS card_interchange_idr,
         COALESCE(tx.qris_revenue_idr, 0) AS qris_revenue_idr
       FROM monthly_fees f

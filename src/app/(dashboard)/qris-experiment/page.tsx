@@ -114,7 +114,7 @@ const actionItems: ActionItem[] = [
     id: "qris-3",
     priority: "positive",
     action: "Fee and interest revenue is +5.4% higher for Test group.",
-    detail: "Admin fees +4.3%, charge fees +5.1%, interest +18.9%. Higher transaction activity generates more fee income. This partially offsets interchange losses but does not close the gap.",
+    detail: "Admin fees +4.3%, late/penalty fees +5.1%, interest +18.9%. Higher transaction activity generates more fee income. This partially offsets interchange losses but does not close the gap.",
   },
   {
     id: "qris-4",
@@ -308,7 +308,7 @@ interface ProfitabilityRow {
   cohort_size: number;
   admin_fee_revenue: number;
   interest_revenue: number;
-  charge_fee_revenue: number;
+  late_penalty_fee_revenue: number;
   card_interchange_revenue: number;
   qris_mdr_revenue: number;
   total_revenue: number;
@@ -347,7 +347,7 @@ interface RevenueTrajectoryRow {
   total_rpu: number;
   interest_idr: number;
   admin_fees_idr: number;
-  charge_fees_idr: number;
+  late_penalty_fees_idr: number;
   card_interchange_idr: number;
   qris_revenue_idr: number;
 }
@@ -1372,7 +1372,7 @@ export default function QrisExperimentPage() {
             { label: "Revolve Rate", c: `${ctrl.revolve_rate_pct}%`, t: `${tst.revolve_rate_pct}%`, d: `${(tst.revolve_rate_pct-ctrl.revolve_rate_pct).toFixed(1)}pp` },
             { label: "Avg Balance", c: fmtI(ctrl.avg_balance_idr), t: fmtI(tst.avg_balance_idr), d: dlt(tst.avg_balance_idr, ctrl.avg_balance_idr) },
             { label: "Admin Fees / 1K Users", c: fmtI(normC(ctrl.total_fees_idr)), t: fmtI(normT(tst.total_fees_idr)), d: dlt(normT(tst.total_fees_idr), normC(ctrl.total_fees_idr)) },
-            { label: "Charge Fees / 1K Users", c: fmtI(normC(ctrl.total_chrg_fee_idr)), t: fmtI(normT(tst.total_chrg_fee_idr)), d: dlt(normT(tst.total_chrg_fee_idr), normC(ctrl.total_chrg_fee_idr)) },
+            { label: "Late/Penalty Fees / 1K Users", c: fmtI(normC(ctrl.total_chrg_fee_idr)), t: fmtI(normT(tst.total_chrg_fee_idr)), d: dlt(normT(tst.total_chrg_fee_idr), normC(ctrl.total_chrg_fee_idr)) },
             { label: "Total Fee Revenue / 1K", c: fmtI(normC(ctrl.total_fees_idr+ctrl.total_chrg_fee_idr)), t: fmtI(normT(tst.total_fees_idr+tst.total_chrg_fee_idr)), d: dlt(normT(tst.total_fees_idr+tst.total_chrg_fee_idr), normC(ctrl.total_fees_idr+ctrl.total_chrg_fee_idr)) },
           ];
 
@@ -1426,7 +1426,7 @@ export default function QrisExperimentPage() {
           const profRows = [
             { label: "Admin Fee Revenue", t: tst.admin_fee_revenue, c: ctrl.admin_fee_revenue },
             { label: "Interest Revenue", t: tst.interest_revenue, c: ctrl.interest_revenue },
-            { label: "Charge Fee Revenue", t: tst.charge_fee_revenue, c: ctrl.charge_fee_revenue },
+            { label: "Late/Penalty Fee Revenue", t: tst.late_penalty_fee_revenue, c: ctrl.late_penalty_fee_revenue },
             { label: "Card Interchange @ 1.6%", t: tst.card_interchange_revenue, c: ctrl.card_interchange_revenue },
             { label: "QRIS MDR @ 0.2035%", t: tst.qris_mdr_revenue, c: ctrl.qris_mdr_revenue },
             { label: "Total Revenue", t: tst.total_revenue, c: ctrl.total_revenue },
@@ -1547,7 +1547,7 @@ export default function QrisExperimentPage() {
               {/* Monthly RPU comparison chart */}
               <ChartCard
                 title={`Monthly RPU: Test vs Control (${currency === "USD" ? "USD" : "Rp K"})`}
-                subtitle="Per-user revenue by month. Fee RPU = admin fees + interest + charge fees. Txn RPU = card interchange + QRIS MDR."
+                subtitle="Per-user revenue by month. Fee RPU = admin fees + interest + late/penalty fees. Txn RPU = card interchange + QRIS MDR."
                 asOf={AS_OF}
                 dataRange={{ start: chartData[0]?.month ?? '', end: chartData[chartData.length - 1]?.month ?? '' }}
               >
