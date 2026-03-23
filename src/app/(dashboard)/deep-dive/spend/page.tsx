@@ -135,7 +135,7 @@ export default function SpendPage() {
   // Weekly spend trend data from BigQuery
   const weeklyTrend = useMemo(() => {
     if (!spendAnalysis?.weeklySpendTrend?.length) return null;
-    const raw = (spendAnalysis.weeklySpendTrend as { week_start: string; eligible_count: number; transactor_count: number; total_transactions: number; total_spend_idr: number; spend_active_rate: number; online_spend_idr: number; offline_spend_idr: number; qris_spend_idr: number; avg_spend_per_txn_idr: number }[]).map(r => ({
+    const raw = (spendAnalysis.weeklySpendTrend as { week_start: string; eligible_count: number; transactor_count: number; total_transactions: number; total_transactors: number; total_spend_idr: number; spend_active_rate: number; online_spend_idr: number; offline_spend_idr: number; qris_spend_idr: number; avg_spend_per_txn_idr: number }[]).map(r => ({
       date: r.week_start.replace("2025-", "").replace("2026-", "").slice(0, 5),
       eligible: r.eligible_count,
       transactors: r.transactor_count,
@@ -145,7 +145,7 @@ export default function SpendPage() {
       offline: r.offline_spend_idr,
       qris: r.qris_spend_idr,
       avgTicket: r.avg_spend_per_txn_idr,
-      txnPerUser: r.total_transactions / Math.max(r.eligible_count, 1),
+      txnPerUser: r.total_transactions / Math.max(r.total_transactors, 1),
     }));
     return raw;
   }, [spendAnalysis]);
