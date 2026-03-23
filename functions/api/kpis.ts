@@ -419,10 +419,14 @@ export async function onRequest(context: FnContext): Promise<Response> {
     });
   } catch (error) {
     console.error("KPI query error:", error);
+    const hasRefresh = !!(env.GCP_REFRESH_TOKEN && env.GCP_CLIENT_ID && env.GCP_CLIENT_SECRET);
+    const hasSA = !!(env.GCP_SERVICE_ACCOUNT_EMAIL && env.GCP_PRIVATE_KEY);
+    const hasToken = !!env.GCP_ACCESS_TOKEN;
     return new Response(
       JSON.stringify({
         error: "Failed to fetch KPI data",
         message: error instanceof Error ? error.message : "Unknown error",
+        authMethod: hasRefresh ? "refresh_token" : hasSA ? "service_account" : hasToken ? "access_token" : "none",
       }),
       { status: 500, headers: { "Content-Type": "application/json" } },
     );
