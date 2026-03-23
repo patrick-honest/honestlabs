@@ -94,7 +94,23 @@ export function createHandler(options: HandlerOptions) {
 
       // Query BigQuery with filters
       // Pass rawStartDate so queries can use it for KPI summaries (non-extended)
-      const result = await queryFn(startDate, endDate, env, filters, rawStartDate ?? startDate);
+      const result = await queryFn(startDate, endDate, env, filters, rawStartDate ?? startDate) as Record<string, unknown>;
+
+      // Run comparison period queries if prevStartDate/prevEndDate provided
+      const prevStart = url.searchParams.get("prevStartDate");
+      const prevEnd = url.searchParams.get("prevEndDate");
+      if (prevStart && prevEnd && prevStart !== rawStartDate) {
+        try {
+          const prevExtended = extendStartDate(prevStart, period);
+          const prevResult = await queryFn(prevExtended, prevEnd, env, filters, prevStart) as Record<string, unknown>;
+          // Merge prev results with "prev_" prefix
+          for (const [k, v] of Object.entries(prevResult)) {
+            result[`prev_${k}`] = v;
+          }
+        } catch {
+          // Comparison query failure shouldn't break the main response
+        }
+      }
 
       // Cache unfiltered results only
       if (!hasFilters) {

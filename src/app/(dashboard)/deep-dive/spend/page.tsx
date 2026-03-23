@@ -150,6 +150,32 @@ export default function SpendPage() {
     return raw;
   }, [spendAnalysis]);
 
+  // Previous period weekly trend (for comparison overlay)
+  const prevWeeklyTrend = useMemo(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const prev = (spendAnalysis as any)?.prev_weeklySpendTrend;
+    if (!prev?.length) return undefined;
+    return prev.map((r: { week_start: string; eligible_count: number; transactor_count: number; total_transactions: number; total_transactors: number; total_spend_idr: number; spend_active_rate: number; online_spend_idr: number; offline_spend_idr: number; qris_spend_idr: number; avg_spend_per_txn_idr: number }) => ({
+      date: r.week_start.replace("2025-", "").replace("2026-", "").slice(0, 5),
+      eligible: r.eligible_count,
+      transactors: r.transactor_count,
+      rate: r.spend_active_rate,
+      totalSpend: r.total_spend_idr,
+      online: r.online_spend_idr,
+      offline: r.offline_spend_idr,
+      qris: r.qris_spend_idr,
+      avgTicket: r.avg_spend_per_txn_idr,
+      txnPerUser: r.total_transactions / Math.max(r.total_transactors, 1),
+    }));
+  }, [spendAnalysis]);
+
+  // Comparison period label
+  const { prevStartDate, prevEndDate } = useApiParams();
+  const { comparisonMode } = usePeriod();
+  const prevLabel = comparisonMode !== "none"
+    ? `${prevStartDate} to ${prevEndDate}`
+    : undefined;
+
   // Period-level summary (cumulative SAR for entire period)
   const periodSummary = spendAnalysis?.periodSummary as {
     eligible_count: number; transactor_count: number; total_transactions: number;
@@ -321,6 +347,8 @@ export default function SpendPage() {
                   xAxisKey="date"
                   valueType="percent"
                   height={220}
+                  prevPeriodData={prevWeeklyTrend ? aggregateByIncrement(prevWeeklyTrend, increment, "date") : undefined}
+                  prevPeriodLabel={prevLabel}
                 />
               )}
             </ChartCard>
@@ -340,6 +368,8 @@ export default function SpendPage() {
                   xAxisKey="date"
                   valueType="currency"
                   height={220}
+                  prevPeriodData={prevWeeklyTrend ? aggregateByIncrement(prevWeeklyTrend, increment, "date") : undefined}
+                  prevPeriodLabel={prevLabel}
                 />
               )}
             </ChartCard>
@@ -359,6 +389,8 @@ export default function SpendPage() {
                   xAxisKey="date"
                   valueType="currency"
                   height={220}
+                  prevPeriodData={prevWeeklyTrend ? aggregateByIncrement(prevWeeklyTrend, increment, "date") : undefined}
+                  prevPeriodLabel={prevLabel}
                 />
               )}
             </ChartCard>
@@ -377,6 +409,8 @@ export default function SpendPage() {
                   lines={[{ key: "txnPerUser", color: "#8b5cf6", label: "Txn/User" }]}
                   xAxisKey="date"
                   height={220}
+                  prevPeriodData={prevWeeklyTrend ? aggregateByIncrement(prevWeeklyTrend, increment, "date") : undefined}
+                  prevPeriodLabel={prevLabel}
                 />
               )}
             </ChartCard>
