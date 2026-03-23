@@ -324,35 +324,35 @@ function UnifiedTimeSelector({
               </button>
             </div>
 
-            {/* Quick selections — 3 column grid */}
-            <div className="mt-2.5 pt-2.5 border-t border-[var(--border)]">
-              <div className="grid grid-cols-3 gap-0.5">
+            {/* Quick selections — Rolling vs Fixed side by side */}
+            <div className="mt-2.5 pt-2.5 border-t border-[var(--border)] flex gap-3">
+              {/* Left column: Rolling windows */}
+              <div className="flex-1 min-w-0">
+                <p className={cn("text-[8px] font-semibold uppercase tracking-wider mb-1 px-1", isDark ? "text-[#7C4DFF]/60" : "text-[#D00083]/50")}>Rolling</p>
                 {QUICK_DAYS.map((q) => (
                   <button
                     key={q.label}
                     onClick={() => handleQuickDays(q.days)}
-                    className={cn(
-                      "rounded-md px-2 py-1.5 text-[10px] transition-colors text-left",
-                      "text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
-                    )}
+                    className="flex w-full items-center rounded-md px-2 py-1 text-[10px] transition-colors text-left text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
                   >
                     {q.label}
                   </button>
                 ))}
               </div>
 
-              <div className="grid grid-cols-3 gap-0.5 mt-1 pt-1 border-t border-[var(--border)]/50">
+              <div className="w-px bg-[var(--border)]" />
+
+              {/* Right column: Fixed periods */}
+              <div className="flex-1 min-w-0">
+                <p className={cn("text-[8px] font-semibold uppercase tracking-wider mb-1 px-1", isDark ? "text-[#7C4DFF]/60" : "text-[#D00083]/50")}>Fixed Periods</p>
                 {TIME_OPTION_DEFS.map((opt) => {
                   const isActive = opt.period === period && opt.timeRange === timeRange;
                   return (
                     <button
                       key={`${opt.period}-${opt.timeRange}`}
-                      onClick={() => {
-                        onSelectRange(opt.period, opt.timeRange);
-                        setOpen(false);
-                      }}
+                      onClick={() => { onSelectRange(opt.period, opt.timeRange); setOpen(false); }}
                       className={cn(
-                        "flex items-center gap-1 rounded-md px-2 py-1.5 text-[10px] transition-colors text-left",
+                        "flex w-full items-center gap-1 rounded-md px-2 py-1 text-[10px] transition-colors text-left",
                         isActive
                           ? isDark ? "text-[#7C4DFF] bg-[#5B22FF]/10 font-medium" : "text-[#D00083] bg-[#D00083]/5 font-medium"
                           : "text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
