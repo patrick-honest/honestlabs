@@ -9,7 +9,6 @@ import { ChartCard } from "@/components/dashboard/chart-card";
 import type { ChartIncrement } from "@/components/dashboard/chart-card";
 import { aggregateByIncrement } from "@/lib/aggregate-by-increment";
 import { DashboardLineChart } from "@/components/charts/line-chart";
-import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { Newspaper, TrendingUp, TrendingDown, AlertTriangle, Sparkles, ArrowRight, Info, X } from "lucide-react";
 import useSWR from "swr";
@@ -236,9 +235,9 @@ function DashboardCharts({ chartData, dataRange, isLive }: { chartData: Record<s
           showIncrement
         >
           {(increment: ChartIncrement) => (
-            <DashboardBarChart
+            <DashboardLineChart
               data={aggregateByIncrement(spend.map((r) => ({ week: r.date, spend: r.total })), increment, "week")}
-              bars={[{ key: "spend", color: "#6366f1", label: "Total Spend (IDR)" }]}
+              lines={[{ key: "spend", color: "#6366f1", label: "Total Spend (IDR)" }]}
               xAxisKey="week"
               height={280}
             />

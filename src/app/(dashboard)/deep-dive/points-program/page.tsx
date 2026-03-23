@@ -226,14 +226,14 @@ export default function PointsProgramPage() {
         >
           {(increment: ChartIncrement) => (
             <>
-              <DashboardBarChart
+              <DashboardLineChart
                 data={aggregateByIncrement(flowTrend.map((r) => ({
                   month: r.month,
                   earned: r.earned,
                   redeemed: r.redeemed,
                   expired: r.expired,
                 })), increment, "month")}
-                bars={[
+                lines={[
                   { key: "earned", color: "#22c55e", label: "Earned" },
                   { key: "redeemed", color: "#6366f1", label: "Redeemed" },
                   { key: "expired", color: "#ef4444", label: "Expired" },

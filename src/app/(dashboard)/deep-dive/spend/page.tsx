@@ -296,9 +296,9 @@ export default function SpendPage() {
             >
               {(increment: ChartIncrement) => (
                 <>
-                  <DashboardBarChart
+                  <DashboardLineChart
                     data={aggregateByIncrement(weeklyTrend, increment, "date")}
-                    bars={[
+                    lines={[
                       { key: "eligible", color: "#475569", label: "Eligible" },
                       { key: "transactors", color: "#3b82f6", label: "Transactors" },
                     ]}
@@ -320,9 +320,9 @@ export default function SpendPage() {
             >
               {(increment: ChartIncrement) => (
                 <>
-                  <DashboardBarChart
+                  <DashboardLineChart
                     data={aggregateByIncrement(weeklyTrend, increment, "date")}
-                    bars={[
+                    lines={[
                       { key: "online", color: "#3b82f6", label: "Online" },
                       { key: "offline", color: "#8b5cf6", label: "Offline" },
                       { key: "qris", color: "#06b6d4", label: "QRIS" },

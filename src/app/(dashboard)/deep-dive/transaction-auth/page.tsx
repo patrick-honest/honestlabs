@@ -8,7 +8,6 @@ import type { ChartIncrement } from "@/components/dashboard/chart-card";
 import { aggregateByIncrement } from "@/lib/aggregate-by-increment";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { DashboardLineChart } from "@/components/charts/line-chart";
-import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { ChartSkeleton, MetricCardsSkeleton } from "@/components/dashboard/chart-skeleton";
 import { HorizontalBar } from "@/components/charts/horizontal-bar";
@@ -192,9 +191,9 @@ export default function TransactionAuthPage() {
             showIncrement
           >
             {(increment: ChartIncrement) => (
-              <DashboardBarChart
+              <DashboardLineChart
                 data={aggregateByIncrement(weeklyTrend, increment, "date")}
-                bars={[{ key: "totalAuths", color: "#3b82f6", label: "Total Auths" }]}
+                lines={[{ key: "totalAuths", color: "#3b82f6", label: "Total Auths" }]}
                 xAxisKey="date"
                 height={300}
               />
@@ -211,15 +210,14 @@ export default function TransactionAuthPage() {
             showIncrement
           >
             {(increment: ChartIncrement) => (
-              <DashboardBarChart
+              <DashboardLineChart
                 data={aggregateByIncrement(weeklyTrend, increment, "date")}
-                bars={[
+                lines={[
                   { key: "online", color: "#3b82f6", label: "Online" },
                   { key: "qris", color: "#06b6d4", label: "QRIS" },
                   { key: "offline", color: "#8b5cf6", label: "Offline" },
                 ]}
                 xAxisKey="date"
-                stacked
                 height={300}
               />
             )}

@@ -10,7 +10,6 @@ import { ActionItems, type ActionItem } from "@/components/dashboard/action-item
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { ChartSkeleton, MetricCardsSkeleton } from "@/components/dashboard/chart-skeleton";
 import { DashboardLineChart } from "@/components/charts/line-chart";
-import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { HorizontalBar } from "@/components/charts/horizontal-bar";
 import { usePeriod } from "@/hooks/use-period";
 import { useApiParams } from "@/hooks/use-api-params";
@@ -182,9 +181,9 @@ export default function CustomerServicePage() {
             showIncrement
           >
             {(increment: ChartIncrement) => (
-              <DashboardBarChart
+              <DashboardLineChart
                 data={aggregateByIncrement(weeklyTrend, increment, "date")}
-                bars={[{ key: "ticket_count", color: "#3b82f6", label: "Tickets" }]}
+                lines={[{ key: "ticket_count", color: "#3b82f6", label: "Tickets" }]}
                 xAxisKey="date"
                 height={300}
               />

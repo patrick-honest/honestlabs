@@ -15,7 +15,6 @@ import { formatAmountCompact } from "@/lib/currency";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { DashboardLineChart } from "@/components/charts/line-chart";
-import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { getPeriodRange } from "@/lib/period-data";
 import { useDateParams } from "@/hooks/use-period";
 
@@ -1551,7 +1550,7 @@ export default function QrisExperimentPage() {
                 asOf={AS_OF}
                 dataRange={{ start: chartData[0]?.month ?? '', end: chartData[chartData.length - 1]?.month ?? '' }}
               >
-                <DashboardBarChart
+                <DashboardLineChart
                   height={300}
                   data={chartData.map(d => ({
                     month: d.month,
@@ -1560,7 +1559,7 @@ export default function QrisExperimentPage() {
                     'Test Txn RPU': d.test_txn_rpu,
                     'Ctrl Txn RPU': d.ctrl_txn_rpu,
                   }))}
-                  bars={[
+                  lines={[
                     { key: 'Ctrl Fee RPU', color: '#94a3b8', label: 'Ctrl Fee RPU' },
                     { key: 'Ctrl Txn RPU', color: '#cbd5e1', label: 'Ctrl Txn RPU' },
                     { key: 'Test Fee RPU', color: '#10b981', label: 'Test Fee RPU' },

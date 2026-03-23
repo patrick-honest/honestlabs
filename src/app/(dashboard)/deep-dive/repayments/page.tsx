@@ -239,9 +239,9 @@ export default function RepaymentsPage() {
             showIncrement
           >
             {(increment: ChartIncrement) => (
-              <DashboardBarChart
+              <DashboardLineChart
                 data={aggregateByIncrement(weeklyTrend, increment, "date")}
-                bars={[{ key: "totalAmountIdr", color: "#8b5cf6", label: "Amount (IDR)" }]}
+                lines={[{ key: "totalAmountIdr", color: "#8b5cf6", label: "Amount (IDR)" }]}
                 xAxisKey="date"
                 height={300}
               />
@@ -268,9 +268,9 @@ export default function RepaymentsPage() {
           showIncrement
         >
           {(increment: ChartIncrement) => (
-            <DashboardBarChart
+            <DashboardLineChart
               data={aggregateByIncrement(volumeTrend, increment, "date")}
-              bars={[{ key: "count", color: "#06b6d4", label: "Payments" }]}
+              lines={[{ key: "count", color: "#06b6d4", label: "Payments" }]}
               xAxisKey="date"
               height={300}
             />

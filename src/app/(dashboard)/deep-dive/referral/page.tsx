@@ -191,13 +191,13 @@ export default function ReferralPage() {
         >
           {(increment: ChartIncrement) => (
             <>
-              <DashboardBarChart
+              <DashboardLineChart
                 data={aggregateByIncrement(funnelData.map((r) => ({
                   week: r.week_start,
                   started: r.started,
                   approved: r.approved,
                 })), increment, "week")}
-                bars={[
+                lines={[
                   { key: "started", color: "#6366f1", label: "Started" },
                   { key: "approved", color: "#22c55e", label: "Approved" },
                 ]}
@@ -295,14 +295,14 @@ export default function ReferralPage() {
         >
           {(increment: ChartIncrement) => (
             <>
-              <DashboardBarChart
+              <DashboardLineChart
                 data={aggregateByIncrement(funnelTrend.map((r) => ({
                   month: r.month,
                   shared: r.shared,
                   started: r.started,
                   approved: r.approved,
                 })), increment, "month")}
-                bars={[
+                lines={[
                   { key: "shared", color: "#94a3b8", label: "Shared" },
                   { key: "started", color: "#6366f1", label: "Started" },
                   { key: "approved", color: "#22c55e", label: "Approved" },

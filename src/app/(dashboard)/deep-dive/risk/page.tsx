@@ -185,9 +185,9 @@ export default function RiskPage() {
             showIncrement
           >
             {(increment: ChartIncrement) => (
-              <DashboardBarChart
+              <DashboardLineChart
                 data={aggregateByIncrement(dpdTrend, increment, "date")}
-                bars={[
+                lines={[
                   { key: "current", color: "#22c55e", label: "Current" },
                   { key: "dpd_1_30", color: "#eab308", label: "1-30 DPD" },
                   { key: "dpd_31_60", color: "#f97316", label: "31-60 DPD" },
@@ -196,7 +196,6 @@ export default function RiskPage() {
                 ]}
                 xAxisKey="date"
                 height={320}
-                stacked
               />
             )}
           </ChartCard>

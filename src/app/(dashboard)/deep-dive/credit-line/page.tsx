@@ -206,13 +206,13 @@ export default function CreditLinePage() {
         >
           {(increment: ChartIncrement) => (
             <>
-              <DashboardBarChart
+              <DashboardLineChart
                 data={aggregateByIncrement(trendData.map((r) => ({
                   week: r.week_start,
                   clis: r.cli_count,
                   users: r.unique_users,
                 })), increment, "week")}
-                bars={[
+                lines={[
                   { key: "clis", color: "#6366f1", label: "CLIs" },
                   { key: "users", color: "#22c55e", label: "Unique Users" },
                 ]}
@@ -280,12 +280,12 @@ export default function CreditLinePage() {
           >
             {(increment: ChartIncrement) => (
               <>
-                <DashboardBarChart
+                <DashboardLineChart
                   data={aggregateByIncrement(volumeTrend.map((r) => ({
                     month: r.month,
                     count: r.cli_count,
                   })), increment, "month")}
-                  bars={[{ key: "count", color: "#8b5cf6", label: "CLI Count" }]}
+                  lines={[{ key: "count", color: "#8b5cf6", label: "CLI Count" }]}
                   xAxisKey="month"
                   height={280}
                 />
