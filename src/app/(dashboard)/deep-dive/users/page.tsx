@@ -9,6 +9,7 @@ import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { HorizontalBar } from "@/components/charts/horizontal-bar";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
+import { ChartSkeleton, MetricCardsSkeleton } from "@/components/dashboard/chart-skeleton";
 import { usePeriod } from "@/hooks/use-period";
 import { useApiParams } from "@/hooks/use-api-params";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
@@ -56,7 +57,7 @@ export default function UsersDeepDivePage() {
   const { apiParams } = useApiParams();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
-  const { data: apiData } = useSWR(
+  const { data: apiData, isLoading } = useSWR(
     `/api/users-overview?${apiParams}`,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 300_000 },
@@ -189,6 +190,8 @@ export default function UsersDeepDivePage() {
             liveData={deviceIsLive}
           />
         </div>
+      ) : isLoading ? (
+        <MetricCardsSkeleton />
       ) : (
         <SampleDataBanner
           dataset="mart_finexus"
@@ -212,6 +215,8 @@ export default function UsersDeepDivePage() {
             height={300}
           />
         </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
       ) : (
         <SampleDataBanner
           dataset="mart_finexus"
@@ -238,6 +243,8 @@ export default function UsersDeepDivePage() {
             height={300}
           />
         </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
       ) : (
         <SampleDataBanner
           dataset="mart_finexus"
@@ -262,6 +269,8 @@ export default function UsersDeepDivePage() {
               height={300}
             />
           </ChartCard>
+        ) : isLoading ? (
+          <ChartSkeleton />
         ) : (
           <SampleDataBanner
             dataset="refined_rudderstack"
@@ -284,6 +293,8 @@ export default function UsersDeepDivePage() {
               height={300}
             />
           </ChartCard>
+        ) : isLoading ? (
+          <ChartSkeleton />
         ) : (
           <SampleDataBanner
             dataset="refined_rudderstack"
@@ -313,6 +324,8 @@ export default function UsersDeepDivePage() {
             ))}
           </div>
         </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
       ) : (
         <SampleDataBanner
           dataset="refined_rudderstack"

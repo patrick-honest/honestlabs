@@ -6,6 +6,7 @@ import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
+import { ChartSkeleton, MetricCardsSkeleton } from "@/components/dashboard/chart-skeleton";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { HorizontalBar } from "@/components/charts/horizontal-bar";

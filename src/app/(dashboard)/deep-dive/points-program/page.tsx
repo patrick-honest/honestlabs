@@ -9,6 +9,7 @@ import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-i
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
+import { ChartSkeleton, MetricCardsSkeleton } from "@/components/dashboard/chart-skeleton";
 import { usePeriod } from "@/hooks/use-period";
 import { useApiParams } from "@/hooks/use-api-params";
 import { getPeriodRange, getPeriodInsightLabels } from "@/lib/period-data";
@@ -85,7 +86,7 @@ export default function PointsProgramPage() {
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
 
-  const { data: apiData } = useSWR(
+  const { data: apiData, isLoading } = useSWR(
     `/api/points-program?${apiParams}`,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 300_000 },
@@ -201,6 +202,8 @@ export default function PointsProgramPage() {
             liveData
           />
         </div>
+      ) : isLoading ? (
+        <MetricCardsSkeleton />
       ) : (
         <SampleDataBanner
           dataset="mart_finexus"
@@ -235,6 +238,8 @@ export default function PointsProgramPage() {
           />
           <ChartInsights insights={flowInsights} />
         </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
       ) : (
         <SampleDataBanner
           dataset="mart_finexus"
@@ -263,6 +268,8 @@ export default function PointsProgramPage() {
             />
             <ChartInsights insights={closingInsights} />
           </ChartCard>
+        ) : isLoading ? (
+          <ChartSkeleton />
         ) : (
           <SampleDataBanner
             dataset="mart_finexus"
@@ -291,6 +298,8 @@ export default function PointsProgramPage() {
             />
             <ChartInsights insights={redemptionInsights} />
           </ChartCard>
+        ) : isLoading ? (
+          <ChartSkeleton />
         ) : (
           <SampleDataBanner
             dataset="mart_finexus"
@@ -319,6 +328,8 @@ export default function PointsProgramPage() {
             height={300}
           />
         </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
       ) : (
         <SampleDataBanner
           dataset="mart_finexus"

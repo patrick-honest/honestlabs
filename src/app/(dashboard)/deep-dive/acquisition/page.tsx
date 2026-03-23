@@ -9,6 +9,7 @@ import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-i
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
+import { ChartSkeleton, MetricCardsSkeleton } from "@/components/dashboard/chart-skeleton";
 import { usePeriod } from "@/hooks/use-period";
 import { useApiParams } from "@/hooks/use-api-params";
 
@@ -82,7 +83,7 @@ export default function AcquisitionPage() {
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
   // Fetch real acquisition data from BigQuery
-  const { data: apiData } = useSWR(
+  const { data: apiData, isLoading } = useSWR(
     `/api/acquisition?${apiParams}`,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 300_000 },
@@ -251,6 +252,8 @@ export default function AcquisitionPage() {
             />
           ))}
         </div>
+      ) : isLoading ? (
+        <MetricCardsSkeleton />
       ) : (
         <SampleDataBanner
           dataset="refined_rudderstack"
@@ -260,10 +263,14 @@ export default function AcquisitionPage() {
 
       {/* Funnel visualization */}
       {!periodFunnel ? (
-        <SampleDataBanner
-          dataset="refined_rudderstack"
-          reason="Acquisition funnel requires milestone_complete and decision_completed tables"
-        />
+        isLoading ? (
+          <ChartSkeleton />
+        ) : (
+          <SampleDataBanner
+            dataset="refined_rudderstack"
+            reason="Acquisition funnel requires milestone_complete and decision_completed tables"
+          />
+        )
       ) : (
       <ChartCard
         title="Application Funnel"
@@ -398,6 +405,8 @@ export default function AcquisitionPage() {
             />
             <ChartInsights insights={decisionInsights} />
           </ChartCard>
+        ) : isLoading ? (
+          <ChartSkeleton />
         ) : (
           <SampleDataBanner
             dataset="refined_rudderstack"
@@ -426,6 +435,8 @@ export default function AcquisitionPage() {
             />
             <ChartInsights insights={productMixInsights} />
           </ChartCard>
+        ) : isLoading ? (
+          <ChartSkeleton />
         ) : (
           <SampleDataBanner
             dataset="refined_rudderstack"
@@ -455,6 +466,8 @@ export default function AcquisitionPage() {
           />
           <ChartInsights insights={approvalRateInsights} />
         </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
       ) : (
         <SampleDataBanner
           dataset="refined_rudderstack"

@@ -8,6 +8,7 @@ import { ActionItems, type ActionItem } from "@/components/dashboard/action-item
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
+import { ChartSkeleton, MetricCardsSkeleton } from "@/components/dashboard/chart-skeleton";
 import { HorizontalBar } from "@/components/charts/horizontal-bar";
 import { usePeriod } from "@/hooks/use-period";
 import { useApiParams } from "@/hooks/use-api-params";
@@ -53,7 +54,7 @@ export default function TransactionAuthPage() {
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
   // --- SWR fetch from API ---
-  const { data: apiData } = useSWR(
+  const { data: apiData, isLoading } = useSWR(
     `/api/transaction-auth?${apiParams}`,
     fetcher,
     { fallbackData: null, revalidateOnFocus: false },
@@ -269,6 +270,8 @@ export default function TransactionAuthPage() {
                 ))}
               </div>
             </ChartCard>
+          ) : isLoading ? (
+            <ChartSkeleton />
           ) : (
             <SampleDataBanner
               dataset="mart_finexus"
@@ -276,6 +279,8 @@ export default function TransactionAuthPage() {
             />
           )}
         </>
+      ) : isLoading ? (
+        <><MetricCardsSkeleton /><ChartSkeleton /><ChartSkeleton /><ChartSkeleton /><ChartSkeleton /></>
       ) : (
         <SampleDataBanner
           dataset="mart_finexus"

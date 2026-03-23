@@ -9,6 +9,7 @@ import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
+import { ChartSkeleton, MetricCardsSkeleton } from "@/components/dashboard/chart-skeleton";
 import { usePeriod } from "@/hooks/use-period";
 import { useApiParams } from "@/hooks/use-api-params";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
@@ -47,7 +48,7 @@ export default function ActivationPage() {
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
-  const { data: apiData } = useSWR(
+  const { data: apiData, isLoading } = useSWR(
     `/api/activation?${apiParams}`,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 300_000 },
@@ -221,6 +222,8 @@ export default function ActivationPage() {
             liveData
           />
         </div>
+      ) : isLoading ? (
+        <MetricCardsSkeleton />
       ) : (
         <SampleDataBanner
           dataset="mart_finexus"
@@ -246,6 +249,8 @@ export default function ActivationPage() {
           />
           <ChartInsights insights={activationRateInsights} />
         </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
       ) : (
         <SampleDataBanner
           dataset="mart_finexus"
@@ -271,6 +276,8 @@ export default function ActivationPage() {
             />
             <ChartInsights insights={deliveryToActivationInsights} />
           </ChartCard>
+        ) : isLoading ? (
+          <ChartSkeleton />
         ) : (
           <SampleDataBanner
             dataset="mart_finexus"
@@ -298,6 +305,8 @@ export default function ActivationPage() {
             />
             <ChartInsights insights={activationByProductInsights} />
           </ChartCard>
+        ) : isLoading ? (
+          <ChartSkeleton />
         ) : (
           <SampleDataBanner
             dataset="mart_finexus"
@@ -327,6 +336,8 @@ export default function ActivationPage() {
           />
           <ChartInsights insights={dormancyInsights} />
         </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
       ) : (
         <SampleDataBanner
           dataset="mart_finexus"

@@ -9,6 +9,7 @@ import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-i
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
+import { ChartSkeleton, MetricCardsSkeleton } from "@/components/dashboard/chart-skeleton";
 import { usePeriod } from "@/hooks/use-period";
 import { useApiParams } from "@/hooks/use-api-params";
 import { getPeriodRange, getPeriodInsightLabels } from "@/lib/period-data";
@@ -50,7 +51,7 @@ export default function ReferralPage() {
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
 
-  const { data: apiData } = useSWR(
+  const { data: apiData, isLoading } = useSWR(
     `/api/referral?${apiParams}`,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 300_000 },
@@ -166,6 +167,8 @@ export default function ReferralPage() {
             liveData
           />
         </div>
+      ) : isLoading ? (
+        <MetricCardsSkeleton />
       ) : (
         <SampleDataBanner
           dataset="refined_rudderstack"
@@ -198,6 +201,8 @@ export default function ReferralPage() {
           />
           <ChartInsights insights={funnelInsights} />
         </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
       ) : (
         <SampleDataBanner
           dataset="refined_rudderstack"
@@ -231,6 +236,8 @@ export default function ReferralPage() {
             />
             <ChartInsights insights={channelInsights} />
           </ChartCard>
+        ) : isLoading ? (
+          <ChartSkeleton />
         ) : (
           <SampleDataBanner
             dataset="refined_rudderstack"
@@ -258,6 +265,8 @@ export default function ReferralPage() {
               height={280}
             />
           </ChartCard>
+        ) : isLoading ? (
+          <ChartSkeleton />
         ) : (
           <SampleDataBanner
             dataset="refined_rudderstack"
@@ -293,6 +302,8 @@ export default function ReferralPage() {
           />
           <ChartInsights insights={trendInsights} />
         </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
       ) : (
         <SampleDataBanner
           dataset="refined_rudderstack"
@@ -320,6 +331,8 @@ export default function ReferralPage() {
             height={300}
           />
         </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
       ) : (
         <SampleDataBanner
           dataset="refined_rudderstack"

@@ -8,6 +8,7 @@ import { ActionItems, type ActionItem } from "@/components/dashboard/action-item
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
+import { ChartSkeleton, MetricCardsSkeleton } from "@/components/dashboard/chart-skeleton";
 import { usePeriod } from "@/hooks/use-period";
 import { useApiParams } from "@/hooks/use-api-params";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
@@ -57,7 +58,7 @@ export default function RepaymentsPage() {
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
-  const { data: apiData } = useSWR(
+  const { data: apiData, isLoading } = useSWR(
     `/api/repayments?${apiParams}`,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 300_000 },
@@ -239,6 +240,8 @@ export default function RepaymentsPage() {
             />
           </ChartCard>
         </>
+      ) : isLoading ? (
+        <><MetricCardsSkeleton /><ChartSkeleton /><ChartSkeleton /></>
       ) : (
         <SampleDataBanner
           dataset="mart_finexus"
@@ -262,6 +265,8 @@ export default function RepaymentsPage() {
             height={300}
           />
         </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
       ) : (
         <SampleDataBanner
           dataset="mart_finexus"
@@ -285,6 +290,8 @@ export default function RepaymentsPage() {
             height={300}
           />
         </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
       ) : (
         <SampleDataBanner
           dataset="refined_rudderstack"
@@ -308,6 +315,8 @@ export default function RepaymentsPage() {
             height={300}
           />
         </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
       ) : (
         <SampleDataBanner
           dataset="mart_finexus"
@@ -332,6 +341,8 @@ export default function RepaymentsPage() {
             height={300}
           />
         </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
       ) : (
         <SampleDataBanner
           dataset="mart_finexus"

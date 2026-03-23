@@ -18,6 +18,7 @@ import { useFilters } from "@/hooks/use-filters";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange } from "@/lib/period-data";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
+import { ChartSkeleton, MetricCardsSkeleton } from "@/components/dashboard/chart-skeleton";
 import { cn } from "@/lib/utils";
 import type { KpiMetric, Cycle } from "@/types/reports";
 import Link from "next/link";
@@ -322,11 +323,15 @@ export default function DashboardPage() {
         {/* ════════════════════════════════════════════════════════════════ */}
         {/* 1. HEALTH SCORE BANNER                                         */}
         {/* ════════════════════════════════════════════════════════════════ */}
-        {!kpis && !loading && (
-          <SampleDataBanner
-            dataset="mart_finexus"
-            reason="KPI data requires financial_account_updates (DW004) and authorized_transaction (DW007)"
-          />
+        {!kpis && (
+          loading ? (
+            <><MetricCardsSkeleton /><ChartSkeleton /></>
+          ) : (
+            <SampleDataBanner
+              dataset="mart_finexus"
+              reason="KPI data requires financial_account_updates (DW004) and authorized_transaction (DW007)"
+            />
+          )
         )}
 
         {kpis && health && (
@@ -539,12 +544,14 @@ export default function DashboardPage() {
         {/* ════════════════════════════════════════════════════════════════ */}
         {apiData?.chartData ? (
           <DashboardCharts chartData={apiData.chartData as Record<string, unknown>} dataRange={DATA_RANGE} isLive={kpisAreLive} />
-        ) : !loading ? (
+        ) : loading ? (
+          <ChartSkeleton />
+        ) : (
           <SampleDataBanner
             dataset="mart_finexus"
             reason="KPI data requires financial_account_updates (DW004) and authorized_transaction (DW007)"
           />
-        ) : null}
+        )}
 
         {/* ════════════════════════════════════════════════════════════════ */}
         {/* 5. INVESTOR SNAPSHOT                                            */}

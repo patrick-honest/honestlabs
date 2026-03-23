@@ -7,6 +7,7 @@ import { useApiParams } from "@/hooks/use-api-params";
 import { getPeriodRange } from "@/lib/period-data";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
+import { ChartSkeleton, MetricCardsSkeleton } from "@/components/dashboard/chart-skeleton";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
@@ -42,7 +43,7 @@ export default function CardsOverviewPage() {
   const { apiParams } = useApiParams();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
-  const { data: apiData } = useSWR(
+  const { data: apiData, isLoading } = useSWR(
     `/api/cards-overview?${apiParams}`,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 300_000 },
@@ -138,6 +139,8 @@ export default function CardsOverviewPage() {
             liveData
           />
         </div>
+      ) : isLoading ? (
+        <MetricCardsSkeleton />
       ) : (
         <SampleDataBanner
           dataset="mart_finexus"
@@ -162,6 +165,8 @@ export default function CardsOverviewPage() {
             height={300}
           />
         </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
       ) : (
         <SampleDataBanner
           dataset="mart_finexus"
@@ -187,6 +192,8 @@ export default function CardsOverviewPage() {
               height={280}
             />
           </ChartCard>
+        ) : isLoading ? (
+          <ChartSkeleton />
         ) : (
           <SampleDataBanner
             dataset="mart_finexus"
@@ -211,6 +218,8 @@ export default function CardsOverviewPage() {
               height={280}
             />
           </ChartCard>
+        ) : isLoading ? (
+          <ChartSkeleton />
         ) : (
           <SampleDataBanner
             dataset="mart_finexus"
@@ -236,6 +245,8 @@ export default function CardsOverviewPage() {
             height={300}
           />
         </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
       ) : (
         <SampleDataBanner
           dataset="mart_finexus"

@@ -9,6 +9,7 @@ import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-i
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
+import { ChartSkeleton, MetricCardsSkeleton } from "@/components/dashboard/chart-skeleton";
 import { usePeriod } from "@/hooks/use-period";
 import { useApiParams } from "@/hooks/use-api-params";
 import { getPeriodRange, getPeriodInsightLabels } from "@/lib/period-data";
@@ -70,7 +71,7 @@ export default function CreditLinePage() {
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
 
-  const { data: apiData } = useSWR(
+  const { data: apiData, isLoading } = useSWR(
     `/api/credit-line?${apiParams}`,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 300_000 },
@@ -181,6 +182,8 @@ export default function CreditLinePage() {
             liveData
           />
         </div>
+      ) : isLoading ? (
+        <MetricCardsSkeleton />
       ) : (
         <SampleDataBanner
           dataset="refined_rudderstack"
@@ -213,6 +216,8 @@ export default function CreditLinePage() {
           />
           <ChartInsights insights={trendInsights} />
         </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
       ) : (
         <SampleDataBanner
           dataset="refined_rudderstack"
@@ -246,6 +251,8 @@ export default function CreditLinePage() {
             />
             <ChartInsights insights={byTypeInsights} />
           </ChartCard>
+        ) : isLoading ? (
+          <ChartSkeleton />
         ) : (
           <SampleDataBanner
             dataset="refined_rudderstack"
@@ -274,6 +281,8 @@ export default function CreditLinePage() {
             />
             <ChartInsights insights={volumeInsights} />
           </ChartCard>
+        ) : isLoading ? (
+          <ChartSkeleton />
         ) : (
           <SampleDataBanner
             dataset="refined_rudderstack"

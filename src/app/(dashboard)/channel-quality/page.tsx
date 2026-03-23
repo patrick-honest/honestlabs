@@ -10,6 +10,7 @@ import { ActionItems, type ActionItem } from "@/components/dashboard/action-item
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
+import { ChartSkeleton, MetricCardsSkeleton } from "@/components/dashboard/chart-skeleton";
 import { usePeriod } from "@/hooks/use-period";
 import { useApiParams } from "@/hooks/use-api-params";
 import { getPeriodRange } from "@/lib/period-data";
@@ -61,7 +62,7 @@ export default function ChannelQualityPage() {
   const { apiParams } = useApiParams();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
-  const { data: apiData } = useSWR(
+  const { data: apiData, isLoading } = useSWR(
     `/api/channel-quality?${apiParams}`,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 300_000 },
@@ -152,6 +153,8 @@ export default function ChannelQualityPage() {
               liveData
             />
           </div>
+        ) : isLoading ? (
+          <MetricCardsSkeleton />
         ) : (
           <SampleDataBanner
             dataset="refined_rudderstack + mart_finexus"
@@ -184,6 +187,8 @@ export default function ChannelQualityPage() {
             />
             <ChartInsights insights={channelInsights} />
           </ChartCard>
+        ) : isLoading ? (
+          <ChartSkeleton />
         ) : (
           <SampleDataBanner
             dataset="refined_rudderstack + mart_finexus"
@@ -213,6 +218,8 @@ export default function ChannelQualityPage() {
               />
               <ChartInsights insights={approvalInsights} />
             </ChartCard>
+          ) : isLoading ? (
+            <ChartSkeleton />
           ) : (
             <SampleDataBanner
               dataset="refined_rudderstack"
@@ -240,6 +247,8 @@ export default function ChannelQualityPage() {
                 height={280}
               />
             </ChartCard>
+          ) : isLoading ? (
+            <ChartSkeleton />
           ) : (
             <SampleDataBanner
               dataset="mart_finexus"

@@ -9,6 +9,7 @@ import { DashboardLineChart } from "@/components/charts/line-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
+import { ChartSkeleton, MetricCardsSkeleton } from "@/components/dashboard/chart-skeleton";
 import { usePeriod } from "@/hooks/use-period";
 import { useApiParams } from "@/hooks/use-api-params";
 import { useTheme } from "@/hooks/use-theme";
@@ -26,7 +27,7 @@ export default function BillingCyclePage() {
   const { isDark } = useTheme();
 
   // Fetch real data from BigQuery
-  const { data: apiData } = useSWR(
+  const { data: apiData, isLoading } = useSWR(
     `/api/billing-cycle?${apiParams}`,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 300_000 },
@@ -163,10 +164,14 @@ export default function BillingCyclePage() {
       <ActiveFiltersBanner />
 
       {!overview && (
-        <SampleDataBanner
-          dataset="mart_finexus"
-          reason="Billing cycle data requires financial_account_updates (DW004)"
-        />
+        isLoading ? (
+          <><MetricCardsSkeleton /><ChartSkeleton /><ChartSkeleton /></>
+        ) : (
+          <SampleDataBanner
+            dataset="mart_finexus"
+            reason="Billing cycle data requires financial_account_updates (DW004)"
+          />
+        )
       )}
 
       {overview && <>

@@ -8,6 +8,7 @@ import { ActionItems, type ActionItem } from "@/components/dashboard/action-item
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
+import { ChartSkeleton, MetricCardsSkeleton } from "@/components/dashboard/chart-skeleton";
 import { usePeriod } from "@/hooks/use-period";
 import { useApiParams } from "@/hooks/use-api-params";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
@@ -55,7 +56,7 @@ export default function PortfolioPage() {
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
   const { apiParams } = useApiParams();
 
-  const { data: apiData } = useSWR(
+  const { data: apiData, isLoading } = useSWR(
     `/api/portfolio?${apiParams}`,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 300_000 },
@@ -206,6 +207,8 @@ export default function PortfolioPage() {
             />
           </ChartCard>
         </>
+      ) : isLoading ? (
+        <><MetricCardsSkeleton /><ChartSkeleton /><ChartSkeleton /></>
       ) : (
         <SampleDataBanner
           dataset="mart_finexus"
@@ -229,6 +232,8 @@ export default function PortfolioPage() {
             height={300}
           />
         </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
       ) : (
         <SampleDataBanner
           dataset="mart_finexus"
@@ -252,6 +257,8 @@ export default function PortfolioPage() {
             height={300}
           />
         </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
       ) : (
         <SampleDataBanner
           dataset="mart_finexus"

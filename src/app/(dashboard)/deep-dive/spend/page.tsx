@@ -9,6 +9,7 @@ import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
+import { ChartSkeleton, MetricCardsSkeleton } from "@/components/dashboard/chart-skeleton";
 import { usePeriod } from "@/hooks/use-period";
 import { useApiParams } from "@/hooks/use-api-params";
 import { getPeriodRange, getPeriodInsightLabels } from "@/lib/period-data";
@@ -116,7 +117,7 @@ export default function SpendPage() {
 
   // --- Spend Analysis SWR (with mock fallback) ---
   // apiParams changes when the user adjusts the time selector → triggers SWR refetch
-  const { data: spendAnalysis } = useSWR(
+  const { data: spendAnalysis, isLoading } = useSWR(
     `/api/spend-analysis?${apiParams}`,
     fetcher,
     { fallbackData: null, revalidateOnFocus: false },
@@ -371,6 +372,8 @@ export default function SpendPage() {
             <ChartInsights insights={txnPerEligibleInsights} />
           </ChartCard>
         </>
+      ) : isLoading ? (
+        <><MetricCardsSkeleton /><ChartSkeleton /><ChartSkeleton /><ChartSkeleton /><ChartSkeleton /></>
       ) : (
         <SampleDataBanner
           dataset="mart_finexus"
@@ -434,6 +437,8 @@ export default function SpendPage() {
 
             <ChartInsights insights={channelInsights} />
           </>
+        ) : isLoading ? (
+          <ChartSkeleton />
         ) : (
           <SampleDataBanner
             dataset="mart_finexus"
@@ -470,6 +475,8 @@ export default function SpendPage() {
           </div>
           <ChartInsights insights={declineInsights} />
         </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
       ) : (
         <SampleDataBanner
           dataset="mart_finexus"
@@ -500,6 +507,8 @@ export default function SpendPage() {
               <ChartInsights insights={qrisMerchantInsights} />
             </ChartCard>
           </>
+        ) : isLoading ? (
+          <ChartSkeleton />
         ) : (
           <SampleDataBanner
             dataset="mart_finexus"
