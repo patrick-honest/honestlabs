@@ -218,12 +218,48 @@ function UnifiedTimeSelector({
     }
   };
 
+  // Quick day-based selections
+  const QUICK_DAYS = [
+    { label: "Today", days: 0 },
+    { label: "Yesterday", days: 1 },
+    { label: "Last 7 Days", days: 7 },
+    { label: "Last 14 Days", days: 14 },
+    { label: "Last 30 Days", days: 30 },
+    { label: "Last 60 Days", days: 60 },
+    { label: "Last 90 Days", days: 90 },
+  ];
+
+  const handleQuickDays = (days: number) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (days === 0) {
+      onCustomRange(today, today);
+    } else if (days === 1) {
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      onCustomRange(yesterday, yesterday);
+    } else {
+      const start = new Date(today);
+      start.setDate(start.getDate() - days);
+      onCustomRange(start, today);
+    }
+    setOpen(false);
+  };
+
+  const handleOpen = () => {
+    if (!open) {
+      setCalStart(dateRange.start);
+      setCalEnd(dateRange.end);
+      setSelecting("start");
+    }
+    setOpen(!open);
+  };
+
   return (
     <div className="flex items-center gap-2 shrink-0">
-      {/* Unified range dropdown */}
       <div ref={ref} className="relative">
         <button
-          onClick={() => { setOpen(!open); setShowCalendar(false); }}
+          onClick={handleOpen}
           className={cn(
             "flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors",
             isDark
@@ -236,69 +272,15 @@ function UnifiedTimeSelector({
           <ChevronDown className={cn("h-3 w-3 transition-transform", open && "rotate-180")} />
         </button>
 
-        {open && !showCalendar && (
-          <div className={cn(
-            "absolute left-0 top-full z-[80] mt-1 w-[280px] rounded-xl border shadow-2xl py-1.5",
-            isDark
-              ? "border-[var(--border)] bg-[#141226] shadow-black/40"
-              : "border-[var(--border)] bg-white shadow-black/10"
-          )}>
-            {/* Custom range — first option */}
-            <button
-              onClick={() => {
-                setCalStart(dateRange.start);
-                setCalEnd(dateRange.end);
-                setSelecting("start");
-                setShowCalendar(true);
-              }}
-              className={cn(
-                "flex w-full items-center gap-2 px-3 py-2 text-xs transition-colors",
-                timeRange === "custom"
-                  ? isDark ? "text-[#7C4DFF] bg-[#5B22FF]/10" : "text-[#D00083] bg-[#D00083]/5"
-                  : "text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
-              )}
-            >
-              <Calendar className="h-3 w-3" />
-              <span className={timeRange === "custom" ? "font-medium" : ""}>{tTime("pickDateRange")}</span>
-            </button>
-
-            <div className="border-t border-[var(--border)] mt-1 pt-1 px-2">
-              {/* 2-column grid of presets */}
-              <div className="grid grid-cols-2 gap-0.5">
-                {TIME_OPTION_DEFS.map((opt) => {
-                  const isActive = opt.period === period && opt.timeRange === timeRange;
-                  return (
-                    <button
-                      key={`${opt.period}-${opt.timeRange}`}
-                      onClick={() => {
-                        onSelectRange(opt.period, opt.timeRange);
-                        setOpen(false);
-                      }}
-                      className={cn(
-                        "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] transition-colors text-left",
-                        isActive
-                          ? isDark ? "text-[#7C4DFF] bg-[#5B22FF]/10 font-medium" : "text-[#D00083] bg-[#D00083]/5 font-medium"
-                          : "text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
-                      )}
-                    >
-                      {isActive && <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", isDark ? "bg-[#5B22FF]" : "bg-[#D00083]")} />}
-                      {tTime(opt.tKey)}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Calendar picker popup */}
-        {open && showCalendar && (
+        {/* Combined calendar + quick selections popup */}
+        {open && (
           <div className={cn(
             "absolute left-0 top-full z-[80] mt-1 rounded-xl border shadow-2xl p-3",
             isDark
               ? "border-[var(--border)] bg-[#141226] shadow-black/40"
               : "border-[var(--border)] bg-white shadow-black/10"
           )}>
+            {/* Dual calendars */}
             <div className="flex gap-3">
               <MiniCalendar
                 year={leftYear} month={leftMonth}
@@ -319,7 +301,7 @@ function UnifiedTimeSelector({
               />
             </div>
 
-            {/* Selected range + actions */}
+            {/* Selected range display + Apply */}
             <div className="flex items-center justify-between mt-2.5 pt-2.5 border-t border-[var(--border)]">
               <div className="text-[10px] text-[var(--text-secondary)]">
                 {calStart ? (
@@ -330,23 +312,57 @@ function UnifiedTimeSelector({
                   <span className="font-medium">{calEnd.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</span>
                 ) : <span className="text-[var(--text-muted)]">{tCommon("end")}</span>}
               </div>
-              <div className="flex gap-1.5">
-                <button
-                  onClick={() => { setShowCalendar(false); }}
-                  className="rounded px-2 py-0.5 text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-                >
-                  {tCommon("back")}
-                </button>
-                <button
-                  onClick={handleApplyCustom}
-                  disabled={!calStart || !calEnd}
-                  className={cn(
-                    "rounded px-2.5 py-0.5 text-[10px] font-medium text-white disabled:opacity-40",
-                    isDark ? "bg-[#5B22FF]" : "bg-[#D00083]"
-                  )}
-                >
-                  {tCommon("apply")}
-                </button>
+              <button
+                onClick={handleApplyCustom}
+                disabled={!calStart || !calEnd}
+                className={cn(
+                  "rounded px-2.5 py-0.5 text-[10px] font-medium text-white disabled:opacity-40",
+                  isDark ? "bg-[#5B22FF]" : "bg-[#D00083]"
+                )}
+              >
+                {tCommon("apply")}
+              </button>
+            </div>
+
+            {/* Quick selections — 3 column grid */}
+            <div className="mt-2.5 pt-2.5 border-t border-[var(--border)]">
+              <div className="grid grid-cols-3 gap-0.5">
+                {QUICK_DAYS.map((q) => (
+                  <button
+                    key={q.label}
+                    onClick={() => handleQuickDays(q.days)}
+                    className={cn(
+                      "rounded-md px-2 py-1.5 text-[10px] transition-colors text-left",
+                      "text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
+                    )}
+                  >
+                    {q.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-3 gap-0.5 mt-1 pt-1 border-t border-[var(--border)]/50">
+                {TIME_OPTION_DEFS.map((opt) => {
+                  const isActive = opt.period === period && opt.timeRange === timeRange;
+                  return (
+                    <button
+                      key={`${opt.period}-${opt.timeRange}`}
+                      onClick={() => {
+                        onSelectRange(opt.period, opt.timeRange);
+                        setOpen(false);
+                      }}
+                      className={cn(
+                        "flex items-center gap-1 rounded-md px-2 py-1.5 text-[10px] transition-colors text-left",
+                        isActive
+                          ? isDark ? "text-[#7C4DFF] bg-[#5B22FF]/10 font-medium" : "text-[#D00083] bg-[#D00083]/5 font-medium"
+                          : "text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
+                      )}
+                    >
+                      {isActive && <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", isDark ? "bg-[#5B22FF]" : "bg-[#D00083]")} />}
+                      {tTime(opt.tKey)}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
