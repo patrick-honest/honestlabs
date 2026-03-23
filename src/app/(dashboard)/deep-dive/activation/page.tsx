@@ -93,6 +93,31 @@ export default function ActivationPage() {
     }));
   }, [apiData]);
 
+  // Product activation rate trend — weekly line chart
+  const productRateTrend = useMemo(() => {
+    if (!apiData?.productRateTrend?.length) return null;
+    const rows = apiData.productRateTrend as { week_start: string; product_type: string; rate: number }[];
+    const weeks = [...new Set(rows.map(r => r.week_start))].sort();
+    return weeks.map(w => {
+      const weekRows = rows.filter(r => r.week_start === w);
+      const entry: Record<string, string | number> = { date: w };
+      for (const r of weekRows) entry[r.product_type] = r.rate;
+      return entry;
+    });
+  }, [apiData]);
+
+  // Days-to-activation distribution trend — weekly line chart
+  const daysDistTrend = useMemo(() => {
+    if (!apiData?.daysDistributionTrend?.length) return null;
+    return (apiData.daysDistributionTrend as { week_start: string; pct_0_1: number; pct_2_3: number; pct_4_7: number; pct_within_7d: number }[]).map(r => ({
+      date: r.week_start,
+      "0-1 days": r.pct_0_1,
+      "2-3 days": r.pct_2_3,
+      "4-7 days": r.pct_4_7,
+      "Within 7d": r.pct_within_7d,
+    }));
+  }, [apiData]);
+
   // Dormancy analysis from DW004
   const dormancyAnalysis = useMemo((): { bucket: string; accounts: number }[] | null => {
     if (!apiData?.dormancyAnalysis?.length) return null;
@@ -268,22 +293,32 @@ export default function ActivationPage() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {periodDeliveryToActivation ? (
+        {daysDistTrend ? (
           <ChartCard
-            title="Card Delivery to Activation Timeline"
-            subtitle="Distribution of days from delivery to first transaction"
+            title="Activation Timeline Trend"
+            subtitle="% of approved users activating within each time bucket — weekly trend"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
-            onRefresh={handleRefresh}
-            liveData={!!apiData?.daysToFirstTransaction}
+            liveData={true}
+            showIncrement
           >
-            <DashboardBarChart
-              data={periodDeliveryToActivation}
-              bars={[{ key: "count", color: "#8b5cf6", label: "Accounts" }]}
-              xAxisKey="days"
-              height={280}
-            />
-            <ChartInsights insights={deliveryToActivationInsights} />
+            {(increment: ChartIncrement) => (
+              <>
+                <DashboardLineChart
+                  data={aggregateByIncrement(daysDistTrend, increment, "date")}
+                  lines={[
+                    { key: "Within 7d", color: "#22c55e", label: "Within 7 Days" },
+                    { key: "0-1 days", color: "#3b82f6", label: "0-1 Days" },
+                    { key: "2-3 days", color: "#8b5cf6", label: "2-3 Days" },
+                    { key: "4-7 days", color: "#f59e0b", label: "4-7 Days" },
+                  ]}
+                  xAxisKey="date"
+                  valueType="percent"
+                  height={280}
+                />
+                <ChartInsights insights={deliveryToActivationInsights} />
+              </>
+            )}
           </ChartCard>
         ) : isLoading ? (
           <ChartSkeleton />
@@ -294,25 +329,31 @@ export default function ActivationPage() {
           />
         )}
 
-        {periodActivationByProduct ? (
+        {productRateTrend ? (
           <ChartCard
-            title="Activation by Product Type"
-            subtitle="Activated vs total by product"
+            title="Activation Rate by Product Type"
+            subtitle="7-day activation rate (%) per product — weekly trend"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
-            onRefresh={handleRefresh}
-            liveData={!!apiData?.activationByProductType}
+            liveData={true}
+            showIncrement
           >
-            <DashboardBarChart
-              data={periodActivationByProduct}
-              bars={[
-                { key: "total", color: "#475569", label: "Total" },
-                { key: "activated", color: "#22c55e", label: "Activated" },
-              ]}
-              xAxisKey="product"
-              height={280}
-            />
-            <ChartInsights insights={activationByProductInsights} />
+            {(increment: ChartIncrement) => (
+              <>
+                <DashboardLineChart
+                  data={aggregateByIncrement(productRateTrend, increment, "date")}
+                  lines={[
+                    { key: "Standard CC", color: "#3b82f6", label: "Standard CC" },
+                    { key: "RP1", color: "#22c55e", label: "RP1" },
+                    { key: "Opening Fee", color: "#f59e0b", label: "Opening Fee" },
+                  ]}
+                  xAxisKey="date"
+                  valueType="percent"
+                  height={280}
+                />
+                <ChartInsights insights={activationByProductInsights} />
+              </>
+            )}
           </ChartCard>
         ) : isLoading ? (
           <ChartSkeleton />

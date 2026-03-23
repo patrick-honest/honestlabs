@@ -213,12 +213,101 @@ async function queryActivation(startDate: string, endDate: string, env: Env, fil
     ),
   ]);
 
+  // Additional trend queries for line chart versions
+  const [productRateTrend, daysDistributionTrend] = await Promise.all([
+    // Activation rate by product type — weekly trend
+    runQuery(
+      `WITH approved AS (
+        SELECT user_id,
+          DATE_TRUNC(DATE(timestamp, 'Asia/Jakarta'), ISOWEEK) AS week_start,
+          MIN(DATE(timestamp, 'Asia/Jakarta')) AS approval_date,
+          CASE
+            WHEN LOGICAL_OR(is_prepaid_card_applicable = true) THEN 'RP1'
+            WHEN LOGICAL_OR(is_account_opening_fee_applicable = true) THEN 'Opening Fee'
+            ELSE 'Standard CC'
+          END AS product_type
+        FROM ${TABLES.decision_completed}
+        WHERE decision = 'APPROVED'
+          AND DATE(timestamp, 'Asia/Jakarta') BETWEEN @startDate AND @endDate
+        GROUP BY user_id, week_start
+      ),
+      first_txn AS (
+        SELECT a.user_id, MIN(DATE(t.f9_dw007_dt)) AS first_txn_date
+        FROM approved a
+        JOIN ${TABLES.cms_line_of_credit} loc ON a.user_id = loc.user_id
+        JOIN ${TABLES.principal_card_updates} pc ON loc.external_id = pc.f9_dw005_loc_acct
+        JOIN ${TABLES.authorized_transaction} t ON pc.f9_dw005_crn = t.f9_dw007_prin_crn
+          AND (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '' OR t.fx_dw007_stat = ' ')
+          AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+        GROUP BY a.user_id
+        HAVING DATE_DIFF(first_txn_date, MIN(a.approval_date), DAY) <= 7
+      )
+      SELECT FORMAT_DATE('%Y-%m-%d', a.week_start + 7) AS week_start,
+        a.product_type,
+        COUNT(DISTINCT a.user_id) AS approved,
+        COUNT(DISTINCT ft.user_id) AS activated,
+        ROUND(SAFE_DIVIDE(COUNT(DISTINCT ft.user_id), COUNT(DISTINCT a.user_id)) * 100, 2) AS rate
+      FROM approved a
+      LEFT JOIN first_txn ft ON a.user_id = ft.user_id
+      GROUP BY a.week_start, a.product_type
+      ORDER BY a.week_start, a.product_type`,
+      { startDate, endDate }, env,
+    ),
+
+    // Days-to-activation distribution — weekly trend (% in each bucket per week)
+    runQuery(
+      `WITH approved AS (
+        SELECT user_id,
+          DATE_TRUNC(DATE(timestamp, 'Asia/Jakarta'), ISOWEEK) AS week_start,
+          MIN(DATE(timestamp, 'Asia/Jakarta')) AS approval_date
+        FROM ${TABLES.decision_completed}
+        WHERE decision = 'APPROVED'
+          AND DATE(timestamp, 'Asia/Jakarta') BETWEEN @startDate AND @endDate
+        GROUP BY user_id, week_start
+      ),
+      first_txn AS (
+        SELECT a.user_id,
+          DATE_DIFF(MIN(DATE(t.f9_dw007_dt)), a.approval_date, DAY) AS days_to_activate
+        FROM approved a
+        JOIN ${TABLES.cms_line_of_credit} loc ON a.user_id = loc.user_id
+        JOIN ${TABLES.principal_card_updates} pc ON loc.external_id = pc.f9_dw005_loc_acct
+        JOIN ${TABLES.authorized_transaction} t ON pc.f9_dw005_crn = t.f9_dw007_prin_crn
+          AND (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '' OR t.fx_dw007_stat = ' ')
+          AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+        GROUP BY a.user_id, a.approval_date
+      ),
+      bucketed AS (
+        SELECT a.week_start, a.user_id,
+          CASE
+            WHEN ft.days_to_activate IS NULL THEN 'Not Activated'
+            WHEN ft.days_to_activate <= 1 THEN '0-1 days'
+            WHEN ft.days_to_activate <= 3 THEN '2-3 days'
+            WHEN ft.days_to_activate <= 7 THEN '4-7 days'
+            ELSE '8+ days'
+          END AS bucket
+        FROM approved a
+        LEFT JOIN first_txn ft ON a.user_id = ft.user_id
+      )
+      SELECT FORMAT_DATE('%Y-%m-%d', week_start + 7) AS week_start,
+        ROUND(SAFE_DIVIDE(COUNTIF(bucket = '0-1 days'), COUNT(*)) * 100, 2) AS pct_0_1,
+        ROUND(SAFE_DIVIDE(COUNTIF(bucket = '2-3 days'), COUNT(*)) * 100, 2) AS pct_2_3,
+        ROUND(SAFE_DIVIDE(COUNTIF(bucket = '4-7 days'), COUNT(*)) * 100, 2) AS pct_4_7,
+        ROUND(SAFE_DIVIDE(COUNTIF(bucket IN ('0-1 days','2-3 days','4-7 days')), COUNT(*)) * 100, 2) AS pct_within_7d
+      FROM bucketed
+      GROUP BY week_start
+      ORDER BY week_start`,
+      { startDate, endDate }, env,
+    ),
+  ]);
+
   return {
     activationRateTrend,
     daysToFirstTransaction,
     activationByProductType,
     dormancyAnalysis,
     pinSetRateTrend,
+    productRateTrend,
+    daysDistributionTrend,
   };
 }
 
