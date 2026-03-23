@@ -10,6 +10,7 @@ import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { usePeriod, useDateParams } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
+import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange } from "@/lib/period-data";
 
@@ -69,7 +70,7 @@ export default function PortfolioPage() {
   // --- Weekly snapshot trend data ---
   const snapshotTrend = useMemo(() => {
     if (!apiData?.snapshot?.length) return null;
-    return (apiData.snapshot as {
+    const raw = (apiData.snapshot as {
       week_start: string;
       total_accounts: number;
       active_accounts: number;
@@ -92,7 +93,8 @@ export default function PortfolioPage() {
       delinquentAccounts: r.delinquent_accounts,
       delinquencyRate: r.delinquency_rate,
     }));
-  }, [apiData]);
+    return applyFilterToData(raw, filters);
+  }, [apiData, filters]);
 
   const snapshotIsLive = !!snapshotTrend?.length;
   const latestSnap = snapshotTrend?.[snapshotTrend.length - 1] ?? null;
@@ -101,22 +103,24 @@ export default function PortfolioPage() {
   // --- Account status breakdown ---
   const statusBarData = useMemo(() => {
     if (!apiData?.statusBreakdown?.length) return null;
-    return (apiData.statusBreakdown as { status: string; accounts: number }[]).map((r) => ({
+    const raw = (apiData.statusBreakdown as { status: string; accounts: number }[]).map((r) => ({
       label: STATUS_LABELS[r.status] ?? r.status,
       accounts: r.accounts,
     }));
-  }, [apiData]);
+    return applyFilterToData(raw, filters);
+  }, [apiData, filters]);
 
   const statusIsLive = !!statusBarData?.length;
 
   // --- Credit limit distribution ---
   const creditLimitBarData = useMemo(() => {
     if (!apiData?.creditLimitDist?.length) return null;
-    return (apiData.creditLimitDist as { bucket: string; accounts: number }[]).map((r) => ({
+    const raw = (apiData.creditLimitDist as { bucket: string; accounts: number }[]).map((r) => ({
       label: r.bucket,
       accounts: r.accounts,
     }));
-  }, [apiData]);
+    return applyFilterToData(raw, filters);
+  }, [apiData, filters]);
 
   const creditLimitIsLive = !!creditLimitBarData?.length;
 

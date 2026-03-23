@@ -11,6 +11,7 @@ import { HorizontalBar } from "@/components/charts/horizontal-bar";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { usePeriod, useDateParams } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
+import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange } from "@/lib/period-data";
 
@@ -54,7 +55,7 @@ const actionItems: ActionItem[] = [
 export default function UsersDeepDivePage() {
   const { period } = usePeriod();
   const { dateParams } = useDateParams();
-  const { filters } = useFilters(); // eslint-disable-line @typescript-eslint/no-unused-vars
+  const { filters } = useFilters();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
   const { data: apiData } = useSWR(
@@ -66,11 +67,12 @@ export default function UsersDeepDivePage() {
   // --- Account status breakdown (bar chart) ---
   const statusBarData = useMemo(() => {
     if (!apiData?.statusBreakdown?.length) return null;
-    return (apiData.statusBreakdown as { status: string; accounts: number }[]).map((r) => ({
+    const raw = (apiData.statusBreakdown as { status: string; accounts: number }[]).map((r) => ({
       label: STATUS_LABELS[r.status] ?? r.status,
       accounts: r.accounts,
     }));
-  }, [apiData]);
+    return applyFilterToData(raw, filters);
+  }, [apiData, filters]);
   const statusIsLive = !!statusBarData?.length;
 
   // KPI values from status breakdown
@@ -96,11 +98,12 @@ export default function UsersDeepDivePage() {
   // --- Device manufacturer breakdown (bar chart) ---
   const deviceBarData = useMemo(() => {
     if (!apiData?.deviceManufacturers?.length) return null;
-    return (apiData.deviceManufacturers as { manufacturer: string; users: number }[]).map((r) => ({
+    const raw = (apiData.deviceManufacturers as { manufacturer: string; users: number }[]).map((r) => ({
       label: r.manufacturer,
       users: r.users,
     }));
-  }, [apiData]);
+    return applyFilterToData(raw, filters);
+  }, [apiData, filters]);
   const deviceIsLive = !!deviceBarData?.length;
 
   const totalDeviceUsers = useMemo(() => {
@@ -111,35 +114,37 @@ export default function UsersDeepDivePage() {
   // --- OS breakdown (bar chart) ---
   const osBarData = useMemo(() => {
     if (!apiData?.osBreakdown?.length) return null;
-    return (apiData.osBreakdown as { os: string; users: number }[]).map((r) => ({
+    const raw = (apiData.osBreakdown as { os: string; users: number }[]).map((r) => ({
       label: r.os,
       users: r.users,
     }));
-  }, [apiData]);
+    return applyFilterToData(raw, filters);
+  }, [apiData, filters]);
   const osIsLive = !!osBarData?.length;
 
   // --- Geographic distribution (horizontal bar) ---
   const geoBarData = useMemo(() => {
     if (!apiData?.geoDeepDive?.length) return null;
-    const rows = apiData.geoDeepDive as { province: string; users: number }[];
+    const rows = applyFilterToData(apiData.geoDeepDive as { province: string; users: number }[], filters);
     const maxVal = Math.max(...rows.map((r) => r.users));
     return rows.map((r) => ({
       label: r.province,
       value: r.users,
       maxValue: maxVal,
     }));
-  }, [apiData]);
+  }, [apiData, filters]);
   const geoIsLive = !!geoBarData?.length;
 
   // --- Account growth trend (line chart) ---
   const growthTrend = useMemo(() => {
     if (!apiData?.accountGrowth?.length) return null;
-    return (apiData.accountGrowth as { month: string; total_accounts: number; new_accounts: number }[]).map((r) => ({
+    const raw = (apiData.accountGrowth as { month: string; total_accounts: number; new_accounts: number }[]).map((r) => ({
       date: r.month,
       totalAccounts: r.total_accounts,
       newAccounts: r.new_accounts ?? 0,
     }));
-  }, [apiData]);
+    return applyFilterToData(raw, filters);
+  }, [apiData, filters]);
   const growthIsLive = !!growthTrend?.length;
 
   return (
@@ -152,7 +157,7 @@ export default function UsersDeepDivePage() {
           <MetricCard
             metricKey="users_total_accounts"
             label="Total Accounts"
-            value={totalAccounts}
+            value={applyFilterToMetric(totalAccounts, filters, false)}
             unit="count"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
@@ -161,7 +166,7 @@ export default function UsersDeepDivePage() {
           <MetricCard
             metricKey="users_active_accounts"
             label="Active Accounts"
-            value={activeAccounts}
+            value={applyFilterToMetric(activeAccounts, filters, false)}
             unit="count"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
@@ -170,7 +175,7 @@ export default function UsersDeepDivePage() {
           <MetricCard
             metricKey="users_blocked_accounts"
             label="Blocked / Suspended"
-            value={blockedAccounts}
+            value={applyFilterToMetric(blockedAccounts, filters, false)}
             unit="count"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
@@ -179,7 +184,7 @@ export default function UsersDeepDivePage() {
           <MetricCard
             metricKey="users_device_users"
             label="Users with Device Data"
-            value={totalDeviceUsers}
+            value={applyFilterToMetric(totalDeviceUsers, filters, false)}
             unit="count"
             asOf={AS_OF}
             dataRange={DATA_RANGE}

@@ -11,7 +11,9 @@ import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-i
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { usePeriod, useDateParams } from "@/hooks/use-period";
+import { useFilters } from "@/hooks/use-filters";
 import { getPeriodRange } from "@/lib/period-data";
+import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 
 const AS_OF = "2026-03-17";
@@ -58,6 +60,7 @@ export default function ChannelQualityPage() {
   const tNav = useTranslations("nav");
   const { period } = usePeriod();
   const { dateParams } = useDateParams();
+  const { filters } = useFilters();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
   const { data: apiData } = useSWR(
@@ -70,8 +73,8 @@ export default function ChannelQualityPage() {
 
   const channelData = useMemo((): ChannelRow[] | null => {
     if (!apiData?.channelQuality?.length) return null;
-    return apiData.channelQuality as ChannelRow[];
-  }, [apiData]);
+    return applyFilterToData(apiData.channelQuality as ChannelRow[], filters);
+  }, [apiData, filters]);
 
   // KPI summary
   const kpiSummary = useMemo(() => {
@@ -115,7 +118,7 @@ export default function ChannelQualityPage() {
             <MetricCard
               metricKey="cq-total-decisions"
               label="Total Decisions"
-              value={kpiSummary.totalDecisions}
+              value={applyFilterToMetric(kpiSummary.totalDecisions, filters, false)}
               unit="count"
               asOf={AS_OF}
               dataRange={DATA_RANGE}
@@ -124,7 +127,7 @@ export default function ChannelQualityPage() {
             <MetricCard
               metricKey="cq-total-approved"
               label="Total Approved"
-              value={kpiSummary.totalApproved}
+              value={applyFilterToMetric(kpiSummary.totalApproved, filters, false)}
               unit="count"
               asOf={AS_OF}
               dataRange={DATA_RANGE}

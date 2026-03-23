@@ -10,6 +10,7 @@ import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { usePeriod, useDateParams } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
+import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange } from "@/lib/period-data";
 
@@ -59,7 +60,7 @@ export default function RiskPage() {
   // ---------------------------------------------------------------------------
   const dpdTrend = useMemo(() => {
     if (!apiData?.dpdTrend?.length) return null;
-    return (apiData.dpdTrend as {
+    const raw = (apiData.dpdTrend as {
       week_start: string;
       current_count: number;
       dpd_1_30: number;
@@ -78,14 +79,15 @@ export default function RiskPage() {
       total_accounts: r.total_accounts,
       delinquency_rate: r.delinquency_rate_30plus,
     }));
-  }, [apiData]);
+    return applyFilterToData(raw, filters);
+  }, [apiData, filters]);
 
   // ---------------------------------------------------------------------------
   // Transform balance exposure data
   // ---------------------------------------------------------------------------
   const balanceExposure = useMemo(() => {
     if (!apiData?.balanceExposure?.length) return null;
-    return (apiData.balanceExposure as {
+    const raw = (apiData.balanceExposure as {
       bucket: string;
       accounts: number;
       total_balance_idr: number;
@@ -94,7 +96,8 @@ export default function RiskPage() {
       accounts: r.accounts,
       balance: r.total_balance_idr,
     }));
-  }, [apiData]);
+    return applyFilterToData(raw, filters);
+  }, [apiData, filters]);
 
   // ---------------------------------------------------------------------------
   // KPI values from latest week

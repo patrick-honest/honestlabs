@@ -10,7 +10,9 @@ import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { HorizontalBar } from "@/components/charts/horizontal-bar";
 import { usePeriod, useDateParams } from "@/hooks/use-period";
+import { useFilters } from "@/hooks/use-filters";
 import { getPeriodRange } from "@/lib/period-data";
+import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { formatNumber } from "@/lib/utils";
 
@@ -48,6 +50,7 @@ const actionItems: ActionItem[] = [
 export default function TransactionAuthPage() {
   const { period } = usePeriod();
   const { dateParams } = useDateParams();
+  const { filters } = useFilters();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
@@ -64,7 +67,7 @@ export default function TransactionAuthPage() {
   // Transform weekly auth trend for charts
   const weeklyTrend = useMemo(() => {
     if (!apiData?.weeklyAuthTrend?.length) return null;
-    return (apiData.weeklyAuthTrend as {
+    const raw = (apiData.weeklyAuthTrend as {
       week_start: string;
       total_auths: number;
       approved: number;
@@ -87,7 +90,8 @@ export default function TransactionAuthPage() {
       avgTicket: r.avg_ticket_idr,
       foreignPct: r.foreign_txn_pct,
     }));
-  }, [apiData]);
+    return applyFilterToData(raw, filters);
+  }, [apiData, filters]);
 
   // Latest KPI values from trend data
   const latestWeek = weeklyTrend?.[weeklyTrend.length - 1];
@@ -96,13 +100,13 @@ export default function TransactionAuthPage() {
   // Top merchants data
   const topMerchants = useMemo(() => {
     if (!apiData?.topMerchants?.length) return null;
-    return apiData.topMerchants as {
+    return applyFilterToData(apiData.topMerchants as {
       merchant_name: string;
       txn_count: number;
       total_spend_idr: number;
       unique_cards: number;
-    }[];
-  }, [apiData]);
+    }[], filters);
+  }, [apiData, filters]);
 
   const maxMerchantTxn = topMerchants ? Math.max(...topMerchants.map(m => m.txn_count)) : 0;
 

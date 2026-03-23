@@ -10,7 +10,9 @@ import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { usePeriod, useDateParams } from "@/hooks/use-period";
+import { useFilters } from "@/hooks/use-filters";
 import { getPeriodRange, getPeriodInsightLabels } from "@/lib/period-data";
+import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 
 const AS_OF = "Mar 15, 2026";
@@ -81,6 +83,7 @@ interface RedemptionRow {
 export default function PointsProgramPage() {
   const { period } = usePeriod();
   const { dateParams } = useDateParams();
+  const { filters } = useFilters();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
 
@@ -95,26 +98,26 @@ export default function PointsProgramPage() {
   // Summary data
   const summaryData = useMemo((): SummaryRow[] | null => {
     if (!apiData?.summary?.length) return null;
-    return apiData.summary as SummaryRow[];
-  }, [apiData]);
+    return applyFilterToData(apiData.summary as SummaryRow[], filters);
+  }, [apiData, filters]);
 
   // Flow trend
   const flowTrend = useMemo((): FlowRow[] | null => {
     if (!apiData?.flowTrend?.length) return null;
-    return apiData.flowTrend as FlowRow[];
-  }, [apiData]);
+    return applyFilterToData(apiData.flowTrend as FlowRow[], filters);
+  }, [apiData, filters]);
 
   // Closing balance trend
   const closingBalance = useMemo((): ClosingRow[] | null => {
     if (!apiData?.closingBalance?.length) return null;
-    return apiData.closingBalance as ClosingRow[];
-  }, [apiData]);
+    return applyFilterToData(apiData.closingBalance as ClosingRow[], filters);
+  }, [apiData, filters]);
 
   // Redemption breakdown
   const redemptionBreakdown = useMemo((): RedemptionRow[] | null => {
     if (!apiData?.redemptionBreakdown?.length) return null;
-    return apiData.redemptionBreakdown as RedemptionRow[];
-  }, [apiData]);
+    return applyFilterToData(apiData.redemptionBreakdown as RedemptionRow[], filters);
+  }, [apiData, filters]);
 
   // KPI summary
   const kpiSummary = useMemo(() => {
@@ -166,7 +169,7 @@ export default function PointsProgramPage() {
           <MetricCard
             metricKey="pts-total-accounts"
             label="Total Accounts"
-            value={kpiSummary.totalAccounts}
+            value={applyFilterToMetric(kpiSummary.totalAccounts, filters, false)}
             unit="count"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
@@ -175,7 +178,7 @@ export default function PointsProgramPage() {
           <MetricCard
             metricKey="pts-with-points"
             label="Accounts with Points"
-            value={kpiSummary.accountsWithPoints}
+            value={applyFilterToMetric(kpiSummary.accountsWithPoints, filters, false)}
             unit="count"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
@@ -184,7 +187,7 @@ export default function PointsProgramPage() {
           <MetricCard
             metricKey="pts-closing-balance"
             label="Closing Balance"
-            value={kpiSummary.closingBalance}
+            value={applyFilterToMetric(kpiSummary.closingBalance, filters, false)}
             unit="count"
             asOf={AS_OF}
             dataRange={DATA_RANGE}

@@ -4,6 +4,7 @@ import { useCallback, useMemo } from "react";
 import useSWR from "swr";
 import { usePeriod, useDateParams } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
+import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { getPeriodRange } from "@/lib/period-data";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
@@ -57,18 +58,18 @@ export default function CardsOverviewPage() {
 
   const cardStatusData = useMemo(() => {
     if (!apiData?.cardStatusBreakdown) return null;
-    return apiData.cardStatusBreakdown as { status: string; accounts: number }[];
-  }, [apiData]);
+    return applyFilterToData(apiData.cardStatusBreakdown as { status: string; accounts: number }[], filters);
+  }, [apiData, filters]);
 
   const cardProgramData = useMemo(() => {
     if (!apiData?.cardProgramBreakdown) return null;
-    return apiData.cardProgramBreakdown as { card_pgm: string; brand: string; accounts: number }[];
-  }, [apiData]);
+    return applyFilterToData(apiData.cardProgramBreakdown as { card_pgm: string; brand: string; accounts: number }[], filters);
+  }, [apiData, filters]);
 
   const verificationData = useMemo(() => {
     if (!apiData?.verificationBreakdown) return null;
-    return apiData.verificationBreakdown as { verification: string; accounts: number }[];
-  }, [apiData]);
+    return applyFilterToData(apiData.verificationBreakdown as { verification: string; accounts: number }[], filters);
+  }, [apiData, filters]);
 
   // Brand split from card program data
   const brandSplit = useMemo(() => {
@@ -114,7 +115,7 @@ export default function CardsOverviewPage() {
           <MetricCard
             metricKey="total-cards"
             label="Total Cards"
-            value={totalCards}
+            value={applyFilterToMetric(totalCards, filters, false)}
             unit="count"
             asOf={AS_OF}
             dataRange={DATA_RANGE}

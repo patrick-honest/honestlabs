@@ -11,6 +11,7 @@ import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-i
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { usePeriod, useDateParams } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
+import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { getPeriodRange, getPeriodInsightLabels } from "@/lib/period-data";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { formatNumber } from "@/lib/utils";
@@ -132,7 +133,7 @@ export default function SpendPage() {
   // Weekly spend trend data from BigQuery
   const weeklyTrend = useMemo(() => {
     if (!spendAnalysis?.weeklySpendTrend?.length) return null;
-    return (spendAnalysis.weeklySpendTrend as { week_start: string; eligible_count: number; transactor_count: number; total_transactions: number; total_spend_idr: number; spend_active_rate: number; online_spend_idr: number; offline_spend_idr: number; qris_spend_idr: number; avg_spend_per_txn_idr: number }[]).map(r => ({
+    const raw = (spendAnalysis.weeklySpendTrend as { week_start: string; eligible_count: number; transactor_count: number; total_transactions: number; total_spend_idr: number; spend_active_rate: number; online_spend_idr: number; offline_spend_idr: number; qris_spend_idr: number; avg_spend_per_txn_idr: number }[]).map(r => ({
       date: r.week_start.replace("2025-", "").replace("2026-", "").slice(0, 5),
       eligible: r.eligible_count,
       transactors: r.transactor_count,
@@ -144,7 +145,8 @@ export default function SpendPage() {
       avgTicket: r.avg_spend_per_txn_idr,
       txnPerUser: r.total_transactions / Math.max(r.eligible_count, 1),
     }));
-  }, [spendAnalysis]);
+    return applyFilterToData(raw, filters);
+  }, [spendAnalysis, filters]);
 
   // Period-level summary (cumulative SAR for entire period)
   const periodSummary = spendAnalysis?.periodSummary as {
@@ -159,32 +161,35 @@ export default function SpendPage() {
   // Transform channel data for horizontal bar chart
   const channelBarData = useMemo(() => {
     if (!channelData) return null;
-    return channelData.map((ch: { channel: string; txn_count: number; spend_idr: number }) => ({
+    const raw = channelData.map((ch: { channel: string; txn_count: number; spend_idr: number }) => ({
       channel: ch.channel,
       txn_count: ch.txn_count,
       spend_idr: ch.spend_idr,
     }));
-  }, [channelData]);
+    return applyFilterToData(raw, filters);
+  }, [channelData, filters]);
 
   // Transform decline data for bar chart with labels
   const declineBarData = useMemo(() => {
     if (!declineData) return null;
-    return declineData.map((d: { code: string; description: string; cnt: number; amount_idr: number }) => ({
+    const raw = declineData.map((d: { code: string; description: string; cnt: number; amount_idr: number }) => ({
       label: `${d.code} — ${d.description.split(" — ")[0]}`,
       code: d.code,
       count: d.cnt,
       description: d.description,
     }));
-  }, [declineData]);
+    return applyFilterToData(raw, filters);
+  }, [declineData, filters]);
 
   // Transform QRIS merchant growth for line chart
   const qrisMerchantLineData = useMemo(() => {
     if (!qrisMerchantData) return null;
-    return qrisMerchantData.map((row: { month: string; cumulative_merchants: number; new_merchants: number }) => ({
+    const raw = qrisMerchantData.map((row: { month: string; cumulative_merchants: number; new_merchants: number }) => ({
       date: row.month.replace("2025-", "").replace("2026-", "").replace("09", "Sep").replace("10", "Oct").replace("11", "Nov").replace("12", "Dec").replace("01", "Jan").replace("02", "Feb").replace("03", "Mar"),
       cumulative: row.cumulative_merchants,
     }));
-  }, [qrisMerchantData]);
+    return applyFilterToData(raw, filters);
+  }, [qrisMerchantData, filters]);
 
   const channelInsights: ChartInsight[] = useMemo(() => [
     { text: "Offline leads in transaction count (75K) but QRIS is closing fast at 63.5K transactions — indicating strong QR adoption.", type: "neutral" },

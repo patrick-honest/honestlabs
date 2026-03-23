@@ -11,6 +11,7 @@ import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banne
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { usePeriod, useDateParams } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
+import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
 
@@ -56,7 +57,7 @@ export default function BillingCyclePage() {
   const revolveTrendData = useMemo(() => {
     if (!apiData?.revolveTrend?.length) return [];
     const months = [...new Set(apiData.revolveTrend.map((r: { month: string }) => r.month))].sort();
-    return months.map((m) => {
+    const raw = months.map((m) => {
       const c4 = apiData.revolveTrend.find((r: { month: string; cycle_day: number }) => r.month === m && r.cycle_day === 4);
       const c26 = apiData.revolveTrend.find((r: { month: string; cycle_day: number }) => r.month === m && r.cycle_day === 26);
       return {
@@ -65,14 +66,15 @@ export default function BillingCyclePage() {
         "Cycle 26th": c26?.revolve_rate ?? 0,
       };
     });
-  }, [apiData]);
+    return applyFilterToData(raw, filters);
+  }, [apiData, filters]);
 
   // ── Utilization Distribution ───────────────────────────────────────
 
   const utilizationData = useMemo(() => {
     if (!apiData?.utilizationDistribution?.length) return [];
     const buckets = ["No Balance", "0-25%", "25-50%", "50-75%", "75-100%", ">100%"];
-    return buckets.map((b) => {
+    const raw = buckets.map((b) => {
       const c4 = apiData.utilizationDistribution.find((r: { cycle_day: number; bucket: string }) => r.cycle_day === 4 && r.bucket === b);
       const c26 = apiData.utilizationDistribution.find((r: { cycle_day: number; bucket: string }) => r.cycle_day === 26 && r.bucket === b);
       return {
@@ -81,14 +83,15 @@ export default function BillingCyclePage() {
         "Cycle 26th": c26?.pct ?? 0,
       };
     });
-  }, [apiData]);
+    return applyFilterToData(raw, filters);
+  }, [apiData, filters]);
 
   // ── DPD Distribution ───────────────────────────────────────────────
 
   const dpdData = useMemo(() => {
     if (!apiData?.dpdDistribution?.length) return [];
     const buckets = ["Current", "1-30 DPD", "31-60 DPD", "61-90 DPD", "90+ DPD"];
-    return buckets.map((b) => {
+    const raw = buckets.map((b) => {
       const c4 = apiData.dpdDistribution.find((r: { cycle_day: number; bucket: string }) => r.cycle_day === 4 && r.bucket === b);
       const c26 = apiData.dpdDistribution.find((r: { cycle_day: number; bucket: string }) => r.cycle_day === 26 && r.bucket === b);
       return {
@@ -97,14 +100,15 @@ export default function BillingCyclePage() {
         "Cycle 26th": c26?.pct ?? 0,
       };
     });
-  }, [apiData]);
+    return applyFilterToData(raw, filters);
+  }, [apiData, filters]);
 
   // ── Balance Trend ──────────────────────────────────────────────────
 
   const balanceTrendData = useMemo(() => {
     if (!apiData?.balanceTrend?.length) return [];
     const months = [...new Set(apiData.balanceTrend.map((r: { month: string }) => r.month))].sort();
-    return months.map((m) => {
+    const raw = months.map((m) => {
       const c4 = apiData.balanceTrend.find((r: { month: string; cycle_day: number }) => r.month === m && r.cycle_day === 4);
       const c26 = apiData.balanceTrend.find((r: { month: string; cycle_day: number }) => r.month === m && r.cycle_day === 26);
       return {
@@ -113,14 +117,15 @@ export default function BillingCyclePage() {
         "Cycle 26th": Math.round((c26?.avg_balance_idr ?? 0) / 1000),
       };
     });
-  }, [apiData]);
+    return applyFilterToData(raw, filters);
+  }, [apiData, filters]);
 
   // ── Payment Behavior ───────────────────────────────────────────────
 
   const paymentBehaviorData = useMemo(() => {
     if (!apiData?.paymentBehavior?.length) return [];
     const behaviors = ["Paid in Full", "Min Payment Made", "Below Min Due", "Past Due", "Other"];
-    return behaviors.map((b) => {
+    const raw = behaviors.map((b) => {
       const c4 = apiData.paymentBehavior.find((r: { cycle_day: number; behavior: string }) => r.cycle_day === 4 && r.behavior === b);
       const c26 = apiData.paymentBehavior.find((r: { cycle_day: number; behavior: string }) => r.cycle_day === 26 && r.behavior === b);
       return {
@@ -131,7 +136,8 @@ export default function BillingCyclePage() {
         c26_accounts: c26?.accounts ?? 0,
       };
     }).filter((d) => d["Cycle 4th"] > 0 || d["Cycle 26th"] > 0);
-  }, [apiData]);
+    return applyFilterToData(raw, filters);
+  }, [apiData, filters]);
 
   // ── Insights ───────────────────────────────────────────────────────
 
@@ -171,7 +177,7 @@ export default function BillingCyclePage() {
         <MetricCard
           metricKey="billing_active_accounts"
           label="Active Accounts"
-          value={totalActive}
+          value={applyFilterToMetric(totalActive, filters, false)}
           unit="count"
           asOf={apiData?.asOf ?? ""}
           dataRange={apiData?.dataRange ?? { start: "", end: "" }}
@@ -198,7 +204,7 @@ export default function BillingCyclePage() {
         <MetricCard
           metricKey="billing_avg_balance"
           label="Avg Balance"
-          value={avgBalance}
+          value={applyFilterToMetric(avgBalance, filters, false)}
           unit="idr"
           asOf={apiData?.asOf ?? ""}
           dataRange={apiData?.dataRange ?? { start: "", end: "" }}

@@ -11,6 +11,7 @@ import { DashboardLineChart } from "@/components/charts/line-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { usePeriod, useDateParams } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
+import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
@@ -92,20 +93,20 @@ export default function AcquisitionPage() {
   const funnelIsLive = !!apiData?.funnel?.length;
 
   // Use real funnel data
-  const periodFunnel = useMemo(() => {
+  const periodFunnel = useMemo((): { stage: string; count: number; rate: number | null }[] | null => {
     if (!apiData?.funnel?.length) return null;
-    return apiData.funnel.map((s: { stage: string; label: string; count: number; conversion_from_prev_pct: number | null }) => ({
+    return applyFilterToData(apiData.funnel.map((s: { stage: string; label: string; count: number; conversion_from_prev_pct: number | null }) => ({
       stage: s.label,
       count: s.count,
       rate: s.conversion_from_prev_pct,
-    }));
-  }, [apiData]);
+    })), filters);
+  }, [apiData, filters]);
 
   // Decision breakdown data
   const decisionBreakdown = useMemo(() => {
     if (!apiData?.decisionBreakdown?.length) return null;
-    return apiData.decisionBreakdown as { decision: string; cnt: number }[];
-  }, [apiData]);
+    return applyFilterToData(apiData.decisionBreakdown as { decision: string; cnt: number }[], filters);
+  }, [apiData, filters]);
 
   const decisionTotal = useMemo(() => {
     if (!decisionBreakdown) return 0;
@@ -115,14 +116,14 @@ export default function AcquisitionPage() {
   // Product mix data
   const productMix = useMemo(() => {
     if (!apiData?.productMix?.length) return null;
-    return apiData.productMix as { product_type: string; cnt: number }[];
-  }, [apiData]);
+    return applyFilterToData(apiData.productMix as { product_type: string; cnt: number }[], filters);
+  }, [apiData, filters]);
 
   // Approval rate trend data
   const approvalRateTrend = useMemo(() => {
     if (!apiData?.approvalRateTrend?.length) return null;
-    return apiData.approvalRateTrend as { week_start: string; total: number; approved: number; approval_rate: number }[];
-  }, [apiData]);
+    return applyFilterToData(apiData.approvalRateTrend as { week_start: string; total: number; approved: number; approval_rate: number }[], filters);
+  }, [apiData, filters]);
 
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
 
@@ -233,7 +234,7 @@ export default function AcquisitionPage() {
           <MetricCard
             metricKey="total-decisions"
             label="Total Decisions"
-            value={decisionTotal}
+            value={applyFilterToMetric(decisionTotal, filters, false)}
             unit="count"
             asOf={AS_OF}
             dataRange={DATA_RANGE}

@@ -10,6 +10,7 @@ import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { usePeriod, useDateParams } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
+import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange } from "@/lib/period-data";
 
@@ -71,7 +72,7 @@ export default function RepaymentsPage() {
   // --- Weekly repayment trend (from DW009) ---
   const weeklyTrend = useMemo(() => {
     if (!apiData?.weeklyTrend?.length) return null;
-    return (apiData.weeklyTrend as {
+    const raw = (apiData.weeklyTrend as {
       week_start: string;
       payment_count: number;
       total_amount_idr: number;
@@ -82,7 +83,8 @@ export default function RepaymentsPage() {
       totalAmountIdr: r.total_amount_idr,
       uniqueAccounts: r.unique_accounts,
     }));
-  }, [apiData]);
+    return applyFilterToData(raw, filters);
+  }, [apiData, filters]);
 
   const weeklyIsLive = !!weeklyTrend?.length;
   const latestWeek = weeklyTrend?.[weeklyTrend.length - 1] ?? null;
@@ -91,7 +93,7 @@ export default function RepaymentsPage() {
   // --- Monthly volume trend ---
   const volumeTrend = useMemo(() => {
     if (!apiData?.volumeTrend?.length) return null;
-    return (apiData.volumeTrend as {
+    const raw = (apiData.volumeTrend as {
       month: string;
       count: number;
       total_amount_idr: number;
@@ -100,14 +102,15 @@ export default function RepaymentsPage() {
       count: r.count,
       totalAmountIdr: r.total_amount_idr,
     }));
-  }, [apiData]);
+    return applyFilterToData(raw, filters);
+  }, [apiData, filters]);
 
   const volumeIsLive = !!volumeTrend?.length;
 
   // --- By vendor ---
   const vendorData = useMemo(() => {
     if (!apiData?.byVendor?.length) return null;
-    return (apiData.byVendor as {
+    const raw = (apiData.byVendor as {
       vendor: string;
       count: number;
       amount: number;
@@ -116,14 +119,15 @@ export default function RepaymentsPage() {
       count: r.count,
       amount: r.amount,
     }));
-  }, [apiData]);
+    return applyFilterToData(raw, filters);
+  }, [apiData, filters]);
 
   const vendorIsLive = !!vendorData?.length;
 
   // --- Timeliness ---
   const timelinessData = useMemo(() => {
     if (!apiData?.timeliness?.length) return null;
-    return (apiData.timeliness as {
+    const raw = (apiData.timeliness as {
       bucket: string;
       accounts: number;
       pct: number;
@@ -132,21 +136,23 @@ export default function RepaymentsPage() {
       accounts: r.accounts,
       pct: r.pct,
     }));
-  }, [apiData]);
+    return applyFilterToData(raw, filters);
+  }, [apiData, filters]);
 
   const timelinessIsLive = !!timelinessData?.length;
 
   // --- Balance ratio ---
   const ratioData = useMemo(() => {
     if (!apiData?.balanceRatio?.length) return null;
-    return (apiData.balanceRatio as {
+    const raw = (apiData.balanceRatio as {
       month: string;
       avg_ratio: number;
     }[]).map((r) => ({
       date: r.month,
       avgRatio: r.avg_ratio,
     }));
-  }, [apiData]);
+    return applyFilterToData(raw, filters);
+  }, [apiData, filters]);
 
   const ratioIsLive = !!ratioData?.length;
 

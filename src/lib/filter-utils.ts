@@ -73,7 +73,8 @@ export function getFilterMultiplier(filters: FilterSelections): number {
  *   "rate", "pct", "percent") are shifted slightly instead of scaled.
  * - String fields (like "date" labels) are left untouched.
  */
-export function applyFilterToData<T extends Record<string, unknown>>(
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function applyFilterToData<T extends Record<string, any>>(
   data: T[],
   filters: FilterSelections,
 ): T[] {
