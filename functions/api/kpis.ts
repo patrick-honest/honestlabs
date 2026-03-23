@@ -254,13 +254,26 @@ function buildKpi(
   return { metric, label, value, prevValue, unit, changePercent, direction };
 }
 
-async function computeKpis(env: Env, filters: ParsedFilters, urlStartDate?: string, urlEndDate?: string) {
+async function computeKpis(env: Env, filters: ParsedFilters, urlStartDate?: string, urlEndDate?: string, period = "monthly") {
   const { start, end } = getLastFullWeek();
-  // Use URL params if provided, otherwise compute from period
-  const extended = getExtendedRange(end, 12);
-  const startDate = urlStartDate || toSqlDate(extended.start);
   const endDate = urlEndDate || toSqlDate(end);
   const snapshotDate = urlEndDate || toSqlDate(end);
+
+  // Extend start date to include 6 periods of chart context
+  let startDate: string;
+  if (urlStartDate) {
+    const d = new Date(urlStartDate + "T00:00:00Z");
+    switch (period) {
+      case "weekly": d.setUTCDate(d.getUTCDate() - 6 * 7); break;
+      case "monthly": d.setUTCMonth(d.getUTCMonth() - 6); break;
+      case "quarterly": d.setUTCMonth(d.getUTCMonth() - 18); break;
+      default: d.setUTCMonth(d.getUTCMonth() - 6); break;
+    }
+    startDate = d.toISOString().slice(0, 10);
+  } else {
+    const extended = getExtendedRange(end, 12);
+    startDate = toSqlDate(extended.start);
+  }
 
   // Run all queries in parallel
   const [eligibleRows, spendRows, decisionRows, portfolio] = await Promise.all([
@@ -397,6 +410,7 @@ export async function onRequest(context: FnContext): Promise<Response> {
   const forceRefresh = request.method === "POST";
   const startDate = url.searchParams.get("startDate") || undefined;
   const endDate = url.searchParams.get("endDate") || undefined;
+  const period = url.searchParams.get("period") || "monthly";
   const filters = parseFilters(url);
   const hasFilters = hasAnyFilter(filters);
 
@@ -424,7 +438,7 @@ export async function onRequest(context: FnContext): Promise<Response> {
     }
 
     // Query BigQuery with filters and date params
-    const result = await computeKpis(env, filters, startDate, endDate);
+    const result = await computeKpis(env, filters, startDate, endDate, period);
 
     // Cache unfiltered results only
     if (!hasFilters) {

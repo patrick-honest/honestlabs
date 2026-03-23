@@ -2,11 +2,41 @@
  * Generic request handler for deep-dive endpoints.
  * Each endpoint provides a query function that receives date params, filters, and env,
  * and returns the data to send as JSON.
+ *
+ * The handler extends the startDate backwards to include 6 periods of chart context:
+ *   - weekly  → 6 weeks back
+ *   - monthly → 6 months back
+ *   - quarterly → 18 months (6 quarters) back
  */
 
 import type { Env } from "./bigquery-auth";
 import { getCached, setCached, cacheKey } from "./cache";
 import { parseFilters, hasAnyFilter, type ParsedFilters } from "./filters";
+
+/**
+ * Extend the start date backwards to include 6 periods of historical context.
+ */
+function extendStartDate(startDate: string, period: string): string {
+  const d = new Date(startDate + "T00:00:00Z");
+  switch (period) {
+    case "weekly":
+      d.setUTCDate(d.getUTCDate() - 6 * 7); // 6 weeks
+      break;
+    case "monthly":
+      d.setUTCMonth(d.getUTCMonth() - 6); // 6 months
+      break;
+    case "quarterly":
+      d.setUTCMonth(d.getUTCMonth() - 18); // 6 quarters
+      break;
+    case "yearly":
+      d.setUTCFullYear(d.getUTCFullYear() - 6); // 6 years
+      break;
+    default:
+      d.setUTCMonth(d.getUTCMonth() - 6); // default to 6 months
+      break;
+  }
+  return d.toISOString().slice(0, 10);
+}
 
 interface HandlerOptions {
   section: string;
@@ -20,8 +50,12 @@ export function createHandler(options: HandlerOptions) {
   return async function onRequest(context: { request: Request; env: Env }): Promise<Response> {
     const { request, env } = context;
     const url = new URL(request.url);
-    const startDate = url.searchParams.get("startDate");
+    const rawStartDate = url.searchParams.get("startDate");
     const endDate = url.searchParams.get("endDate");
+    const period = url.searchParams.get("period") || "monthly";
+
+    // Extend start date to include 6 periods of chart context
+    const startDate = rawStartDate ? extendStartDate(rawStartDate, period) : null;
 
     if (!startDate || !endDate) {
       return new Response(
