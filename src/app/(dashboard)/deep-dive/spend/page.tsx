@@ -304,6 +304,84 @@ export default function SpendPage() {
             />
           </div>
 
+          {/* Headline KPI trend charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <ChartCard
+              title={tSpend("spendActiveRate")}
+              subtitle="Weekly trend — % of newly eligible users transacting within 7 days"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              liveData={trendIsLive}
+              showIncrement
+            >
+              {(increment: ChartIncrement) => (
+                <DashboardLineChart
+                  data={aggregateByIncrement(weeklyTrend, increment, "date")}
+                  lines={[{ key: "rate", color: "#3b82f6", label: "SAR %" }]}
+                  xAxisKey="date"
+                  valueType="percent"
+                  height={220}
+                />
+              )}
+            </ChartCard>
+
+            <ChartCard
+              title={tSpend("totalSpend")}
+              subtitle="Weekly authorized transaction volume"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              liveData={trendIsLive}
+              showIncrement
+            >
+              {(increment: ChartIncrement) => (
+                <DashboardLineChart
+                  data={aggregateByIncrement(weeklyTrend, increment, "date")}
+                  lines={[{ key: "totalSpend", color: "#10b981", label: "Total Spend" }]}
+                  xAxisKey="date"
+                  valueType="currency"
+                  height={220}
+                />
+              )}
+            </ChartCard>
+
+            <ChartCard
+              title={tSpend("avgSpendPerUser")}
+              subtitle="Weekly total spend ÷ transactors"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              liveData={trendIsLive}
+              showIncrement
+            >
+              {(increment: ChartIncrement) => (
+                <DashboardLineChart
+                  data={aggregateByIncrement(weeklyTrend, increment, "date")}
+                  lines={[{ key: "avgTicket", color: "#f59e0b", label: "Avg Spend/Txn" }]}
+                  xAxisKey="date"
+                  valueType="currency"
+                  height={220}
+                />
+              )}
+            </ChartCard>
+
+            <ChartCard
+              title={tSpend("avgTxnPerUser")}
+              subtitle="Weekly transactions per transactor"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              liveData={trendIsLive}
+              showIncrement
+            >
+              {(increment: ChartIncrement) => (
+                <DashboardLineChart
+                  data={aggregateByIncrement(weeklyTrend, increment, "date")}
+                  lines={[{ key: "txnPerUser", color: "#8b5cf6", label: "Txn/User" }]}
+                  xAxisKey="date"
+                  height={220}
+                />
+              )}
+            </ChartCard>
+          </div>
+
           {/* ================================================================== */}
           {/* SECTION 2: Onboarding & Activation                                 */}
           {/* ================================================================== */}
