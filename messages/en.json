@@ -353,7 +353,10 @@
     "channelMix": "Channel Mix",
     "weeklyTrend": "Weekly Trend",
     "approvalRate": "Approval Rate",
-    "decisionBreakdown": "Decision Breakdown"
+    "decisionBreakdown": "Decision Breakdown",
+    "creditLimitTrend": "Credit Limit & Fee Trends",
+    "avgCreditLimit": "Avg Credit Limit (USD)",
+    "weightedAvgFee": "Weighted Avg Fee %"
   },
   "spend": {
     "title": "Spend",
@@ -411,20 +414,31 @@
     "dpd61to90": "61-90 DPD",
     "dpd90plus": "90+ DPD",
     "flowRates": "Flow Rates",
-    "nplTrend": "NPL Trend"
+    "nplTrend": "NPL Trend",
+    "vintageDelinquency": "Vintage Delinquency Analysis",
+    "dpdFirstStatement": "30+ DPD on First Statement",
+    "dpdApplicationMonth": "30+ DPD by Application Month"
   },
   "portfolio": {
     "title": "Portfolio",
     "totalAccounts": "Total Accounts",
     "eligibleToSpend": "Eligible to Spend",
     "creditExposure": "Credit Exposure",
-    "avgCreditLimit": "Average Credit Limit"
+    "avgCreditLimit": "Average Credit Limit",
+    "revolveRate": "Revolve Rate",
+    "revolveAnalysis": "Revolve & Fee Analysis",
+    "revolveRateCount": "Revolve Rate (Count)",
+    "revolveRateBalance": "Revolve Rate (Balance)"
   },
   "collections": {
     "title": "Collections",
     "recoveryRate": "Recovery Rate",
     "collectedAmount": "Collected Amount",
-    "writeOffs": "Write-Offs"
+    "writeOffs": "Write-Offs",
+    "cureRate": "Cure Rate",
+    "cureRateTrend": "Cure Rate Trend",
+    "curedBalance": "Cured Balance",
+    "totalBalance": "Total Balance"
   },
   "billingCycle": {
     "title": "Billing Cycle",

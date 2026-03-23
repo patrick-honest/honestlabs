@@ -353,7 +353,10 @@
     "channelMix": "チャネルミックス",
     "weeklyTrend": "週次推移",
     "approvalRate": "承認率",
-    "decisionBreakdown": "審査内訳"
+    "decisionBreakdown": "審査内訳",
+    "creditLimitTrend": "与信限度額・手数料推移",
+    "avgCreditLimit": "平均与信限度額 (USD)",
+    "weightedAvgFee": "加重平均手数料 %"
   },
   "spend": {
     "title": "支出",
@@ -411,20 +414,31 @@
     "dpd61to90": "DPD 61-90",
     "dpd90plus": "DPD 90超",
     "flowRates": "フロー率",
-    "nplTrend": "NPL推移"
+    "nplTrend": "NPL推移",
+    "vintageDelinquency": "ビンテージ延滞分析",
+    "dpdFirstStatement": "初回明細30日超延滞",
+    "dpdApplicationMonth": "申込月別30日超延滞"
   },
   "portfolio": {
     "title": "ポートフォリオ",
     "totalAccounts": "総口座数",
     "eligibleToSpend": "利用可能",
     "creditExposure": "信用エクスポージャー",
-    "avgCreditLimit": "平均与信限度額"
+    "avgCreditLimit": "平均与信限度額",
+    "revolveRate": "リボ率",
+    "revolveAnalysis": "リボ・手数料分析",
+    "revolveRateCount": "リボ率（件数）",
+    "revolveRateBalance": "リボ率（残高）"
   },
   "collections": {
     "title": "回収",
     "recoveryRate": "回収率",
     "collectedAmount": "回収額",
-    "writeOffs": "償却額"
+    "writeOffs": "償却額",
+    "cureRate": "回復率",
+    "cureRateTrend": "回復率推移",
+    "curedBalance": "回復残高",
+    "totalBalance": "総残高"
   },
   "billingCycle": {
     "title": "請求サイクル",

@@ -353,7 +353,10 @@
     "channelMix": "Campuran Channel",
     "weeklyTrend": "Tren Mingguan",
     "approvalRate": "Tingkat Persetujuan",
-    "decisionBreakdown": "Rincian Keputusan"
+    "decisionBreakdown": "Rincian Keputusan",
+    "creditLimitTrend": "Tren Batas Kredit & Biaya",
+    "avgCreditLimit": "Rata-rata Batas Kredit (USD)",
+    "weightedAvgFee": "Rata-rata Biaya Tertimbang %"
   },
   "spend": {
     "title": "Pengeluaran",
@@ -411,20 +414,31 @@
     "dpd61to90": "DPD 61-90",
     "dpd90plus": "DPD 90+",
     "flowRates": "Tingkat Aliran",
-    "nplTrend": "Tren NPL"
+    "nplTrend": "Tren NPL",
+    "vintageDelinquency": "Analisis Tunggakan Vintage",
+    "dpdFirstStatement": "DPD 30+ pada Tagihan Pertama",
+    "dpdApplicationMonth": "DPD 30+ berdasarkan Bulan Aplikasi"
   },
   "portfolio": {
     "title": "Portofolio",
     "totalAccounts": "Total Akun",
     "eligibleToSpend": "Memenuhi Syarat Belanja",
     "creditExposure": "Eksposur Kredit",
-    "avgCreditLimit": "Rata-rata Batas Kredit"
+    "avgCreditLimit": "Rata-rata Batas Kredit",
+    "revolveRate": "Tingkat Revolving",
+    "revolveAnalysis": "Analisis Revolving & Biaya",
+    "revolveRateCount": "Tingkat Revolving (Jumlah)",
+    "revolveRateBalance": "Tingkat Revolving (Saldo)"
   },
   "collections": {
     "title": "Penagihan",
     "recoveryRate": "Tingkat Pemulihan",
     "collectedAmount": "Jumlah Tertagih",
-    "writeOffs": "Penghapusan"
+    "writeOffs": "Penghapusan",
+    "cureRate": "Tingkat Kesembuhan",
+    "cureRateTrend": "Tren Tingkat Kesembuhan",
+    "curedBalance": "Saldo Tersembuhkan",
+    "totalBalance": "Total Saldo"
   },
   "billingCycle": {
     "title": "Siklus Tagihan",

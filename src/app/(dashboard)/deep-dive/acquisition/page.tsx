@@ -14,6 +14,9 @@ import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { ChartSkeleton, MetricCardsSkeleton } from "@/components/dashboard/chart-skeleton";
 import { usePeriod } from "@/hooks/use-period";
 import { useApiParams } from "@/hooks/use-api-params";
+import { useCurrency } from "@/hooks/use-currency";
+import { formatAmountCompact } from "@/lib/currency";
+import { useTranslations } from "next-intl";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
@@ -81,6 +84,8 @@ type ContextMenuState = {
 export default function AcquisitionPage() {
   const { period } = usePeriod();
   const { apiParams } = useApiParams();
+  const { currency } = useCurrency();
+  const tAcq = useTranslations("acquisition");
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
   // Fetch real acquisition data from BigQuery
@@ -124,6 +129,28 @@ export default function AcquisitionPage() {
     if (!apiData?.approvalRateTrend?.length) return null;
     return apiData.approvalRateTrend as { week_start: string; total: number; approved: number; approval_rate: number }[];
   }, [apiData]);
+
+  // Credit limit trend data
+  const creditLimitTrend = useMemo(() => {
+    if (!apiData?.creditLimitTrend?.length) return null;
+    return (apiData.creditLimitTrend as {
+      week_start: string;
+      approval_count: number;
+      avg_credit_limit_usd: number;
+      weighted_avg_fee_pct: number;
+    }[]).map((r) => ({
+      date: r.week_start,
+      avgCreditLimitUsd: r.avg_credit_limit_usd,
+      weightedAvgFeePct: r.weighted_avg_fee_pct,
+      approvalCount: r.approval_count,
+    }));
+  }, [apiData]);
+
+  const creditLimitIsLive = !!creditLimitTrend?.length;
+  const latestCreditLimit = creditLimitTrend?.[creditLimitTrend.length - 1] ?? null;
+  const prevCreditLimit = creditLimitTrend && creditLimitTrend.length >= 2 ? creditLimitTrend[creditLimitTrend.length - 2] : null;
+
+  const fmtCur = useCallback((v: number) => formatAmountCompact(v, currency), [currency]);
 
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
 
@@ -478,6 +505,69 @@ export default function AcquisitionPage() {
         <SampleDataBanner
           dataset="refined_rudderstack"
           reason="Approval rate trend requires decision_completed table"
+        />
+      )}
+
+      {/* ================================================================== */}
+      {/* Credit Limit & Fee Trends                                         */}
+      {/* ================================================================== */}
+      <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2 mt-8">
+        <span className="i-lucide-credit-card w-5 h-5" aria-hidden="true" />
+        {tAcq("creditLimitTrend")}
+      </h2>
+
+      {creditLimitTrend && latestCreditLimit ? (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <MetricCard
+              metricKey="acq_avg_credit_limit"
+              label={tAcq("avgCreditLimit")}
+              value={latestCreditLimit.avgCreditLimitUsd}
+              prevValue={prevCreditLimit?.avgCreditLimitUsd ?? null}
+              unit="usd"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              liveData={creditLimitIsLive}
+            />
+            <MetricCard
+              metricKey="acq_weighted_avg_fee"
+              label={tAcq("weightedAvgFee")}
+              value={latestCreditLimit.weightedAvgFeePct}
+              prevValue={prevCreditLimit?.weightedAvgFeePct ?? null}
+              unit="percent"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              liveData={creditLimitIsLive}
+            />
+          </div>
+
+          <ChartCard
+            title={tAcq("creditLimitTrend")}
+            subtitle="Weekly avg credit limit (USD) and weighted avg fee (%)"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            liveData={creditLimitIsLive}
+            showIncrement
+          >
+            {(increment: ChartIncrement) => (
+              <DashboardLineChart
+                data={aggregateByIncrement(creditLimitTrend, increment, "date")}
+                lines={[
+                  { key: "avgCreditLimitUsd", color: "#3b82f6", label: "Avg Credit Limit (USD)" },
+                  { key: "weightedAvgFeePct", color: "#f59e0b", label: "Weighted Avg Fee %" },
+                ]}
+                xAxisKey="date"
+                height={300}
+              />
+            )}
+          </ChartCard>
+        </>
+      ) : isLoading ? (
+        <><MetricCardsSkeleton /><ChartSkeleton /></>
+      ) : (
+        <SampleDataBanner
+          dataset="sandbox_risk"
+          reason="Credit limit trend requires new_card_application + card_type_dictionary tables"
         />
       )}
 

@@ -79,6 +79,15 @@ export const TABLES = {
 
   // QRIS experiment
   qris_rollout: "`storage-58f5a02c.sandbox_risk.sample_qris_rollout_test_10k_202601`",
+
+  // WBR / Risk sandbox tables
+  collection_cure_rate_raw: "`storage-58f5a02c.sandbox_risk.collection_cure_rate_raw`",
+  ft_delinquency_xpd: "`storage-58f5a02c.sandbox_risk.ft_delinquency_xpd`",
+  delinquency_xpd: "`storage-58f5a02c.sandbox_risk.delinquency_xpd`",
+  ft_application_decision_base: "`storage-58f5a02c.sandbox_risk.ft_application_decision_base`",
+  card_type_dictionary: "`storage-58f5a02c.sandbox_risk.card_type_dictionary`",
+  account_dpd_block_date: "`storage-58f5a02c.sandbox_risk.account_dpd_block_date`",
+  mapping_loc_user: "`storage-58f5a02c.sandbox_risk.mapping_loc_acct_to_user_id_and_application_status_id`",
 } as const;
 
 // ---------------------------------------------------------------------------

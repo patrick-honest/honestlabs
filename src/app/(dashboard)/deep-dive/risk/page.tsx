@@ -15,6 +15,7 @@ import { usePeriod } from "@/hooks/use-period";
 import { useApiParams } from "@/hooks/use-api-params";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange } from "@/lib/period-data";
+import { useTranslations } from "next-intl";
 
 const AS_OF = "Mar 15, 2026";
 
@@ -45,6 +46,7 @@ export default function RiskPage() {
   const { period } = usePeriod();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
   const { apiParams } = useApiParams();
+  const tRisk = useTranslations("risk");
 
   const { data: apiData, isLoading } = useSWR(
     `/api/risk?${apiParams}`,
@@ -99,6 +101,52 @@ export default function RiskPage() {
     }));
     return raw;
   }, [apiData]);
+
+  // ---------------------------------------------------------------------------
+  // Vintage Delinquency — DPD on First Statement
+  // ---------------------------------------------------------------------------
+  const dpdFirstStatement = useMemo(() => {
+    if (!apiData?.dpdFirstStatement?.length) return null;
+    return (apiData.dpdFirstStatement as {
+      month: string;
+      c1_pd30_obs: number;
+      c1_pd30: number;
+      v1_pd30_obs: number;
+      v1_pd30: number;
+      pd30_rate_pct: number;
+    }[]).map((r) => ({
+      date: r.month,
+      pd30Rate: r.pd30_rate_pct,
+      observations: r.v1_pd30_obs,
+      delinquent: r.v1_pd30,
+    }));
+  }, [apiData]);
+
+  const dpdFirstStatementIsLive = !!dpdFirstStatement?.length;
+  const latestFirstStmt = dpdFirstStatement?.[dpdFirstStatement.length - 1] ?? null;
+  const prevFirstStmt = dpdFirstStatement && dpdFirstStatement.length >= 2 ? dpdFirstStatement[dpdFirstStatement.length - 2] : null;
+
+  // ---------------------------------------------------------------------------
+  // Vintage Delinquency — DPD by Application Month
+  // ---------------------------------------------------------------------------
+  const dpdApplicationMonth = useMemo(() => {
+    if (!apiData?.dpdApplicationMonth?.length) return null;
+    return (apiData.dpdApplicationMonth as {
+      month: string;
+      c1_pd30_obs: number;
+      c1_pd30: number;
+      v1_pd30_obs: number;
+      v1_pd30: number;
+      pd30_rate_pct: number;
+    }[]).map((r) => ({
+      date: r.month,
+      pd30Rate: r.pd30_rate_pct,
+      observations: r.v1_pd30_obs,
+      delinquent: r.v1_pd30,
+    }));
+  }, [apiData]);
+
+  const dpdAppMonthIsLive = !!dpdApplicationMonth?.length;
 
   // ---------------------------------------------------------------------------
   // KPI values from latest week
@@ -251,6 +299,80 @@ export default function RiskPage() {
         <SampleDataBanner
           dataset="mart_finexus"
           reason="Balance exposure requires financial_account_updates (DW004)"
+        />
+      )}
+
+      {/* ================================================================== */}
+      {/* Vintage Delinquency Analysis                                       */}
+      {/* ================================================================== */}
+      <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2 mt-8">
+        <span className="i-lucide-calendar-clock w-5 h-5" aria-hidden="true" />
+        {tRisk("vintageDelinquency")}
+      </h2>
+
+      {dpdFirstStatement && latestFirstStmt ? (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <MetricCard
+              metricKey="risk_pd30_first_stmt"
+              label={tRisk("dpdFirstStatement")}
+              value={latestFirstStmt.pd30Rate}
+              prevValue={prevFirstStmt?.pd30Rate ?? null}
+              unit="percent"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              higherIsBetter={false}
+              liveData={dpdFirstStatementIsLive}
+            />
+          </div>
+
+          <ChartCard
+            title={tRisk("dpdFirstStatement")}
+            subtitle="Monthly PD30 rate on first statement (non-FT, excl. AOF/RP1)"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            liveData={dpdFirstStatementIsLive}
+          >
+            <DashboardLineChart
+              data={dpdFirstStatement}
+              lines={[{ key: "pd30Rate", color: "#ef4444", label: "PD30 Rate %" }]}
+              xAxisKey="date"
+              valueType="percent"
+              height={300}
+            />
+          </ChartCard>
+        </>
+      ) : isLoading ? (
+        <><MetricCardsSkeleton /><ChartSkeleton /></>
+      ) : (
+        <SampleDataBanner
+          dataset="sandbox_risk"
+          reason="First statement DPD requires ft_delinquency_xpd table"
+        />
+      )}
+
+      {dpdApplicationMonth ? (
+        <ChartCard
+          title={tRisk("dpdApplicationMonth")}
+          subtitle="Monthly PD30 rate by application/decision month (non-FT, excl. AOF/RP1)"
+          asOf={AS_OF}
+          dataRange={DATA_RANGE}
+          liveData={dpdAppMonthIsLive}
+        >
+          <DashboardLineChart
+            data={dpdApplicationMonth}
+            lines={[{ key: "pd30Rate", color: "#f97316", label: "PD30 Rate %" }]}
+            xAxisKey="date"
+            valueType="percent"
+            height={300}
+          />
+        </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
+      ) : (
+        <SampleDataBanner
+          dataset="sandbox_risk"
+          reason="Application month DPD requires ft_delinquency_xpd + financial_account_updates tables"
         />
       )}
 

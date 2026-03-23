@@ -15,6 +15,7 @@ import { usePeriod } from "@/hooks/use-period";
 import { useApiParams } from "@/hooks/use-api-params";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange } from "@/lib/period-data";
+import { useTranslations } from "next-intl";
 
 const AS_OF = "Mar 15, 2026";
 
@@ -57,6 +58,7 @@ export default function PortfolioPage() {
   const { period } = usePeriod();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
   const { apiParams } = useApiParams();
+  const tPort = useTranslations("portfolio");
 
   const { data: apiData, isLoading } = useSWR(
     `/api/portfolio?${apiParams}`,
@@ -124,6 +126,30 @@ export default function PortfolioPage() {
   }, [apiData]);
 
   const creditLimitIsLive = !!creditLimitBarData?.length;
+
+  // --- Revolve Rate Trend ---
+  const revolveRateTrend = useMemo(() => {
+    if (!apiData?.revolveRateTrend?.length) return null;
+    return (apiData.revolveRateTrend as {
+      month: string;
+      cnt_accounts: number;
+      cnt_revolving: number;
+      revolve_rate_count_pct: number;
+      revolve_rate_balance_pct: number;
+      statement_opening_balance: number;
+      total_billed_outstanding: number;
+    }[]).map((r) => ({
+      date: r.month,
+      revolveRateCount: r.revolve_rate_count_pct,
+      revolveRateBalance: r.revolve_rate_balance_pct,
+      accounts: r.cnt_accounts,
+      revolving: r.cnt_revolving,
+    }));
+  }, [apiData]);
+
+  const revolveIsLive = !!revolveRateTrend?.length;
+  const latestRevolve = revolveRateTrend?.[revolveRateTrend.length - 1] ?? null;
+  const prevRevolve = revolveRateTrend && revolveRateTrend.length >= 2 ? revolveRateTrend[revolveRateTrend.length - 2] : null;
 
   return (
     <div className="space-y-6">
@@ -271,6 +297,67 @@ export default function PortfolioPage() {
         <SampleDataBanner
           dataset="mart_finexus"
           reason="Credit limit distribution requires financial_account_updates (DW004)"
+        />
+      )}
+
+      {/* ================================================================== */}
+      {/* Revolve & Fee Analysis                                             */}
+      {/* ================================================================== */}
+      <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2 mt-8">
+        <span className="i-lucide-repeat w-5 h-5" aria-hidden="true" />
+        {tPort("revolveAnalysis")}
+      </h2>
+
+      {revolveRateTrend && latestRevolve ? (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <MetricCard
+              metricKey="portfolio_revolve_rate_count"
+              label={tPort("revolveRateCount")}
+              value={latestRevolve.revolveRateCount}
+              prevValue={prevRevolve?.revolveRateCount ?? null}
+              unit="percent"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              liveData={revolveIsLive}
+            />
+            <MetricCard
+              metricKey="portfolio_revolve_rate_balance"
+              label={tPort("revolveRateBalance")}
+              value={latestRevolve.revolveRateBalance}
+              prevValue={prevRevolve?.revolveRateBalance ?? null}
+              unit="percent"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              liveData={revolveIsLive}
+            />
+          </div>
+
+          <ChartCard
+            title={tPort("revolveRate")}
+            subtitle="Monthly revolve rate — count-based and balance-based"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            liveData={revolveIsLive}
+          >
+            <DashboardLineChart
+              data={revolveRateTrend}
+              lines={[
+                { key: "revolveRateCount", color: "#8b5cf6", label: "Revolve Rate (Count) %" },
+                { key: "revolveRateBalance", color: "#06b6d4", label: "Revolve Rate (Balance) %" },
+              ]}
+              xAxisKey="date"
+              valueType="percent"
+              height={300}
+            />
+          </ChartCard>
+        </>
+      ) : isLoading ? (
+        <><MetricCardsSkeleton /><ChartSkeleton /></>
+      ) : (
+        <SampleDataBanner
+          dataset="sandbox_risk"
+          reason="Revolve rate requires financial_account_updates + account_dpd_block_date tables"
         />
       )}
 
