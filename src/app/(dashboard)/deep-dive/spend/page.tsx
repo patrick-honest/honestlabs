@@ -707,17 +707,65 @@ export default function SpendPage() {
 
       <ActionItems section="Spend" items={actionItems} />
 
-      {/* Revenue Metrics — blocked by mart_finance */}
-      <SampleDataBanner
-        dataset="mart_finance"
-        reason="Revenue per customer and fee metrics require access to mart_finance dataset"
-      />
+      {/* ================================================================== */}
+      {/* DEFINITIONS                                                        */}
+      {/* ================================================================== */}
+      <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] px-6 py-4 space-y-3">
+        <p className="text-sm font-semibold text-[var(--text-primary)] mb-2">Metric Definitions</p>
 
-      {/* BNPL Usage — blocked by mart_finance + product data */}
-      <SampleDataBanner
-        dataset="mart_finance"
-        reason="BNPL usage data requires mart_finance access"
-      />
+        <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+          <span className="font-semibold text-[var(--text-secondary)]">Spend Activation Rate (SAR):</span>{" "}
+          % of customers who make at least 1 transaction within 7 days of their <strong>welcome call completed date</strong> (videocall verified).
+          Eligible date determined by DW005 field <code className="px-1 rounded bg-slate-100 dark:bg-slate-800 text-xs">f9_dw005_1st_unblk_all_mtd_tms</code> (first unblock timestamp).
+          Additional eligibility criteria: account status Good/Normal (DW004), DPD &ge; 0, card unblocked, all transaction channels enabled (HCE, network, contactless).
+          Only regular CC users included (Rp1 and RegFee users excluded from SAR denominator).
+          Weekly cohorts require full 13-day observation window before reporting.
+        </p>
+
+        <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+          <span className="font-semibold text-[var(--text-secondary)]">Rp1 Funded Rate:</span>{" "}
+          % of Rp1 (prepaid card) users who make at least 1 transaction within 7 days of approval date.
+          Rp1 users identified by <code className="px-1 rounded bg-slate-100 dark:bg-slate-800 text-xs">is_prepaid_card_applicable = TRUE</code> in decision_completed.
+          Average first funded amount = average of the first authorized transaction amount per funded user.
+        </p>
+
+        <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+          <span className="font-semibold text-[var(--text-secondary)]">Registration Fee Paid Rate:</span>{" "}
+          % of Registration Fee users who make at least 1 transaction within 7 days of approval date.
+          RegFee users identified by <code className="px-1 rounded bg-slate-100 dark:bg-slate-800 text-xs">is_account_opening_fee_applicable = TRUE</code> in decision_completed.
+        </p>
+
+        <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+          <span className="font-semibold text-[var(--text-secondary)]">Avg Spend per User:</span>{" "}
+          Total authorized spend volume &divide; number of eligible users in the selected period. Follows global time range.
+        </p>
+
+        <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+          <span className="font-semibold text-[var(--text-secondary)]">Avg Transactions per User:</span>{" "}
+          Total authorized transaction count &divide; number of eligible users in the selected period. Follows global time range.
+        </p>
+
+        <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+          <span className="font-semibold text-[var(--text-secondary)]">1st Transaction Channel:</span>{" "}
+          Distribution of each user&apos;s first-ever authorized transaction by channel (Online / Offline / QRIS). Lifetime metric, not filtered by selected period.
+          Channel classification: <code className="px-1 rounded bg-slate-100 dark:bg-slate-800 text-xs">TM</code> = Online,{" "}
+          <code className="px-1 rounded bg-slate-100 dark:bg-slate-800 text-xs">RA + rte_dest=L</code> = QRIS, all others = Offline.
+        </p>
+
+        <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+          <span className="font-semibold text-[var(--text-secondary)]">Spend by Channel:</span>{" "}
+          Online = e-commerce (<code className="px-1 rounded bg-slate-100 dark:bg-slate-800 text-xs">txn_typ=TM</code>),
+          Offline = POS/contactless (non-TM, non-QRIS),
+          QRIS = QR payments (<code className="px-1 rounded bg-slate-100 dark:bg-slate-800 text-xs">txn_typ=RA, rte_dest=L</code>).
+          Excludes payments (PM), batch errors (BE), and refunds (RF).
+        </p>
+
+        <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+          <span className="font-semibold text-[var(--text-secondary)]">Transaction Filter:</span>{" "}
+          All spend metrics use authorized transactions with no decline code (<code className="px-1 rounded bg-slate-100 dark:bg-slate-800 text-xs">fx_dw007_stat IS NULL</code>) and exclude PM/BE/RF types.
+          Currency: amounts in DW007 are in cents &divide; 100 for IDR.
+        </p>
+      </div>
     </div>
   );
 }
