@@ -325,6 +325,22 @@ interface QrisOnlySpendRow {
   qris_pct: number;
 }
 
+interface RevenueTrajectoryRow {
+  month: string;
+  grp: string;
+  cohort_size: number;
+  revolvers: number;
+  revolve_rate_pct: number;
+  fee_rpu: number;
+  txn_rpu: number;
+  total_rpu: number;
+  interest_idr: number;
+  admin_fees_idr: number;
+  charge_fees_idr: number;
+  card_interchange_idr: number;
+  qris_revenue_idr: number;
+}
+
 interface ApiData {
   cohortComparison: CohortRow[];
   merchantClassification?: MerchantClassRow[];
@@ -334,6 +350,7 @@ interface ApiData {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   cohortRpu?: any[];
   profitability?: ProfitabilityRow[];
+  revenueTrajectory?: RevenueTrajectoryRow[];
   // Legacy fields (backward compat with old dev-mode API)
   merchantBreakdown?: { qris_only_merchants: number; mixed_merchants: number; non_qris_only_merchants: number };
   merchantGrowth?: { month: string; cumulative_merchants: number; new_merchants: number }[];
@@ -457,6 +474,76 @@ export default function QrisExperimentPage() {
   const rpuTest = rpuData?.tst?.rpu_idr ?? null;
   const rpuControl = rpuData?.ctrl?.rpu_idr ?? null;
   const rpuDelta = rpuTest && rpuControl ? ((rpuTest - rpuControl) / rpuControl * 100) : 0;
+
+  // Revenue trajectory: monthly fee vs interchange RPU, with breakeven projection
+  const trajectoryData = useMemo(() => {
+    const rows = apiData?.revenueTrajectory;
+    if (!rows || rows.length < 2) return null;
+
+    const months = [...new Set(rows.map(r => r.month))].sort();
+    const testRows = rows.filter(r => r.grp === 'Test');
+    const ctrlRows = rows.filter(r => r.grp === 'Control');
+
+    // Build monthly chart data (actual observed)
+    const chartData = months.map(m => {
+      const t = testRows.find(r => r.month === m);
+      const c = ctrlRows.find(r => r.month === m);
+      if (!t || !c) return null;
+      const feeDelta = t.fee_rpu - c.fee_rpu;
+      const txnDelta = t.txn_rpu - c.txn_rpu;
+      const totalDelta = t.total_rpu - c.total_rpu;
+      return {
+        month: m,
+        test_fee_rpu: Math.round(t.fee_rpu / 1000),
+        ctrl_fee_rpu: Math.round(c.fee_rpu / 1000),
+        test_txn_rpu: Math.round(t.txn_rpu / 1000),
+        ctrl_txn_rpu: Math.round(c.txn_rpu / 1000),
+        test_total_rpu: Math.round(t.total_rpu / 1000),
+        ctrl_total_rpu: Math.round(c.total_rpu / 1000),
+        fee_delta: Math.round(feeDelta / 1000),
+        txn_delta: Math.round(txnDelta / 1000),
+        total_delta: Math.round(totalDelta / 1000),
+        fee_surplus: feeDelta,
+        interchange_deficit: -txnDelta,
+        test_revolvers: t.revolvers,
+        ctrl_revolvers: c.revolvers,
+      };
+    }).filter(Boolean) as NonNullable<ReturnType<typeof Array.prototype.find>>[];
+
+    // Project forward: calculate monthly growth rates from observed data
+    if (chartData.length < 2) return { chartData, projectedData: [], breakeven: null };
+
+    const lastTwo = chartData.slice(-2);
+    const feeSurplusGrowth = lastTwo[1].fee_surplus - lastTwo[0].fee_surplus;
+    const interchangeDeficitGrowth = lastTwo[1].interchange_deficit - lastTwo[0].interchange_deficit;
+
+    // Project up to 12 months forward to find breakeven
+    let currentFeeSurplus = lastTwo[1].fee_surplus;
+    let currentInterchangeDeficit = lastTwo[1].interchange_deficit;
+    const projectedData: { month: string; fee_surplus_k: number; interchange_deficit_k: number; net_delta_k: number }[] = [];
+    let breakevenMonth: string | null = null;
+    const lastMonth = months[months.length - 1];
+    const [lastY, lastM] = lastMonth.split('-').map(Number);
+
+    for (let i = 1; i <= 12; i++) {
+      currentFeeSurplus += feeSurplusGrowth;
+      currentInterchangeDeficit += interchangeDeficitGrowth;
+      const projMonth = new Date(lastY, lastM - 1 + i, 1);
+      const mLabel = `${projMonth.getFullYear()}-${String(projMonth.getMonth() + 1).padStart(2, '0')}`;
+      const netDelta = currentFeeSurplus - currentInterchangeDeficit;
+      projectedData.push({
+        month: mLabel,
+        fee_surplus_k: Math.round(currentFeeSurplus / 1000),
+        interchange_deficit_k: Math.round(currentInterchangeDeficit / 1000),
+        net_delta_k: Math.round(netDelta / 1000),
+      });
+      if (netDelta >= 0 && !breakevenMonth) {
+        breakevenMonth = mLabel;
+      }
+    }
+
+    return { chartData, projectedData, breakeven: breakevenMonth };
+  }, [apiData]);
 
   // Cumulative QRIS-only merchant growth
   const qrisOnlyMerchantGrowthData = useMemo(() => {
@@ -1275,6 +1362,159 @@ export default function QrisExperimentPage() {
                     : ` graduating QRIS would reduce per-user revenue by Rp ${((ctrl.arpu - tst.arpu) / 1000).toFixed(0)}K (${(((tst.arpu - ctrl.arpu) / ctrl.arpu) * 100).toFixed(1)}%).`
                   }
                   {' '}Consider LTV impact, churn reduction, and BI regulatory trajectory before decision.
+                </p>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ============================================================ */}
+        {/* REVENUE TRAJECTORY & BREAKEVEN PROJECTION                      */}
+        {/* ============================================================ */}
+        {trajectoryData && trajectoryData.chartData.length > 0 && (() => {
+          const { chartData, projectedData, breakeven } = trajectoryData;
+
+          // Build combined chart for actual + projected
+          const combinedForDelta = [
+            ...chartData.map(d => ({
+              month: d.month,
+              fee_surplus: d.fee_delta,
+              interchange_deficit: d.txn_delta,
+              total_delta: d.total_delta,
+              type: 'actual',
+            })),
+            ...projectedData.map(d => ({
+              month: d.month,
+              fee_surplus: d.fee_surplus_k,
+              interchange_deficit: -d.interchange_deficit_k,
+              total_delta: d.net_delta_k,
+              type: 'projected',
+            })),
+          ];
+
+          return (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <TrendingUp className={cn("h-5 w-5", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")} />
+                <h2 className="text-lg font-semibold text-[var(--text-primary)]">Revenue Trajectory & Breakeven</h2>
+                <LiveBadge />
+              </div>
+
+              {/* Monthly RPU comparison chart */}
+              <ChartCard
+                title="Monthly RPU: Test vs Control (Rp K)"
+                subtitle="Per-user revenue by month. Fee RPU = admin fees + interest + charge fees. Txn RPU = card interchange + QRIS MDR."
+                asOf={AS_OF}
+                dataRange={{ start: chartData[0]?.month ?? '', end: chartData[chartData.length - 1]?.month ?? '' }}
+              >
+                <DashboardBarChart
+                  height={300}
+                  data={chartData.map(d => ({
+                    month: d.month,
+                    'Test Fee RPU': d.test_fee_rpu,
+                    'Ctrl Fee RPU': d.ctrl_fee_rpu,
+                    'Test Txn RPU': d.test_txn_rpu,
+                    'Ctrl Txn RPU': d.ctrl_txn_rpu,
+                  }))}
+                  bars={[
+                    { key: 'Ctrl Fee RPU', color: '#94a3b8', label: 'Ctrl Fee RPU' },
+                    { key: 'Ctrl Txn RPU', color: '#cbd5e1', label: 'Ctrl Txn RPU' },
+                    { key: 'Test Fee RPU', color: '#10b981', label: 'Test Fee RPU' },
+                    { key: 'Test Txn RPU', color: '#06b6d4', label: 'Test Txn RPU' },
+                  ]}
+                  xAxisKey="month"
+                />
+              </ChartCard>
+
+              {/* Fee surplus vs interchange deficit delta chart */}
+              <ChartCard
+                title="Test vs Control: Revenue Delta per User (Rp K)"
+                subtitle="Positive = Test earns more. Fee surplus is growing as revolving balances compound; interchange deficit from QRIS cannibalization."
+                asOf={AS_OF}
+                dataRange={{ start: combinedForDelta[0]?.month ?? '', end: combinedForDelta[combinedForDelta.length - 1]?.month ?? '' }}
+              >
+                <DashboardLineChart
+                  height={280}
+                  data={combinedForDelta}
+                  lines={[
+                    { key: "fee_surplus", color: "#10b981", label: "Fee Revenue Delta" },
+                    { key: "interchange_deficit", color: "#ef4444", label: "Interchange Delta" },
+                    { key: "total_delta", color: "#8b5cf6", label: "Net Revenue Delta" },
+                  ]}
+                  xAxisKey="month"
+                />
+              </ChartCard>
+
+              {/* Key metrics table */}
+              <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] overflow-hidden">
+                <div className="p-4 border-b border-[var(--border)]">
+                  <p className="text-xs text-[var(--text-muted)]">
+                    Monthly revenue per eligible user. Data sourced from actual DW004 billed amounts and DW007 transaction volumes.
+                    Admin fee rates vary by card program (0%–6.49%) per{' '}
+                    <a href="https://www.honest.co.id/en/faq/what-is-admin-fee" target="_blank" rel="noopener noreferrer" className="underline">honest.co.id</a>.
+                    Interest at 21% p.a. per{' '}
+                    <a href="https://www.honest.co.id/en/faq/bagaimana-bunga-dihitung" target="_blank" rel="noopener noreferrer" className="underline">honest.co.id</a>.
+                  </p>
+                </div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[var(--border)]">
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase">Month</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase">Test Fee RPU</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase">Ctrl Fee RPU</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase">Fee Delta</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase">Test Txn RPU</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase">Ctrl Txn RPU</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase">Net RPU Delta</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {chartData.map(d => {
+                      const netD = d.total_delta;
+                      return (
+                        <tr key={d.month} className="border-b border-[var(--border)] last:border-b-0">
+                          <td className="px-4 py-2 font-medium text-[var(--text-primary)]">{d.month}</td>
+                          <td className="text-right px-4 py-2 font-mono text-xs text-[var(--text-primary)]">Rp {d.test_fee_rpu.toLocaleString()}K</td>
+                          <td className="text-right px-4 py-2 font-mono text-xs text-[var(--text-secondary)]">Rp {d.ctrl_fee_rpu.toLocaleString()}K</td>
+                          <td className="text-right px-4 py-2">
+                            <span className={cn("text-xs font-semibold", d.fee_delta >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400")}>
+                              {d.fee_delta >= 0 ? '+' : ''}{d.fee_delta}K
+                            </span>
+                          </td>
+                          <td className="text-right px-4 py-2 font-mono text-xs text-[var(--text-primary)]">Rp {d.test_txn_rpu.toLocaleString()}K</td>
+                          <td className="text-right px-4 py-2 font-mono text-xs text-[var(--text-secondary)]">Rp {d.ctrl_txn_rpu.toLocaleString()}K</td>
+                          <td className="text-right px-4 py-2">
+                            <span className={cn("inline-flex items-center gap-1 text-xs font-semibold rounded-full px-2 py-0.5",
+                              netD >= 0 ? "text-emerald-600 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-950/30" : "text-red-600 bg-red-50 dark:text-red-400 dark:bg-red-950/30",
+                            )}>
+                              {netD >= 0 ? '+' : ''}{netD}K
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Breakeven callout */}
+              <div className={cn(
+                "rounded-xl border-l-4 p-4",
+                breakeven
+                  ? isDark ? "border-l-emerald-500 bg-emerald-950/20 border border-emerald-900/30" : "border-l-emerald-500 bg-emerald-50 border border-emerald-200"
+                  : isDark ? "border-l-amber-500 bg-amber-950/20 border border-amber-900/30" : "border-l-amber-500 bg-amber-50 border border-amber-200",
+              )}>
+                <p className="text-sm font-semibold text-[var(--text-primary)] mb-1">
+                  {breakeven ? `Projected Breakeven: ${breakeven}` : 'Breakeven Not Reached in 12-Month Projection'}
+                </p>
+                <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                  {chartData.length >= 2 && (() => {
+                    const last = chartData[chartData.length - 1];
+                    const feeSurplusTrend = last.fee_delta >= 0 ? 'positive' : 'negative';
+                    return breakeven
+                      ? `Fee revenue surplus is growing at Rp ${Math.abs(last.fee_delta)}K/user per month and is already ${feeSurplusTrend}. At this trajectory, the cumulative fee surplus will overcome the interchange deficit by ${breakeven}. Key driver: QRIS users carry higher revolving balances → more interest and admin fee income.`
+                      : `Fee revenue delta is ${feeSurplusTrend} (Rp ${last.fee_delta}K/user) but the interchange deficit (Rp ${Math.abs(last.txn_delta)}K/user) is growing faster. At current rates, fee surplus does not overcome interchange loss within 12 months. However, interest compounds on revolving balances — accelerating fee growth over time may close the gap.`;
+                  })()}
                 </p>
               </div>
             </div>

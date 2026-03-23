@@ -64,6 +64,7 @@ async function queryQrisExperiment(
     interchangeProjection,
     cohortRpu,
     profitability,
+    revenueTrajectory,
   ] = await Promise.all([
     // -----------------------------------------------------------------------
     // (a) cohortComparison — Test vs Control headline metrics
@@ -450,6 +451,92 @@ async function queryQrisExperiment(
       { startDate: effectiveStart, endDate },
       env,
     ),
+
+    // -----------------------------------------------------------------------
+    // (h) revenueTrajectory — Monthly fee vs interchange revenue per user
+    //     for breakeven projection analysis
+    // -----------------------------------------------------------------------
+    runQuery(
+      `WITH all_users AS (
+        SELECT user_id, qris_test_rollout_group AS grp FROM ${TABLES.qris_rollout}
+      ),
+      contaminated_ctrl AS (
+        SELECT DISTINCT u.user_id
+        FROM all_users u
+        JOIN ${TABLES.cms_line_of_credit} m ON u.user_id = m.user_id
+        JOIN ${TABLES.principal_card_updates} p ON p.f9_dw005_loc_acct = m.external_id
+        JOIN ${TABLES.authorized_transaction} t ON t.f9_dw007_prin_crn = p.f9_dw005_crn
+        WHERE u.grp = 'Control' AND t.fx_dw007_rte_dest = 'L'
+          AND (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '')
+      ),
+      credit_qris_exp AS (
+        SELECT user_id, grp FROM all_users
+        WHERE NOT (grp = 'Control' AND user_id IN (SELECT user_id FROM contaminated_ctrl))
+      ),
+      acct_map AS (
+        SELECT c.user_id, c.grp, m.external_id AS loc_acct
+        FROM credit_qris_exp c
+        JOIN ${TABLES.cms_line_of_credit} m ON c.user_id = m.user_id
+      ),
+      cohort_size AS (
+        SELECT grp, COUNT(DISTINCT user_id) AS sz FROM credit_qris_exp GROUP BY grp
+      ),
+      -- Monthly snapshots: last business day of each month
+      monthly_dates AS (
+        SELECT f9_dw004_bus_dt AS bus_dt, FORMAT_DATE('%Y-%m', f9_dw004_bus_dt) AS month
+        FROM ${TABLES.financial_account_updates}
+        WHERE f9_dw004_bus_dt >= '2026-02-01'
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY FORMAT_DATE('%Y-%m', f9_dw004_bus_dt) ORDER BY f9_dw004_bus_dt DESC) = 1
+      ),
+      monthly_fees AS (
+        SELECT md.month, a.grp, cs.sz AS cohort_size,
+          ROUND(SUM(CAST(d.f9_dw004_tot_int AS FLOAT64) / 100), 0) AS interest_idr,
+          ROUND(SUM(CAST(d.f9_dw004_bil_fee_chrg_1 AS FLOAT64) / 100), 0) AS admin_fees_idr,
+          ROUND(SUM(CAST(d.f9_dw004_bil_chrg_fee AS FLOAT64) / 100), 0) AS charge_fees_idr,
+          COUNTIF(CAST(d.f9_dw004_os_bill_amt AS FLOAT64) > 0) AS with_balance,
+          COUNTIF(CAST(d.f9_dw004_os_bill_amt AS FLOAT64) > CAST(d.f9_dw004_curr_min_rpmt AS FLOAT64)
+            AND CAST(d.f9_dw004_curr_min_rpmt AS FLOAT64) > 0) AS revolvers
+        FROM acct_map a
+        JOIN ${TABLES.financial_account_updates} d ON d.p9_dw004_loc_acct = a.loc_acct
+        JOIN monthly_dates md ON d.f9_dw004_bus_dt = md.bus_dt
+        JOIN cohort_size cs ON a.grp = cs.grp
+        GROUP BY md.month, a.grp, cs.sz
+      ),
+      monthly_txn AS (
+        SELECT FORMAT_DATE('%Y-%m', t.f9_dw007_dt) AS month, c.grp, cs.sz AS cohort_size,
+          ROUND(SUM(CASE WHEN t.fx_dw007_rte_dest != 'L' OR t.fx_dw007_rte_dest IS NULL
+            THEN CAST(t.f9_dw007_amt_req AS FLOAT64) / 100 * ${CARD_INTERCHANGE_RATE} ELSE 0 END), 0) AS card_interchange_idr,
+          ROUND(SUM(CASE WHEN t.fx_dw007_rte_dest = 'L'
+            THEN CAST(t.f9_dw007_amt_req AS FLOAT64) / 100 * ${QRIS_ISSUER_RATE} ELSE 0 END), 0) AS qris_revenue_idr
+        FROM ${TABLES.authorized_transaction} t
+        JOIN ${TABLES.principal_card_updates} p ON p.f9_dw005_crn = t.f9_dw007_prin_crn
+        JOIN ${TABLES.cms_line_of_credit} m ON m.external_id = p.f9_dw005_loc_acct
+        JOIN credit_qris_exp c ON c.user_id = m.user_id
+        JOIN cohort_size cs ON c.grp = cs.grp
+        WHERE t.f9_dw007_dt >= '2026-02-01'
+          AND (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '')
+          AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+        GROUP BY month, c.grp, cs.sz
+      )
+      SELECT
+        f.month, f.grp, f.cohort_size,
+        f.revolvers,
+        ROUND(SAFE_DIVIDE(f.revolvers, f.with_balance) * 100, 1) AS revolve_rate_pct,
+        ROUND(SAFE_DIVIDE(f.interest_idr + f.admin_fees_idr + f.charge_fees_idr, f.cohort_size), 0) AS fee_rpu,
+        ROUND(SAFE_DIVIDE(COALESCE(tx.card_interchange_idr, 0) + COALESCE(tx.qris_revenue_idr, 0), f.cohort_size), 0) AS txn_rpu,
+        ROUND(SAFE_DIVIDE(
+          f.interest_idr + f.admin_fees_idr + f.charge_fees_idr
+          + COALESCE(tx.card_interchange_idr, 0) + COALESCE(tx.qris_revenue_idr, 0),
+          f.cohort_size), 0) AS total_rpu,
+        f.interest_idr, f.admin_fees_idr, f.charge_fees_idr,
+        COALESCE(tx.card_interchange_idr, 0) AS card_interchange_idr,
+        COALESCE(tx.qris_revenue_idr, 0) AS qris_revenue_idr
+      FROM monthly_fees f
+      LEFT JOIN monthly_txn tx ON f.month = tx.month AND f.grp = tx.grp
+      ORDER BY f.month, f.grp`,
+      undefined,
+      env,
+    ),
   ]);
 
   return {
@@ -460,6 +547,7 @@ async function queryQrisExperiment(
     interchangeProjection,
     cohortRpu,
     profitability,
+    revenueTrajectory,
   };
 }
 
