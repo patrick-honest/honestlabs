@@ -362,6 +362,7 @@ interface ApiData {
   cohortRpu?: any[];
   profitability?: ProfitabilityRow[];
   revenueTrajectory?: RevenueTrajectoryRow[];
+  incrementality?: { grp: string; user_type: string; users: number; total_spend: number; qris_spend: number; card_spend: number; txns: number }[];
   // Legacy fields (backward compat with old dev-mode API)
   merchantBreakdown?: { qris_only_merchants: number; mixed_merchants: number; non_qris_only_merchants: number };
   merchantGrowth?: { month: string; cumulative_merchants: number; new_merchants: number }[];
@@ -907,46 +908,49 @@ export default function QrisExperimentPage() {
                     <thead>
                       <tr className="border-b border-[var(--border)]">
                         <th className="text-left px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">Segment</th>
-                        <th className="text-right px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">Test QRIS Spend</th>
-                        <th className="text-right px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">Test Card Spend</th>
-                        <th className="text-right px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">Ctrl Card Spend</th>
-                        <th className="text-right px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">Card Δ</th>
-                        <th className="text-right px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">95% CI (per user)</th>
+                        <th className="text-right px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">Test QRIS</th>
+                        <th className="text-right px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">Test Card</th>
+                        <th className="text-right px-4 py-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase">Test Total</th>
+                        <th className="text-right px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">Ctrl Total</th>
+                        <th className="text-right px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">Δ vs Ctrl</th>
+                        <th className="text-right px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">95% CI</th>
                       </tr>
                     </thead>
                     <tbody>
                       {types.map(type => {
-                        const t = mc.byType(mc.testRows, type);
-                        const c = mc.byType(mc.controlRows, type);
-                        const tCard = t?.card_spend_idr ?? 0;
-                        const cCard = c?.card_spend_idr ?? 0;
-                        const cardDelta = cCard > 0 ? ((tCard - cCard) / cCard) * 100 : (tCard > 0 ? 100 : 0);
+                        const tR = mc.byType(mc.testRows, type);
+                        const cR = mc.byType(mc.controlRows, type);
+                        const tTotal = tR?.total_spend_idr ?? 0;
+                        const cTotal = cR?.total_spend_idr ?? 0;
+                        const delta = cTotal > 0 ? ((tTotal - cTotal) / cTotal) * 100 : (tTotal > 0 ? 100 : 0);
                         const isQrisOnly = type === 'QRIS-Only Merchants';
-                        const ci = segCI(t, c);
+                        const ci = segCI(tR, cR);
                         return (
                           <tr key={type} className="border-b border-[var(--border)] last:border-b-0">
                             <td className="px-4 py-2.5">
                               <span className="font-medium text-[var(--text-primary)]">{type}</span>
-                              {isQrisOnly && <span className="ml-2 text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">100% INCREMENTAL</span>}
+                              {isQrisOnly && <span className="ml-2 text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">INCREMENTAL</span>}
                             </td>
-                            <td className="text-right px-4 py-2.5 font-mono text-xs font-semibold text-[var(--text-primary)]">
-                              {t ? fmtCur(t.qris_spend_idr) : '-'}
-                              <div className="text-[10px] text-[var(--text-muted)] font-normal">{t?.qris_txns?.toLocaleString() ?? 0} txns</div>
-                            </td>
-                            <td className="text-right px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">
-                              {isQrisOnly ? <span className="text-[var(--text-muted)]">N/A</span> : tCard > 0 ? fmtCur(tCard) : '-'}
-                              {!isQrisOnly && <div className="text-[10px] text-[var(--text-muted)]">{t?.card_txns?.toLocaleString() ?? 0} txns</div>}
+                            <td className="text-right px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">
+                              {tR ? fmtCur(tR.qris_spend_idr) : '-'}
+                              <div className="text-[10px] text-[var(--text-muted)]">{tR?.qris_txns?.toLocaleString() ?? 0} txns</div>
                             </td>
                             <td className="text-right px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">
-                              {isQrisOnly ? <span className="text-[var(--text-muted)]">N/A</span> : cCard > 0 ? fmtCur(cCard) : '-'}
-                              {!isQrisOnly && <div className="text-[10px] text-[var(--text-muted)]">{c?.card_txns?.toLocaleString() ?? 0} txns</div>}
+                              {isQrisOnly ? <span className="text-[var(--text-muted)]">N/A</span> : (tR?.card_spend_idr ?? 0) > 0 ? fmtCur(tR!.card_spend_idr) : '-'}
+                              {!isQrisOnly && <div className="text-[10px] text-[var(--text-muted)]">{tR?.card_txns?.toLocaleString() ?? 0} txns</div>}
+                            </td>
+                            <td className="text-right px-4 py-2.5 font-mono text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                              {tTotal > 0 ? fmtCur(tTotal) : '-'}
+                            </td>
+                            <td className="text-right px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">
+                              {isQrisOnly ? <span className="text-[var(--text-muted)]">N/A</span> : cTotal > 0 ? fmtCur(cTotal) : '-'}
                             </td>
                             <td className="text-right px-4 py-2.5">
                               {isQrisOnly ? (
-                                <span className="text-[10px] text-[var(--text-muted)]">—</span>
+                                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">NEW</span>
                               ) : (
-                                <span className={cn("text-xs font-semibold", cardDelta >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400")}>
-                                  {cardDelta >= 0 ? '+' : ''}{cardDelta.toFixed(1)}%
+                                <span className={cn("text-xs font-semibold", delta >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400")}>
+                                  {delta >= 0 ? '+' : ''}{delta.toFixed(1)}%
                                 </span>
                               )}
                             </td>
@@ -958,11 +962,11 @@ export default function QrisExperimentPage() {
                       })}
                       {/* Totals row */}
                       <tr className="bg-[var(--surface)] font-semibold border-t-2 border-[var(--border)]">
-                        <td className="px-4 py-2.5 text-[var(--text-primary)]">Incremental Spend</td>
-                        <td className="text-right px-4 py-2.5 font-mono text-xs text-emerald-600 dark:text-emerald-400" colSpan={5}>
+                        <td className="px-4 py-2.5 text-[var(--text-primary)]">Net Incremental Spend</td>
+                        <td className="text-right px-4 py-2.5 font-mono text-xs text-emerald-600 dark:text-emerald-400" colSpan={6}>
                           {fmtCur(incrementalSpend)}
                           <span className="ml-2 text-[10px] text-[var(--text-muted)] font-normal">
-                            = QRIS-Only spend + net new spend at Mixed &amp; E-commerce
+                            = QRIS-Only + net lift at Mixed &amp; E-commerce
                           </span>
                         </td>
                       </tr>
@@ -970,6 +974,88 @@ export default function QrisExperimentPage() {
                   </table>
                 </div>
               )}
+
+              {/* Incrementality Analysis — dormant user reactivation */}
+              {apiData?.incrementality && apiData.incrementality.length > 0 && (() => {
+                const inc = apiData.incrementality;
+                const testRows = inc.filter(r => r.grp === 'Test');
+                const ctrlRows = inc.filter(r => r.grp === 'Control');
+                const dormantQris = testRows.find(r => r.user_type === 'dormant_qris_reactivated');
+                const activeFirstQris = testRows.find(r => r.user_type === 'active_first_qris');
+                const activeFirstCard = testRows.find(r => r.user_type === 'active_first_card');
+                const ctrlActive = ctrlRows.find(r => r.user_type === 'active_first_card');
+                const ctrlDormant = ctrlRows.find(r => r.user_type === 'dormant_card_reactivated');
+
+                // Truly incremental: dormant users reactivated by QRIS (all spend)
+                // + active-first-QRIS users' subsequent card spend (QRIS brought them back)
+                const trulyIncremental = (dormantQris?.total_spend ?? 0) + (activeFirstQris?.card_spend ?? 0);
+
+                const userTypes = [
+                  { key: 'dormant_qris_reactivated', label: 'Dormant → Reactivated by QRIS', tag: '100% INCREMENTAL', tagColor: 'emerald' },
+                  { key: 'active_first_qris', label: 'Active → First Txn was QRIS', tag: 'CARD SPEND INCREMENTAL', tagColor: 'blue' },
+                  { key: 'active_first_card', label: 'Active → First Txn was Card', tag: 'CANNIBALIZATION RISK', tagColor: 'amber' },
+                  { key: 'dormant_card_reactivated', label: 'Dormant → Reactivated by Card', tag: null, tagColor: '' },
+                ];
+
+                return (
+                  <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] overflow-hidden">
+                    <div className="p-4 border-b border-[var(--border)]">
+                      <p className="text-sm font-semibold text-[var(--text-primary)] mb-1">Spend Incrementality by User Journey</p>
+                      <p className="text-xs text-[var(--text-muted)]">
+                        Dormant = no transactions in 60 days pre-experiment. If a dormant user&apos;s first transaction is QRIS, all their spend is incremental.
+                        If an active user&apos;s first experiment transaction is QRIS, their subsequent card spend is also incremental (QRIS re-engaged them).
+                      </p>
+                    </div>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-[var(--border)]">
+                          <th className="text-left px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">User Type</th>
+                          <th className="text-right px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">Test Users</th>
+                          <th className="text-right px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">Test Total Spend</th>
+                          <th className="text-right px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">QRIS Spend</th>
+                          <th className="text-right px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">Card Spend</th>
+                          <th className="text-right px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">Ctrl Users</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {userTypes.map(ut => {
+                          const tRow = testRows.find(r => r.user_type === ut.key);
+                          const cRow = ctrlRows.find(r => r.user_type === ut.key);
+                          if (!tRow && !cRow) return null;
+                          return (
+                            <tr key={ut.key} className="border-b border-[var(--border)] last:border-b-0">
+                              <td className="px-4 py-2.5">
+                                <span className="font-medium text-[var(--text-primary)] text-xs">{ut.label}</span>
+                                {ut.tag && (
+                                  <span className={cn("ml-2 text-[9px] font-semibold",
+                                    ut.tagColor === 'emerald' ? "text-emerald-600 dark:text-emerald-400" :
+                                    ut.tagColor === 'blue' ? "text-blue-600 dark:text-blue-400" :
+                                    "text-amber-600 dark:text-amber-400"
+                                  )}>{ut.tag}</span>
+                                )}
+                              </td>
+                              <td className="text-right px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{tRow?.users?.toLocaleString() ?? '-'}</td>
+                              <td className="text-right px-4 py-2.5 font-mono text-xs font-semibold text-[var(--text-primary)]">{tRow ? fmtCur(tRow.total_spend) : '-'}</td>
+                              <td className="text-right px-4 py-2.5 font-mono text-xs text-violet-600 dark:text-violet-400">{tRow ? fmtCur(tRow.qris_spend) : '-'}</td>
+                              <td className="text-right px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{tRow ? fmtCur(tRow.card_spend) : '-'}</td>
+                              <td className="text-right px-4 py-2.5 font-mono text-xs text-[var(--text-muted)]">{cRow?.users?.toLocaleString() ?? '-'}</td>
+                            </tr>
+                          );
+                        })}
+                        <tr className="bg-[var(--surface)] font-semibold border-t-2 border-[var(--border)]">
+                          <td className="px-4 py-2.5 text-[var(--text-primary)]">Truly Incremental Spend</td>
+                          <td className="text-right px-4 py-2.5 font-mono text-xs text-emerald-600 dark:text-emerald-400" colSpan={5}>
+                            {fmtCur(trulyIncremental)}
+                            <span className="ml-2 text-[10px] text-[var(--text-muted)] font-normal">
+                              = dormant QRIS all spend + active-first-QRIS card spend
+                            </span>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
 
               {/* Cumulative QRIS-only merchant growth chart */}
               {qrisOnlyMerchantGrowthData.length > 0 && (

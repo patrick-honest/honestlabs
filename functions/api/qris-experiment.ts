@@ -65,6 +65,7 @@ async function queryQrisExperiment(
     cohortRpu,
     profitability,
     revenueTrajectory,
+    incrementality,
   ] = await Promise.all([
     // -----------------------------------------------------------------------
     // (a) cohortComparison — Test vs Control headline metrics
@@ -564,6 +565,59 @@ async function queryQrisExperiment(
       undefined,
       env,
     ),
+
+    // -----------------------------------------------------------------------
+    // (i) incrementality — User-level spend classification
+    //     Dormant = no txns in 60 days before experiment start
+    //     If first txn is QRIS → all their spend is incremental
+    //     Active first-QRIS → subsequent card spend also incremental
+    // -----------------------------------------------------------------------
+    runQuery(
+      `WITH ${cohortCTEs(experimentStart)},
+      user_txns AS (
+        SELECT co.user_id, co.grp, t.f9_dw007_dt AS txn_date,
+          CAST(t.f9_dw007_amt_req AS FLOAT64) / 100.0 AS spend_idr,
+          CASE WHEN t.fx_dw007_rte_dest = 'L' THEN 1 ELSE 0 END AS is_qris
+        FROM clean_cohort co
+        JOIN cards k ON co.loc_acct = k.f9_dw005_loc_acct
+        JOIN ${TABLES.authorized_transaction} t ON k.f9_dw005_crn = t.f9_dw007_prin_crn
+        WHERE (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '' OR t.fx_dw007_stat = ' ')
+          AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF') AND t.f9_dw007_ori_amt > 0
+      ),
+      recent_active AS (
+        SELECT DISTINCT user_id FROM user_txns
+        WHERE txn_date BETWEEN DATE_SUB(DATE '${experimentStart}', INTERVAL 60 DAY) AND DATE_SUB(DATE '${experimentStart}', INTERVAL 1 DAY)
+      ),
+      first_exp_txn AS (
+        SELECT user_id, grp,
+          ARRAY_AGG(is_qris ORDER BY txn_date, is_qris DESC LIMIT 1)[OFFSET(0)] AS first_is_qris
+        FROM user_txns WHERE txn_date >= '${experimentStart}'
+        GROUP BY user_id, grp
+      ),
+      user_class AS (
+        SELECT f.user_id, f.grp,
+          CASE
+            WHEN r.user_id IS NULL AND f.first_is_qris = 1 THEN 'dormant_qris_reactivated'
+            WHEN r.user_id IS NULL AND f.first_is_qris = 0 THEN 'dormant_card_reactivated'
+            WHEN r.user_id IS NOT NULL AND f.first_is_qris = 1 THEN 'active_first_qris'
+            ELSE 'active_first_card'
+          END AS user_type
+        FROM first_exp_txn f
+        LEFT JOIN recent_active r ON f.user_id = r.user_id
+      )
+      SELECT uc.grp, uc.user_type,
+        COUNT(DISTINCT uc.user_id) AS users,
+        ROUND(SUM(ut.spend_idr), 0) AS total_spend,
+        ROUND(SUM(CASE WHEN ut.is_qris = 1 THEN ut.spend_idr ELSE 0 END), 0) AS qris_spend,
+        ROUND(SUM(CASE WHEN ut.is_qris = 0 THEN ut.spend_idr ELSE 0 END), 0) AS card_spend,
+        COUNT(*) AS txns
+      FROM user_class uc
+      JOIN user_txns ut ON uc.user_id = ut.user_id AND ut.txn_date >= '${experimentStart}'
+      GROUP BY uc.grp, uc.user_type
+      ORDER BY uc.grp, uc.user_type`,
+      undefined,
+      env,
+    ),
   ]);
 
   return {
@@ -575,6 +629,7 @@ async function queryQrisExperiment(
     cohortRpu,
     profitability,
     revenueTrajectory,
+    incrementality,
   };
 }
 
