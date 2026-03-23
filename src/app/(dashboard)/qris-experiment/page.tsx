@@ -1696,6 +1696,13 @@ export default function QrisExperimentPage() {
           </p>
 
           <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+            <span className="font-semibold text-[var(--text-secondary)]">Late/Penalty Fee:</span>{" "}
+            Fee charged when minimum payment is not met by due date.
+            Revenue from DW004 field <code className={cn("px-1 rounded", isDark ? "text-[#7C4DFF] bg-[#5B22FF]/10" : "text-[#D00083] bg-[#D00083]/10")}>f9_dw004_bil_fee_chrg_2</code>.
+            Note: <code className={cn("px-1 rounded", isDark ? "text-[#7C4DFF] bg-[#5B22FF]/10" : "text-[#D00083] bg-[#D00083]/10")}>f9_dw004_bil_chrg_fee</code> = fee_chrg_1 + fee_chrg_2 (not used separately to avoid double-counting admin fees).
+          </p>
+
+          <p className="text-xs text-[var(--text-muted)] leading-relaxed">
             <span className="font-semibold text-[var(--text-secondary)]">Interchange &amp; QRIS MDR:</span>{" "}
             Card interchange at ~1.6% (blended Visa+MC domestic, Kansas City Fed Aug 2025).
             QRIS MDR weighted avg ~0.55% (UMI 0%/0.3%, UKE/UKI 0.7% — PBI No. 24/8/PBI/2022) with 37% issuer share via PT ALTO Network,
