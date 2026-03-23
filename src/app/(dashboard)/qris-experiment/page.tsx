@@ -290,6 +290,12 @@ interface MerchantClassRow {
   qris_spend_idr: number;
   qris_txns: number;
   qris_users: number;
+  card_spend_idr: number;
+  card_txns: number;
+  card_users: number;
+  total_spend_idr: number;
+  cohort_size: number;
+  std_dev_spend: number;
 }
 
 interface ProfitabilityRow {
@@ -813,106 +819,152 @@ export default function QrisExperimentPage() {
         )}
 
         {/* ============================================================ */}
-        {/* MERCHANT CLASSIFICATION by QRIS merchant type                  */}
+        {/* MERCHANT CLASSIFICATION & REACH — unified section               */}
         {/* ============================================================ */}
-        {merchantClass && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <Store className={cn("h-5 w-5", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")} />
-              <h2 className="text-lg font-semibold text-[var(--text-primary)]">QRIS Merchant Classification</h2>
-              <LiveBadge />
-            </div>
-
-            <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] overflow-hidden">
-              <div className="p-4 border-b border-[var(--border)]">
-                <p className="text-xs text-[var(--text-muted)]">
-                  QRIS spend classified by merchant type. Mixed = accepts both card and QRIS.
-                  QRIS-Only = only ever processed QRIS. E-commerce = online-only merchants.
-                </p>
-              </div>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--border)]">
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Merchant Type</th>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Test Spend (IDR)</th>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Test Txns</th>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Control Spend (IDR)</th>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Control Txns</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {merchantClass.types.map(type => {
-                    const t = merchantClass.byType(merchantClass.testRows, type);
-                    const c = merchantClass.byType(merchantClass.controlRows, type);
-                    return (
-                      <tr key={type} className="border-b border-[var(--border)] last:border-b-0">
-                        <td className="px-4 py-3 font-medium text-[var(--text-primary)]">{type}</td>
-                        <td className="text-right px-4 py-3 font-mono text-xs text-[var(--text-primary)]">
-                          {t ? `Rp ${(t.qris_spend_idr / 1e6).toFixed(1)}M` : '-'}
-                        </td>
-                        <td className="text-right px-4 py-3 font-mono text-xs text-[var(--text-secondary)]">
-                          {t?.qris_txns?.toLocaleString() ?? '-'}
-                        </td>
-                        <td className="text-right px-4 py-3 font-mono text-xs text-[var(--text-secondary)]">
-                          {c ? `Rp ${(c.qris_spend_idr / 1e6).toFixed(1)}M` : '-'}
-                        </td>
-                        <td className="text-right px-4 py-3 font-mono text-xs text-[var(--text-secondary)]">
-                          {c?.qris_txns?.toLocaleString() ?? '-'}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* ============================================================ */}
-        {/* MERCHANT REACH ANALYSIS                                       */}
-        {/* ============================================================ */}
-        {(apiData?.qrisOnlyMerchantCount || apiData?.merchantBreakdown) && (() => {
+        {(() => {
           const bd = apiData?.qrisOnlyMerchantCount ?? apiData?.merchantBreakdown;
-          if (!bd) return null;
+          const mc = merchantClass;
+          if (!bd && !mc) return null;
+
+          // Cannibalization analysis: compare card spend at Mixed/E-commerce merchants
+          // QRIS-Only spend is truly incremental (no card alternative)
+          // Mixed/E-commerce: Test QRIS spend partially cannibalizes card spend
+          const fmtM = (v: number) => v >= 1e9 ? `Rp ${(v / 1e9).toFixed(2)}B` : `Rp ${(v / 1e6).toFixed(1)}M`;
+          const types = ['QRIS-Only Merchants', 'Mixed Merchants', 'E-commerce Sites'];
+
+          // Compute incremental spend = QRIS-Only total + (Test total - Control total at Mixed & E-com)
+          let totalQrisOnlySpend = 0;
+          let testMixedEcomTotal = 0;
+          let ctrlMixedEcomTotal = 0;
+          if (mc) {
+            types.forEach(type => {
+              const t = mc.byType(mc.testRows, type);
+              const c = mc.byType(mc.controlRows, type);
+              if (type === 'QRIS-Only Merchants') {
+                totalQrisOnlySpend = t?.total_spend_idr ?? 0;
+              } else {
+                testMixedEcomTotal += t?.total_spend_idr ?? 0;
+                ctrlMixedEcomTotal += c?.total_spend_idr ?? 0;
+              }
+            });
+          }
+          const cannibalized = ctrlMixedEcomTotal > 0
+            ? Math.max(0, ctrlMixedEcomTotal - (testMixedEcomTotal - (mc?.testRows.filter(r => r.merchant_type !== 'QRIS-Only Merchants').reduce((s, r) => s + r.qris_spend_idr, 0) ?? 0)))
+            : 0;
+          // Net incremental = QRIS-Only spend (100% new) + net new spend at Mixed/Ecom
+          const incrementalSpend = totalQrisOnlySpend +
+            Math.max(0, (mc?.testRows.reduce((s, r) => s + r.total_spend_idr, 0) ?? 0)
+              - (mc?.controlRows.reduce((s, r) => s + r.total_spend_idr, 0) ?? 0));
+
+          // CI helper for per-user spend at segment
+          const segCI = (t: MerchantClassRow | undefined, c: MerchantClassRow | undefined) => {
+            if (!t || !c || !t.std_dev_spend || !c.std_dev_spend) return null;
+            const tMean = t.total_spend_idr / t.cohort_size;
+            const cMean = c.total_spend_idr / c.cohort_size;
+            const diff = tMean - cMean;
+            const se = Math.sqrt((t.std_dev_spend ** 2) / t.cohort_size + (c.std_dev_spend ** 2) / c.cohort_size);
+            const pct = cMean > 0 ? (diff / cMean) * 100 : 0;
+            const pctLo = cMean > 0 ? ((diff - 1.96 * se) / cMean) * 100 : 0;
+            const pctHi = cMean > 0 ? ((diff + 1.96 * se) / cMean) * 100 : 0;
+            return { pct, pctLo, pctHi };
+          };
+
           return (
             <div className="space-y-4">
               <div className="flex items-center gap-2">
                 <Store className={cn("h-5 w-5", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")} />
-                <h2 className="text-lg font-semibold text-[var(--text-primary)]">QRIS Merchant Reach</h2>
+                <h2 className="text-lg font-semibold text-[var(--text-primary)]">QRIS Merchant Reach & Spend Analysis</h2>
+                <LiveBadge />
               </div>
 
-              {/* Merchant KPI cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <MetricCard
-                  metricKey="qris_only_merchants"
-                  label="QRIS-Only Merchants"
-                  value={bd.qris_only_merchants}
-                  unit="count"
-                  asOf="All Time"
-                  dataRange={{ start: "", end: "" }}
-                  liveData
-                />
-                <MetricCard
-                  metricKey="mixed_merchants"
-                  label="Mixed (Card + QRIS)"
-                  value={bd.mixed_merchants}
-                  unit="count"
-                  asOf="All Time"
-                  dataRange={{ start: "", end: "" }}
-                  liveData
-                />
-                <MetricCard
-                  metricKey="non_qris_merchants"
-                  label="Card-Only Merchants"
-                  value={bd.non_qris_only_merchants}
-                  unit="count"
-                  asOf="All Time"
-                  dataRange={{ start: "", end: "" }}
-                  liveData
-                />
-              </div>
+              {/* Merchant count KPIs */}
+              {bd && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <MetricCard metricKey="qris_only_merchants" label="QRIS-Only Merchants" value={bd.qris_only_merchants} unit="count" asOf="All Time" dataRange={{ start: "", end: "" }} liveData />
+                  <MetricCard metricKey="mixed_merchants" label="Mixed (Card + QRIS)" value={bd.mixed_merchants} unit="count" asOf="All Time" dataRange={{ start: "", end: "" }} liveData />
+                  <MetricCard metricKey="non_qris_merchants" label="Card-Only Merchants" value={bd.non_qris_only_merchants} unit="count" asOf="All Time" dataRange={{ start: "", end: "" }} liveData />
+                </div>
+              )}
 
-              {/* Cumulative QRIS-only merchant growth */}
+              {/* Spend by merchant segment — with cannibalization */}
+              {mc && (
+                <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] overflow-hidden">
+                  <div className="p-4 border-b border-[var(--border)]">
+                    <p className="text-xs text-[var(--text-muted)]">
+                      Spend at QRIS-accepting merchants classified by type. <strong>QRIS-Only</strong> = 100% incremental (no card alternative).
+                      <strong> Mixed</strong> = accepts both card &amp; QRIS — QRIS may cannibalize card spend.
+                      <strong> E-commerce</strong> = online-only merchants. Card spend shows non-QRIS transactions at the same merchants for cannibalization comparison.
+                    </p>
+                  </div>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-[var(--border)]">
+                        <th className="text-left px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">Segment</th>
+                        <th className="text-right px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">Test QRIS Spend</th>
+                        <th className="text-right px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">Test Card Spend</th>
+                        <th className="text-right px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">Ctrl Card Spend</th>
+                        <th className="text-right px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">Card Δ</th>
+                        <th className="text-right px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">95% CI (per user)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {types.map(type => {
+                        const t = mc.byType(mc.testRows, type);
+                        const c = mc.byType(mc.controlRows, type);
+                        const tCard = t?.card_spend_idr ?? 0;
+                        const cCard = c?.card_spend_idr ?? 0;
+                        const cardDelta = cCard > 0 ? ((tCard - cCard) / cCard) * 100 : (tCard > 0 ? 100 : 0);
+                        const isQrisOnly = type === 'QRIS-Only Merchants';
+                        const ci = segCI(t, c);
+                        return (
+                          <tr key={type} className="border-b border-[var(--border)] last:border-b-0">
+                            <td className="px-4 py-2.5">
+                              <span className="font-medium text-[var(--text-primary)]">{type}</span>
+                              {isQrisOnly && <span className="ml-2 text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">100% INCREMENTAL</span>}
+                            </td>
+                            <td className="text-right px-4 py-2.5 font-mono text-xs font-semibold text-[var(--text-primary)]">
+                              {t ? fmtM(t.qris_spend_idr) : '-'}
+                              <div className="text-[10px] text-[var(--text-muted)] font-normal">{t?.qris_txns?.toLocaleString() ?? 0} txns</div>
+                            </td>
+                            <td className="text-right px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">
+                              {isQrisOnly ? <span className="text-[var(--text-muted)]">N/A</span> : tCard > 0 ? fmtM(tCard) : '-'}
+                              {!isQrisOnly && <div className="text-[10px] text-[var(--text-muted)]">{t?.card_txns?.toLocaleString() ?? 0} txns</div>}
+                            </td>
+                            <td className="text-right px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">
+                              {isQrisOnly ? <span className="text-[var(--text-muted)]">N/A</span> : cCard > 0 ? fmtM(cCard) : '-'}
+                              {!isQrisOnly && <div className="text-[10px] text-[var(--text-muted)]">{c?.card_txns?.toLocaleString() ?? 0} txns</div>}
+                            </td>
+                            <td className="text-right px-4 py-2.5">
+                              {isQrisOnly ? (
+                                <span className="text-[10px] text-[var(--text-muted)]">—</span>
+                              ) : (
+                                <span className={cn("text-xs font-semibold", cardDelta >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400")}>
+                                  {cardDelta >= 0 ? '+' : ''}{cardDelta.toFixed(1)}%
+                                </span>
+                              )}
+                            </td>
+                            <td className="text-right px-4 py-2.5 text-[10px] text-[var(--text-muted)]">
+                              {ci ? `${ci.pct >= 0 ? '+' : ''}${ci.pct.toFixed(1)}% (${ci.pctLo.toFixed(1)}% to ${ci.pctHi.toFixed(1)}%)` : '—'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {/* Totals row */}
+                      <tr className="bg-[var(--surface)] font-semibold border-t-2 border-[var(--border)]">
+                        <td className="px-4 py-2.5 text-[var(--text-primary)]">Incremental Spend</td>
+                        <td className="text-right px-4 py-2.5 font-mono text-xs text-emerald-600 dark:text-emerald-400" colSpan={5}>
+                          {fmtM(incrementalSpend)}
+                          <span className="ml-2 text-[10px] text-[var(--text-muted)] font-normal">
+                            = QRIS-Only spend + net new spend at Mixed &amp; E-commerce
+                          </span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Cumulative QRIS-only merchant growth chart */}
               {qrisOnlyMerchantGrowthData.length > 0 && (
                 <ChartCard
                   title="Cumulative QRIS-Only Merchants"
@@ -925,7 +977,6 @@ export default function QrisExperimentPage() {
                     data={qrisOnlyMerchantGrowthData.map(r => ({
                       date: r.month,
                       cumulative: r.cumulative_merchants,
-                      new: r.new_merchants,
                     }))}
                     lines={[
                       { key: "cumulative", color: "#06b6d4", label: "Cumulative QRIS-Only Merchants" },
@@ -1523,25 +1574,46 @@ export default function QrisExperimentPage() {
 
         <ActionItems section="QRIS Experiment" items={actionItems} />
 
-        {/* Footer note */}
-        <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] px-6 py-4">
+        {/* Footer: Definitions & Methodology */}
+        <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] px-6 py-4 space-y-3">
           <p className="text-xs text-[var(--text-muted)] leading-relaxed">
             <span className="font-semibold text-[var(--text-secondary)]">Methodology:</span>{" "}
             A/B test with {hasData ? `${(test.cohort_size + control.cohort_size).toLocaleString()}` : "~10,000"} users from <code className={cn("px-1 rounded", isDark ? "text-[#7C4DFF] bg-[#5B22FF]/10" : "text-[#D00083] bg-[#D00083]/10")}>sandbox_risk.sample_qris_rollout_test_10k_202601</code>.
             Contaminated Control users (with QRIS transactions) are excluded dynamically.
             QRIS transactions are identified by{" "}
             <code className={cn("px-1 rounded", isDark ? "text-[#7C4DFF] bg-[#5B22FF]/10" : "text-[#D00083] bg-[#D00083]/10")}>fx_dw007_rte_dest = &apos;L&apos;</code>.
-            Currency conversion: cents / 100 for IDR, / 16,000 for USD.
-            Interchange estimates: card ~1.6% (blended Visa+MC domestic, Kansas City Fed Aug 2025), QRIS MDR ~0.55% weighted avg (PBI No. 24/8/PBI/2022) with 37% issuer share via PT ALTO Network.
-            Fee and interest revenue sourced from actual billed amounts in DW004 (f9_dw004_tot_int, f9_dw004_bil_fee_chrg_1, f9_dw004_bil_chrg_fee).
-            Spend data from authorized transactions (DW007). Data as of {AS_OF}.
+            Confidence intervals use the two-sample z-test: CI = (μ₁−μ₂) ± 1.96 × √(σ₁²/n₁ + σ₂²/n₂). Data as of {AS_OF}.
           </p>
-          <p className="text-xs text-[var(--text-muted)] leading-relaxed mt-2">
-            <span className="font-semibold text-amber-600">Revenue Note:</span>{" "}
-            While QRIS drives higher engagement (+16.9% total spend, +18.2% transactions) and modestly higher fee/interest revenue (+5.4%),
-            the card interchange cannibalization (-28.9%) results in <strong>lower total revenue per user</strong> for the Test group.
-            The QRIS issuer share (0.2035% effective rate) is ~8x lower than card interchange (1.6%).
-            Decision to graduate QRIS should weigh customer engagement benefits and long-term LTV against short-term revenue impact.
+
+          <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+            <span className="font-semibold text-[var(--text-secondary)]">Admin Fee:</span>{" "}
+            Personalized rate from 0% to 6.49% on statement balance, determined by card program (<code className={cn("px-1 rounded", isDark ? "text-[#7C4DFF] bg-[#5B22FF]/10" : "text-[#D00083] bg-[#D00083]/10")}>fx_dw005_crd_pgm</code>).
+            Refunded if paid in full by due date. No fee if no balance.
+            Rates: 0% (pgm xx01/05/07/12/17), 1.49% (xx02/08/13/18), 3.99% (xx03/09/14/19), 4.99% (xx04/10/15/20), 6.49% (xx06/11/16/21–27).
+            Source: <a href="https://www.honest.co.id/en/faq/what-is-admin-fee" target="_blank" rel="noopener noreferrer" className="underline">honest.co.id/faq/what-is-admin-fee</a>.
+            Revenue from DW004 field <code className={cn("px-1 rounded", isDark ? "text-[#7C4DFF] bg-[#5B22FF]/10" : "text-[#D00083] bg-[#D00083]/10")}>f9_dw004_bil_fee_chrg_1</code>.
+          </p>
+
+          <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+            <span className="font-semibold text-[var(--text-secondary)]">Interest:</span>{" "}
+            21% p.a. (1.75%/month) calculated daily on unpaid balances. Formula: Unpaid Balance × (Days / 365) × 21%.
+            No interest if statement paid in full on time.
+            Source: <a href="https://www.honest.co.id/en/faq/bagaimana-bunga-dihitung" target="_blank" rel="noopener noreferrer" className="underline">honest.co.id/faq/bagaimana-bunga-dihitung</a>.
+            Revenue from DW004 field <code className={cn("px-1 rounded", isDark ? "text-[#7C4DFF] bg-[#5B22FF]/10" : "text-[#D00083] bg-[#D00083]/10")}>f9_dw004_tot_int</code>.
+          </p>
+
+          <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+            <span className="font-semibold text-[var(--text-secondary)]">Interchange &amp; QRIS MDR:</span>{" "}
+            Card interchange at ~1.6% (blended Visa+MC domestic, Kansas City Fed Aug 2025).
+            QRIS MDR weighted avg ~0.55% (UMI 0%/0.3%, UKE/UKI 0.7% — PBI No. 24/8/PBI/2022) with 37% issuer share via PT ALTO Network,
+            effective issuer rate = 0.2035%.
+          </p>
+
+          <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+            <span className="font-semibold text-[var(--text-secondary)]">Incremental Spend:</span>{" "}
+            QRIS-Only merchant spend is 100% incremental (no card alternative exists).
+            At Mixed and E-commerce merchants, incremental spend = Test total spend − Control total spend at the same merchant segment.
+            Card spend decline at Mixed merchants indicates cannibalization.
           </p>
         </div>
       </div>

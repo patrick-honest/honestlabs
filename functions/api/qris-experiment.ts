@@ -129,9 +129,10 @@ async function queryQrisExperiment(
     ),
 
     // -----------------------------------------------------------------------
-    // (b) merchantClassification — QRIS at Mixed vs QRIS-Only vs E-commerce
-    // Merchant history lookup is ALL TIME (no date filter).
-    // Spend within period uses startDate/endDate.
+    // (b) merchantClassification — QRIS + Card spend at classified merchants
+    // Merchant history is ALL TIME; period spend uses startDate/endDate.
+    // Also returns card spend per cohort at the same merchants for
+    // cannibalization analysis, plus per-user std devs for CIs.
     // -----------------------------------------------------------------------
     runQuery(
       `WITH ${cohortCTEs(experimentStart)},
@@ -141,8 +142,6 @@ async function queryQrisExperiment(
           fx_dw007_merc_name AS merchant,
           MAX(CASE WHEN fx_dw007_rte_dest = 'L' THEN 1 ELSE 0 END) AS has_qris,
           MAX(CASE WHEN fx_dw007_rte_dest != 'L' OR fx_dw007_rte_dest IS NULL THEN 1 ELSE 0 END) AS has_non_qris,
-          -- E-commerce detection: merchants where ALL non-QRIS txns are route 'I' (international/online)
-          -- or merchant name matches known e-commerce platforms
           MAX(CASE WHEN fx_dw007_rte_dest != 'L' AND fx_dw007_rte_dest != 'I'
                     AND fx_dw007_rte_dest IS NOT NULL THEN 1 ELSE 0 END) AS has_domestic_non_qris
         FROM ${TABLES.authorized_transaction}
@@ -161,7 +160,6 @@ async function queryQrisExperiment(
         FROM merchant_history
         WHERE has_qris = 1
       ),
-      -- Also classify by known e-commerce names as fallback
       final_class AS (
         SELECT merchant,
           CASE
@@ -175,27 +173,56 @@ async function queryQrisExperiment(
           END AS merchant_type
         FROM classified
       ),
-      -- Period QRIS spend by cohort at classified merchants
-      period_qris AS (
+      -- ALL transactions (QRIS + card) at classified merchants, by cohort
+      period_txns AS (
         SELECT
-          co.grp,
-          fc.merchant_type,
-          ROUND(SUM(CAST(t.f9_dw007_amt_req AS FLOAT64) / 100.0), 2) AS qris_spend_idr,
-          COUNT(*) AS qris_txns,
-          COUNT(DISTINCT co.user_id) AS qris_users
+          co.user_id, co.grp, fc.merchant_type,
+          CAST(t.f9_dw007_amt_req AS FLOAT64) / 100.0 AS spend_idr,
+          CASE WHEN t.fx_dw007_rte_dest = 'L' THEN 1 ELSE 0 END AS is_qris
         FROM clean_cohort co
         JOIN cards k ON co.loc_acct = k.f9_dw005_loc_acct
         JOIN ${TABLES.authorized_transaction} t ON k.f9_dw005_crn = t.f9_dw007_prin_crn
         JOIN final_class fc ON t.fx_dw007_merc_name = fc.merchant
         WHERE t.f9_dw007_dt BETWEEN @startDate AND @endDate
-          AND t.fx_dw007_txn_typ = 'RA' AND t.fx_dw007_rte_dest = 'L'
           AND (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '' OR t.fx_dw007_stat = ' ')
+          AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
           AND t.f9_dw007_ori_amt > 0
-        GROUP BY co.grp, fc.merchant_type
+      ),
+      -- Per-user spend by merchant type for std dev
+      user_segment_spend AS (
+        SELECT user_id, grp, merchant_type,
+          SUM(CASE WHEN is_qris = 1 THEN spend_idr ELSE 0 END) AS qris_spend,
+          SUM(CASE WHEN is_qris = 0 THEN spend_idr ELSE 0 END) AS card_spend,
+          SUM(spend_idr) AS total_spend
+        FROM period_txns
+        GROUP BY user_id, grp, merchant_type
+      ),
+      -- Std dev per segment (for CIs)
+      segment_stddev AS (
+        SELECT grp, merchant_type,
+          ROUND(STDDEV_POP(total_spend), 2) AS std_dev_spend
+        FROM user_segment_spend
+        GROUP BY grp, merchant_type
+      ),
+      cohort_sz AS (
+        SELECT grp, COUNT(DISTINCT user_id) AS sz FROM clean_cohort GROUP BY grp
       )
-      SELECT grp, merchant_type, qris_spend_idr, qris_txns, qris_users
-      FROM period_qris
-      ORDER BY grp, merchant_type`,
+      SELECT
+        p.grp, p.merchant_type,
+        ROUND(SUM(CASE WHEN p.is_qris = 1 THEN p.spend_idr ELSE 0 END), 2) AS qris_spend_idr,
+        COUNTIF(p.is_qris = 1) AS qris_txns,
+        COUNT(DISTINCT CASE WHEN p.is_qris = 1 THEN p.user_id END) AS qris_users,
+        ROUND(SUM(CASE WHEN p.is_qris = 0 THEN p.spend_idr ELSE 0 END), 2) AS card_spend_idr,
+        COUNTIF(p.is_qris = 0) AS card_txns,
+        COUNT(DISTINCT CASE WHEN p.is_qris = 0 THEN p.user_id END) AS card_users,
+        ROUND(SUM(p.spend_idr), 2) AS total_spend_idr,
+        cs.sz AS cohort_size,
+        sd.std_dev_spend
+      FROM period_txns p
+      JOIN cohort_sz cs ON p.grp = cs.grp
+      LEFT JOIN segment_stddev sd ON p.grp = sd.grp AND p.merchant_type = sd.merchant_type
+      GROUP BY p.grp, p.merchant_type, cs.sz, sd.std_dev_spend
+      ORDER BY p.grp, p.merchant_type`,
       { startDate: effectiveStart, endDate },
       env,
     ),
