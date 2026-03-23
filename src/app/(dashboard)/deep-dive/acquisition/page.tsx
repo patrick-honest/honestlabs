@@ -20,7 +20,6 @@ import { getPeriodRange, getPeriodInsightLabels } from "@/lib/period-data";
 const AS_OF = "Mar 15, 2026";
 
 const stageToSqlValue: Record<string, string> = {
-  "OTP Started": "OTP login started",
   "Mobile Verified": "Mobile verified",
   "Agreements Accepted": "Application agreements accepted",
   "KYC Complete": "KYC complete",

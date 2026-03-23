@@ -5,14 +5,14 @@ import type { ParsedFilters } from "../_shared/filters";
 import { productTypeWhere } from "../_shared/filters";
 
 const FUNNEL_STAGES = [
-  "OTP login started", "Mobile verified", "Application agreements accepted", "KYC complete",
+  "Mobile verified", "Application agreements accepted", "KYC complete",
   "Personal details entered", "Personal info details part 2 complete", "Application submitted",
   "Decision complete", "Cardholder agreement viewed", "Cardholder agreement accepted",
   "Tutorial complete", "Delivery Address Entered", "PIN set",
 ];
 
 const STAGE_LABELS: Record<string, string> = {
-  "OTP login started": "OTP Started", "Mobile verified": "Mobile Verified",
+  "Mobile verified": "Mobile Verified",
   "Application agreements accepted": "Agreements Accepted", "KYC complete": "KYC Complete",
   "Personal details entered": "Personal Details", "Personal info details part 2 complete": "Personal Info Pt2",
   "Application submitted": "Application Submitted", "Decision complete": "Decision Complete",

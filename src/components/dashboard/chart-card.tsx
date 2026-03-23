@@ -7,7 +7,6 @@ import { useTranslations } from "next-intl";
 import { useTheme } from "@/hooks/use-theme";
 import { QueryInspectorButton, type QueryInfo } from "@/components/query-inspector/query-inspector";
 import { BreakdownFilter, type ActiveBreakdowns, type BreakdownDimension } from "@/components/filters/breakdown-filter";
-import { ChartDateRange, type DateRangeOverride } from "@/components/charts/chart-date-range";
 
 interface ChartCardProps {
   title: string;
@@ -23,11 +22,6 @@ interface ChartCardProps {
   breakdowns?: ActiveBreakdowns;
   onBreakdownChange?: (b: ActiveBreakdowns) => void;
   availableBreakdowns?: BreakdownDimension[];
-  /** Chart-level date range override (controlled mode) */
-  dateOverride?: DateRangeOverride | null;
-  onDateOverride?: (range: DateRangeOverride | null) => void;
-  /** Set false to hide the date picker (default: true) */
-  showDatePicker?: boolean;
   /** Show star badge indicating data is from BigQuery (not mock) */
   liveData?: boolean;
 }
@@ -44,28 +38,25 @@ export function ChartCard({
   breakdowns,
   onBreakdownChange,
   availableBreakdowns,
-  dateOverride: controlledDateOverride,
-  onDateOverride: controlledOnDateOverride,
-  showDatePicker = true,
   liveData,
 }: ChartCardProps) {
   const tMetrics = useTranslations("metrics");
   const { isDark } = useTheme();
   const [refreshing, setRefreshing] = useState(false);
-  // Self-managed date override when no external control is provided
-  const [internalDateOverride, setInternalDateOverride] = useState<DateRangeOverride | null>(null);
-  const dateOverride = controlledOnDateOverride ? controlledDateOverride ?? null : internalDateOverride;
-  const onDateOverride = controlledOnDateOverride ?? setInternalDateOverride;
+  const [lastRefreshed, setLastRefreshed] = useState<string | null>(null);
 
   async function handleRefresh() {
     if (!onRefresh || refreshing) return;
     setRefreshing(true);
     try {
       await onRefresh();
+      setLastRefreshed(new Date().toLocaleString());
     } finally {
       setRefreshing(false);
     }
   }
+
+  const displayTimestamp = lastRefreshed ?? asOf;
 
   return (
     <div className={cn(
@@ -88,14 +79,11 @@ export function ChartCard({
             <p className="text-xs text-[var(--text-secondary)] mt-0.5">{subtitle}</p>
           )}
           <p className="text-[10px] text-[var(--text-muted)] mt-0.5">
-            {(dateOverride ?? dataRange).start} &ndash; {(dateOverride ?? dataRange).end}
+            {dataRange.start} &ndash; {dataRange.end}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {showDatePicker && (
-            <ChartDateRange override={dateOverride} onOverride={onDateOverride} />
-          )}
-          <span className="text-[10px] text-[var(--text-muted)]">{tMetrics("asOf")}: {asOf}</span>
+          <span className="text-[10px] text-[var(--text-muted)]">{tMetrics("asOf")}: {displayTimestamp}</span>
           {onRefresh && (
             <button
               onClick={handleRefresh}
