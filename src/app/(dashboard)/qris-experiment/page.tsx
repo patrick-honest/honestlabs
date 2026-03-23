@@ -15,6 +15,7 @@ import { ChartCard } from "@/components/dashboard/chart-card";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { getPeriodRange } from "@/lib/period-data";
+import { useDateParams } from "@/hooks/use-period";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -268,13 +269,39 @@ interface CohortRow {
   cohort_size: number;
   transactors: number;
   qris_users: number;
-  total_spend_usd: number;
-  qris_spend_usd: number;
+  total_spend_idr: number;
+  qris_spend_idr: number;
   total_txns: number;
   qris_txns: number;
-  avg_spend_per_user: number;
+  avg_spend_per_eligible_user: number;
   txn_per_user: number;
   sar: number;
+  std_dev_spend: number;
+  std_dev_txns: number;
+  // Legacy USD fields (kept for backward compat if old API still used)
+  total_spend_usd?: number;
+  qris_spend_usd?: number;
+  avg_spend_per_user?: number;
+}
+
+interface MerchantClassRow {
+  grp: string;
+  merchant_type: string;
+  qris_spend_idr: number;
+  qris_txns: number;
+  qris_users: number;
+}
+
+interface ProfitabilityRow {
+  grp: string;
+  cohort_size: number;
+  admin_fee_revenue: number;
+  interest_revenue: number;
+  charge_fee_revenue: number;
+  card_interchange_revenue: number;
+  qris_mdr_revenue: number;
+  total_revenue: number;
+  arpu: number;
 }
 
 interface InterchangeRow {
@@ -300,26 +327,36 @@ interface QrisOnlySpendRow {
 
 interface ApiData {
   cohortComparison: CohortRow[];
+  merchantClassification?: MerchantClassRow[];
+  qrisOnlyMerchantCount?: { qris_only_merchants: number; mixed_merchants: number; non_qris_only_merchants: number };
+  qrisOnlyMerchantGrowth?: { month: string; cumulative_merchants: number; new_merchants: number }[];
+  interchangeProjection?: InterchangeRow[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  cohortRpu?: any[];
+  profitability?: ProfitabilityRow[];
+  // Legacy fields (backward compat with old dev-mode API)
   merchantBreakdown?: { qris_only_merchants: number; mixed_merchants: number; non_qris_only_merchants: number };
   merchantGrowth?: { month: string; cumulative_merchants: number; new_merchants: number }[];
   mixedMerchantStats?: { qris_txns_at_mixed: number; qris_spend_idr_at_mixed: number; qris_spend_usd_at_mixed: number; mixed_merchant_count: number };
-  interchangeProjection?: InterchangeRow[];
   qrisOnlyMerchantSpend?: QrisOnlySpendRow[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   cohortFinancials?: any[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  cohortRpu?: any[];
   topMerchantsByTxn?: { merchant: string; txn_count: number; total_spend_idr: number; total_spend_usd: number }[];
   topMerchantsBySpend?: { merchant: string; txn_count: number; total_spend_idr: number; total_spend_usd: number }[];
 }
 
 export default function QrisExperimentPage() {
   const { periodLabel } = usePeriod();
+  const { dateParams, startDate, endDate } = useDateParams();
   const { isDark } = useTheme();
   const tNav = useTranslations("nav");
 
+  const apiUrl = startDate && endDate
+    ? `/api/qris-experiment?${dateParams}`
+    : null;
+
   const { data: apiData, isLoading } = useSWR<ApiData>(
-    "/api/qris-experiment?startDate=2026-02-09",
+    apiUrl,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 300_000 },
   );
@@ -335,16 +372,62 @@ export default function QrisExperimentPage() {
 
   const hasData = test !== null && control !== null;
 
+  // Helper: get spend value (support both IDR and legacy USD fields)
+  const getSpend = (row: CohortRow) => row.total_spend_idr ?? ((row.total_spend_usd ?? 0) * 16000);
+  const getQrisSpend = (row: CohortRow) => row.qris_spend_idr ?? ((row.qris_spend_usd ?? 0) * 16000);
+  const getAvgSpend = (row: CohortRow) => row.avg_spend_per_eligible_user ?? (row.avg_spend_per_user ?? 0);
+
   // Derived metrics
-  const spendLift = hasData
-    ? ((test.total_spend_usd - control.total_spend_usd) / control.total_spend_usd * 100)
+  const spendLift = hasData && getSpend(control) > 0
+    ? ((getSpend(test) - getSpend(control)) / getSpend(control) * 100)
     : 0;
   const qrisAdoptionRate = hasData && test.transactors > 0
     ? (test.qris_users / test.transactors * 100)
     : 0;
-  const qrisSpendShare = hasData && test.total_spend_usd > 0
-    ? (test.qris_spend_usd / test.total_spend_usd * 100)
+  const qrisSpendShare = hasData && getSpend(test) > 0
+    ? (getQrisSpend(test) / getSpend(test) * 100)
     : 0;
+
+  // Confidence interval for avg spend per eligible user
+  const spendCI = useMemo(() => {
+    if (!hasData || !test.std_dev_spend || !control.std_dev_spend) return null;
+    const testMean = getAvgSpend(test);
+    const controlMean = getAvgSpend(control);
+    const testVar = (test.std_dev_spend ?? 0) ** 2;
+    const controlVar = (control.std_dev_spend ?? 0) ** 2;
+    const testN = test.cohort_size;
+    const controlN = control.cohort_size;
+    if (testN === 0 || controlN === 0 || controlMean === 0) return null;
+    const diff = testMean - controlMean;
+    const se = Math.sqrt(testVar / testN + controlVar / controlN);
+    const ciLow = diff - 1.96 * se;
+    const ciHigh = diff + 1.96 * se;
+    const pctDiff = (diff / controlMean) * 100;
+    const pctLow = (ciLow / controlMean) * 100;
+    const pctHigh = (ciHigh / controlMean) * 100;
+    return { pctDiff, pctLow, pctHigh, diff, ciLow, ciHigh };
+  }, [hasData, test, control]);
+
+  // Merchant classification data
+  const merchantClass = useMemo(() => {
+    if (!apiData?.merchantClassification?.length) return null;
+    const rows = apiData.merchantClassification;
+    const testRows = rows.filter(r => r.grp === 'Test');
+    const controlRows = rows.filter(r => r.grp === 'Control');
+    const types = ['Mixed Merchants', 'QRIS-Only Merchants', 'E-commerce Sites'];
+    const byType = (arr: MerchantClassRow[], type: string) => arr.find(r => r.merchant_type === type);
+    return { testRows, controlRows, types, byType };
+  }, [apiData]);
+
+  // Profitability data
+  const profData = useMemo(() => {
+    if (!apiData?.profitability?.length) return null;
+    const rows = apiData.profitability;
+    const ctrl = rows.find(r => r.grp === 'Control');
+    const tst = rows.find(r => r.grp === 'Test');
+    if (!ctrl || !tst) return null;
+    return { ctrl, tst };
+  }, [apiData]);
 
   // RPU computed after interchangeTest/Control are defined (see below)
 
@@ -375,7 +458,12 @@ export default function QrisExperimentPage() {
   const rpuControl = rpuData?.ctrl?.rpu_idr ?? null;
   const rpuDelta = rpuTest && rpuControl ? ((rpuTest - rpuControl) / rpuControl * 100) : 0;
 
-  // Cumulative QRIS spend at QRIS-only merchants
+  // Cumulative QRIS-only merchant growth
+  const qrisOnlyMerchantGrowthData = useMemo(() => {
+    return apiData?.qrisOnlyMerchantGrowth ?? apiData?.merchantGrowth ?? [];
+  }, [apiData]);
+
+  // Cumulative QRIS spend at QRIS-only merchants (legacy support)
   const qrisOnlySpendCumulative = useMemo(() => {
     const rows = apiData?.qrisOnlyMerchantSpend;
     if (!rows || rows.length === 0) return [];
@@ -456,6 +544,11 @@ export default function QrisExperimentPage() {
                   <div>
                     <p className="text-[11px] font-medium uppercase tracking-wider text-white/50">Spend Lift</p>
                     <p className="text-2xl font-bold text-white">+{spendLift.toFixed(1)}%</p>
+                    {spendCI && (
+                      <p className="text-[9px] text-white/40">
+                        95% CI: {spendCI.pctLow >= 0 ? '+' : ''}{spendCI.pctLow.toFixed(1)}% to {spendCI.pctHigh >= 0 ? '+' : ''}{spendCI.pctHigh.toFixed(1)}%
+                      </p>
+                    )}
                   </div>
                   <div>
                     <p className="text-[11px] font-medium uppercase tracking-wider text-white/50">QRIS Adoption</p>
@@ -531,8 +624,8 @@ export default function QrisExperimentPage() {
             <KpiCard
               icon={<TrendingUp className="h-4 w-4 text-amber-600 dark:text-amber-400" />}
               label="Total Spend Lift"
-              value={`+$${Math.round(test.total_spend_usd - control.total_spend_usd).toLocaleString()}`}
-              subtext={`+${spendLift.toFixed(1)}% vs Control`}
+              value={`Rp ${((getSpend(test) - getSpend(control)) / 1e6).toFixed(0)}M`}
+              subtext={`+${spendLift.toFixed(1)}% vs Control${spendCI ? ` (CI: ${spendCI.pctLow >= 0 ? '+' : ''}${spendCI.pctLow.toFixed(1)}% to ${spendCI.pctHigh >= 0 ? '+' : ''}${spendCI.pctHigh.toFixed(1)}%)` : ''}`}
               accent="bg-amber-100 dark:bg-amber-900/30"
               live
             />
@@ -554,10 +647,10 @@ export default function QrisExperimentPage() {
               live
             />
             <ComparisonRow
-              label="Avg Spend per User (USD)"
-              testValue={test.avg_spend_per_user}
-              controlValue={control.avg_spend_per_user}
-              format="usd"
+              label="Avg Spend per Eligible User (IDR)"
+              testValue={getAvgSpend(test)}
+              controlValue={getAvgSpend(control)}
+              format="number"
               live
             />
             <ComparisonRow
@@ -583,7 +676,7 @@ export default function QrisExperimentPage() {
             />
             <ComparisonRow
               label="QRIS Share of Spend"
-              testValue={test.total_spend_usd > 0 ? test.qris_spend_usd / test.total_spend_usd * 100 : 0}
+              testValue={getSpend(test) > 0 ? getQrisSpend(test) / getSpend(test) * 100 : 0}
               controlValue={0}
               format="percent"
               live
@@ -592,108 +685,172 @@ export default function QrisExperimentPage() {
         )}
 
         {/* ============================================================ */}
-        {/* MERCHANT REACH ANALYSIS                                       */}
+        {/* HEADLINE: Avg Spend per Eligible User with CI                  */}
         {/* ============================================================ */}
-        {apiData?.merchantBreakdown && (
+        {hasData && spendCI && (
+          <div className={cn(
+            "rounded-xl border p-5",
+            isDark ? "border-emerald-800/30 bg-emerald-950/20" : "border-emerald-200 bg-emerald-50",
+          )}>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-emerald-600" />
+              Average Spend per Eligible User
+              <LiveBadge />
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              <div className="text-center">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">Control</p>
+                <p className="text-2xl font-bold text-[var(--text-secondary)]">
+                  Rp {(getAvgSpend(control) / 1000).toFixed(0)}K
+                </p>
+                <p className="text-[10px] text-[var(--text-muted)]">{control.cohort_size.toLocaleString()} eligible users</p>
+              </div>
+              <div className="text-center">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">Test</p>
+                <p className="text-2xl font-bold text-[var(--text-primary)]">
+                  Rp {(getAvgSpend(test) / 1000).toFixed(0)}K
+                </p>
+                <p className="text-[10px] text-[var(--text-muted)]">{test.cohort_size.toLocaleString()} eligible users</p>
+              </div>
+              <div className="text-center">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">Lift (95% CI)</p>
+                <p className={cn("text-2xl font-bold", spendCI.pctDiff >= 0 ? "text-emerald-600" : "text-red-600")}>
+                  {spendCI.pctDiff >= 0 ? '+' : ''}{spendCI.pctDiff.toFixed(1)}%
+                </p>
+                <p className="text-[10px] text-[var(--text-muted)]">
+                  ({spendCI.pctLow >= 0 ? '+' : ''}{spendCI.pctLow.toFixed(1)}% to {spendCI.pctHigh >= 0 ? '+' : ''}{spendCI.pctHigh.toFixed(1)}%)
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================ */}
+        {/* MERCHANT CLASSIFICATION by QRIS merchant type                  */}
+        {/* ============================================================ */}
+        {merchantClass && (
           <div className="space-y-4">
             <div className="flex items-center gap-2">
               <Store className={cn("h-5 w-5", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")} />
-              <h2 className="text-lg font-semibold text-[var(--text-primary)]">QRIS Merchant Reach</h2>
+              <h2 className="text-lg font-semibold text-[var(--text-primary)]">QRIS Merchant Classification</h2>
+              <LiveBadge />
             </div>
 
-            {/* Merchant KPI cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <MetricCard
-                metricKey="qris_only_merchants"
-                label="QRIS-Only Merchants"
-                value={(apiData.merchantBreakdown as { qris_only_merchants: number }).qris_only_merchants}
-                unit="count"
-                asOf="All Time"
-                dataRange={{ start: "", end: "" }}
-                liveData
-              />
-              <MetricCard
-                metricKey="mixed_merchants"
-                label="Mixed (Card + QRIS)"
-                value={(apiData.merchantBreakdown as { mixed_merchants: number }).mixed_merchants}
-                unit="count"
-                asOf="All Time"
-                dataRange={{ start: "", end: "" }}
-                liveData
-              />
-              <MetricCard
-                metricKey="non_qris_merchants"
-                label="Card-Only Merchants"
-                value={(apiData.merchantBreakdown as { non_qris_only_merchants: number }).non_qris_only_merchants}
-                unit="count"
-                asOf="All Time"
-                dataRange={{ start: "", end: "" }}
-                liveData
-              />
+            <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] overflow-hidden">
+              <div className="p-4 border-b border-[var(--border)]">
+                <p className="text-xs text-[var(--text-muted)]">
+                  QRIS spend classified by merchant type. Mixed = accepts both card and QRIS.
+                  QRIS-Only = only ever processed QRIS. E-commerce = online-only merchants.
+                </p>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--border)]">
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Merchant Type</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Test Spend (IDR)</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Test Txns</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Control Spend (IDR)</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Control Txns</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {merchantClass.types.map(type => {
+                    const t = merchantClass.byType(merchantClass.testRows, type);
+                    const c = merchantClass.byType(merchantClass.controlRows, type);
+                    return (
+                      <tr key={type} className="border-b border-[var(--border)] last:border-b-0">
+                        <td className="px-4 py-3 font-medium text-[var(--text-primary)]">{type}</td>
+                        <td className="text-right px-4 py-3 font-mono text-xs text-[var(--text-primary)]">
+                          {t ? `Rp ${(t.qris_spend_idr / 1e6).toFixed(1)}M` : '-'}
+                        </td>
+                        <td className="text-right px-4 py-3 font-mono text-xs text-[var(--text-secondary)]">
+                          {t?.qris_txns?.toLocaleString() ?? '-'}
+                        </td>
+                        <td className="text-right px-4 py-3 font-mono text-xs text-[var(--text-secondary)]">
+                          {c ? `Rp ${(c.qris_spend_idr / 1e6).toFixed(1)}M` : '-'}
+                        </td>
+                        <td className="text-right px-4 py-3 font-mono text-xs text-[var(--text-secondary)]">
+                          {c?.qris_txns?.toLocaleString() ?? '-'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-
-            {/* Cumulative QRIS-only merchant growth */}
-            {(apiData.merchantGrowth?.length ?? 0) > 0 && (
-              <ChartCard
-                title="Cumulative QRIS-Only Merchants"
-                subtitle="Running total of merchants that have only ever processed QRIS transactions"
-                asOf="All Time"
-                dataRange={{ start: "", end: "" }}
-                liveData
-              >
-                <DashboardLineChart
-                  data={(apiData.merchantGrowth as { month: string; cumulative_merchants: number; new_merchants: number }[]).map(r => ({
-                    date: r.month,
-                    cumulative: r.cumulative_merchants,
-                    new: r.new_merchants,
-                  }))}
-                  lines={[
-                    { key: "cumulative", color: "#06b6d4", label: "Cumulative QRIS-Only Merchants" },
-                  ]}
-                  xAxisKey="date"
-                  height={300}
-                />
-              </ChartCard>
-            )}
-
-            {/* Mixed merchant QRIS stats */}
-            {apiData.mixedMerchantStats && (() => {
-              const stats = apiData.mixedMerchantStats as { qris_txns_at_mixed: number; qris_spend_idr_at_mixed: number; qris_spend_usd_at_mixed: number; mixed_merchant_count: number };
-              return (
-                <div className={cn(
-                  "rounded-xl border p-5",
-                  isDark ? "border-[var(--border)] bg-[var(--surface)]" : "border-[var(--border)] bg-[var(--surface)]"
-                )}>
-                  <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">
-                    QRIS at Mixed Merchants
-                    <span className={cn("ml-2 text-[9px]", isDark ? "text-[#FFD166]" : "text-amber-500")} title="Live BigQuery data">&#9733;</span>
-                  </h3>
-                  <p className="text-xs text-[var(--text-secondary)] mb-4">
-                    Merchants that accept both card and QRIS payments — showing QRIS transaction volume at these merchants
-                  </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    <div className="text-center">
-                      <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">Mixed Merchants</p>
-                      <p className="text-2xl font-bold text-[var(--text-primary)]">{stats.mixed_merchant_count.toLocaleString()}</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">QRIS Txns</p>
-                      <p className="text-2xl font-bold text-[var(--text-primary)]">{stats.qris_txns_at_mixed.toLocaleString()}</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">QRIS Spend (IDR)</p>
-                      <p className="text-2xl font-bold text-[var(--text-primary)]">Rp {(stats.qris_spend_idr_at_mixed / 1e9).toFixed(1)}B</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">QRIS Spend (USD)</p>
-                      <p className="text-2xl font-bold text-[var(--text-primary)]">${(stats.qris_spend_usd_at_mixed / 1000).toFixed(0)}K</p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
           </div>
         )}
+
+        {/* ============================================================ */}
+        {/* MERCHANT REACH ANALYSIS                                       */}
+        {/* ============================================================ */}
+        {(apiData?.qrisOnlyMerchantCount || apiData?.merchantBreakdown) && (() => {
+          const bd = apiData?.qrisOnlyMerchantCount ?? apiData?.merchantBreakdown;
+          if (!bd) return null;
+          return (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Store className={cn("h-5 w-5", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")} />
+                <h2 className="text-lg font-semibold text-[var(--text-primary)]">QRIS Merchant Reach</h2>
+              </div>
+
+              {/* Merchant KPI cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <MetricCard
+                  metricKey="qris_only_merchants"
+                  label="QRIS-Only Merchants"
+                  value={bd.qris_only_merchants}
+                  unit="count"
+                  asOf="All Time"
+                  dataRange={{ start: "", end: "" }}
+                  liveData
+                />
+                <MetricCard
+                  metricKey="mixed_merchants"
+                  label="Mixed (Card + QRIS)"
+                  value={bd.mixed_merchants}
+                  unit="count"
+                  asOf="All Time"
+                  dataRange={{ start: "", end: "" }}
+                  liveData
+                />
+                <MetricCard
+                  metricKey="non_qris_merchants"
+                  label="Card-Only Merchants"
+                  value={bd.non_qris_only_merchants}
+                  unit="count"
+                  asOf="All Time"
+                  dataRange={{ start: "", end: "" }}
+                  liveData
+                />
+              </div>
+
+              {/* Cumulative QRIS-only merchant growth */}
+              {qrisOnlyMerchantGrowthData.length > 0 && (
+                <ChartCard
+                  title="Cumulative QRIS-Only Merchants"
+                  subtitle="Running total of merchants that have only ever processed QRIS transactions"
+                  asOf="All Time"
+                  dataRange={{ start: "", end: "" }}
+                  liveData
+                >
+                  <DashboardLineChart
+                    data={qrisOnlyMerchantGrowthData.map(r => ({
+                      date: r.month,
+                      cumulative: r.cumulative_merchants,
+                      new: r.new_merchants,
+                    }))}
+                    lines={[
+                      { key: "cumulative", color: "#06b6d4", label: "Cumulative QRIS-Only Merchants" },
+                    ]}
+                    xAxisKey="date"
+                    height={300}
+                  />
+                </ChartCard>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ============================================================ */}
         {/* INTERCHANGE REVENUE ANALYSIS                                  */}
@@ -1018,6 +1175,107 @@ export default function QrisExperimentPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ============================================================ */}
+        {/* PROFITABILITY ANALYSIS                                         */}
+        {/* ============================================================ */}
+        {profData && (() => {
+          const { ctrl, tst } = profData;
+          const fmtR = (v: number) => v >= 1e9 ? `Rp ${(v/1e9).toFixed(2)}B` : v >= 1e6 ? `Rp ${(v/1e6).toFixed(1)}M` : `Rp ${v.toLocaleString()}`;
+          const dlt = (t: number, c: number) => {
+            if (c === 0) return t > 0 ? 'new' : '-';
+            const d = ((t - c) / Math.abs(c)) * 100;
+            return d > 0 ? `+${d.toFixed(1)}%` : `${d.toFixed(1)}%`;
+          };
+
+          const profRows = [
+            { label: "Admin Fee Revenue", t: tst.admin_fee_revenue, c: ctrl.admin_fee_revenue },
+            { label: "Interest Revenue", t: tst.interest_revenue, c: ctrl.interest_revenue },
+            { label: "Charge Fee Revenue", t: tst.charge_fee_revenue, c: ctrl.charge_fee_revenue },
+            { label: "Card Interchange @ 1.6%", t: tst.card_interchange_revenue, c: ctrl.card_interchange_revenue },
+            { label: "QRIS MDR @ 0.2035%", t: tst.qris_mdr_revenue, c: ctrl.qris_mdr_revenue },
+            { label: "Total Revenue", t: tst.total_revenue, c: ctrl.total_revenue },
+            { label: "ARPU (per Eligible User)", t: tst.arpu, c: ctrl.arpu },
+          ];
+
+          return (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <DollarSign className={cn("h-5 w-5", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")} />
+                <h2 className="text-lg font-semibold text-[var(--text-primary)]">Profitability Analysis</h2>
+                <LiveBadge />
+              </div>
+
+              <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] overflow-hidden">
+                <div className="p-4 border-b border-[var(--border)]">
+                  <p className="text-xs text-[var(--text-muted)]">
+                    Revenue per cohort. Fees and interest from actual DW004 billed amounts.
+                    Card interchange at 1.6% (Kansas City Fed Aug 2025).
+                    QRIS issuer revenue at 0.2035% (0.55% MDR x 37% share via PT ALTO).
+                  </p>
+                </div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[var(--border)]">
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Revenue Line</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Control ({ctrl.cohort_size.toLocaleString()})</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Test ({tst.cohort_size.toLocaleString()})</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Delta</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {profRows.map(row => {
+                      const d = dlt(row.t, row.c);
+                      const isPos = d.startsWith('+');
+                      const isNeg = d.startsWith('-');
+                      const isTotal = row.label.startsWith('Total') || row.label.startsWith('ARPU');
+                      return (
+                        <tr key={row.label} className={cn(
+                          "border-b border-[var(--border)] last:border-b-0",
+                          isTotal && "bg-[var(--surface)] font-semibold",
+                        )}>
+                          <td className="px-4 py-3 font-medium text-[var(--text-primary)]">{row.label}</td>
+                          <td className="text-right px-4 py-3 font-mono text-xs text-[var(--text-secondary)]">{fmtR(row.c)}</td>
+                          <td className="text-right px-4 py-3 font-mono text-xs text-[var(--text-primary)]">{fmtR(row.t)}</td>
+                          <td className="text-right px-4 py-3">
+                            <span className={cn(
+                              "inline-flex items-center gap-1 text-xs font-semibold rounded-full px-2 py-0.5",
+                              d === 'new' ? "text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-950/30"
+                                : isPos ? "text-emerald-600 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-950/30"
+                                : isNeg ? "text-red-600 bg-red-50 dark:text-red-400 dark:bg-red-950/30"
+                                : "text-[var(--text-muted)]",
+                            )}>
+                              {d !== 'new' && d !== '-' && <ArrowUpRight className={cn("h-3 w-3", isNeg && "rotate-90")} />}
+                              {d}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Projected ARPU if QRIS graduates to full portfolio */}
+              <div className={cn(
+                "rounded-xl border-l-4 p-4",
+                isDark
+                  ? "border-l-violet-500 bg-violet-950/20 border border-violet-900/30"
+                  : "border-l-violet-500 bg-violet-50 border border-violet-200",
+              )}>
+                <p className="text-sm font-semibold text-[var(--text-primary)] mb-1">Graduation Projection</p>
+                <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                  If the Test group ARPU of Rp {(tst.arpu / 1000).toFixed(0)}K holds at scale,
+                  {tst.arpu > ctrl.arpu
+                    ? ` graduating QRIS to the full portfolio would increase per-user revenue by Rp ${((tst.arpu - ctrl.arpu) / 1000).toFixed(0)}K (+${(((tst.arpu - ctrl.arpu) / ctrl.arpu) * 100).toFixed(1)}%).`
+                    : ` graduating QRIS would reduce per-user revenue by Rp ${((ctrl.arpu - tst.arpu) / 1000).toFixed(0)}K (${(((tst.arpu - ctrl.arpu) / ctrl.arpu) * 100).toFixed(1)}%).`
+                  }
+                  {' '}Consider LTV impact, churn reduction, and BI regulatory trajectory before decision.
+                </p>
               </div>
             </div>
           );

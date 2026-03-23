@@ -1,0 +1,454 @@
+import { runQuery, TABLES } from "../_shared/bigquery-client";
+import { createHandler } from "../_shared/handler";
+import type { Env } from "../_shared/bigquery-auth";
+import type { ParsedFilters } from "../_shared/filters";
+
+// ---------------------------------------------------------------------------
+// Revenue rate constants
+// ---------------------------------------------------------------------------
+const CARD_INTERCHANGE_RATE = 0.016; // 1.6% blended Visa+MC (Kansas City Fed Aug 2025)
+const QRIS_ISSUER_RATE = 0.002035; // 0.55% MDR x 37% issuer share (PBI No. 24/8/PBI/2022, PT ALTO)
+
+// ---------------------------------------------------------------------------
+// Shared CTE fragments
+// ---------------------------------------------------------------------------
+
+/** Base CTEs for clean cohort (with dynamic contamination detection) */
+function cohortCTEs(startDate: string): string {
+  return `
+    credit_qris_exp AS (
+      SELECT user_id, loc_acct, qris_test_rollout_group AS grp
+      FROM ${TABLES.qris_rollout}
+    ),
+    cards AS (
+      SELECT DISTINCT f9_dw005_loc_acct, f9_dw005_crn
+      FROM ${TABLES.principal_card_updates}
+      WHERE f9_dw005_loc_acct IS NOT NULL AND f9_dw005_crn IS NOT NULL
+    ),
+    contaminated AS (
+      SELECT DISTINCT c.user_id
+      FROM credit_qris_exp c
+      JOIN cards k ON c.loc_acct = k.f9_dw005_loc_acct
+      JOIN ${TABLES.authorized_transaction} t ON k.f9_dw005_crn = t.f9_dw007_prin_crn
+      WHERE c.grp = 'Control'
+        AND t.fx_dw007_txn_typ = 'RA' AND t.fx_dw007_rte_dest = 'L'
+        AND t.f9_dw007_dt >= '${startDate}'
+        AND (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '' OR t.fx_dw007_stat = ' ')
+    ),
+    clean_cohort AS (
+      SELECT c.user_id, c.loc_acct, c.grp
+      FROM credit_qris_exp c
+      WHERE NOT EXISTS (SELECT 1 FROM contaminated x WHERE x.user_id = c.user_id)
+    )`;
+}
+
+// ---------------------------------------------------------------------------
+// Query function
+// ---------------------------------------------------------------------------
+
+async function queryQrisExperiment(
+  startDate: string,
+  endDate: string,
+  env: Env,
+  _filters: ParsedFilters,
+) {
+  // The experiment has a fixed start date; use the earlier of global startDate or experiment start
+  const experimentStart = "2026-02-09";
+  const effectiveStart = startDate < experimentStart ? experimentStart : startDate;
+
+  const [
+    cohortComparison,
+    merchantClassification,
+    qrisOnlyMerchantCount,
+    qrisOnlyMerchantGrowth,
+    interchangeProjection,
+    cohortRpu,
+    profitability,
+  ] = await Promise.all([
+    // -----------------------------------------------------------------------
+    // (a) cohortComparison — Test vs Control headline metrics
+    // -----------------------------------------------------------------------
+    runQuery(
+      `WITH ${cohortCTEs(experimentStart)},
+      auth_trx AS (
+        SELECT
+          co.user_id, co.grp,
+          CAST(t.f9_dw007_amt_req AS FLOAT64) / 100.0 AS spend_idr,
+          CASE WHEN t.fx_dw007_txn_typ = 'RA' AND t.fx_dw007_rte_dest = 'L' THEN 1 ELSE 0 END AS is_qris
+        FROM clean_cohort co
+        JOIN cards k ON co.loc_acct = k.f9_dw005_loc_acct
+        JOIN ${TABLES.authorized_transaction} t ON k.f9_dw005_crn = t.f9_dw007_prin_crn
+        WHERE t.f9_dw007_dt BETWEEN @startDate AND @endDate
+          AND (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '' OR t.fx_dw007_stat = ' ')
+          AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+          AND t.f9_dw007_ori_amt > 0
+      ),
+      user_spend AS (
+        SELECT user_id, grp, SUM(spend_idr) AS total_spend, COUNT(*) AS txn_count
+        FROM auth_trx GROUP BY user_id, grp
+      )
+      SELECT
+        co.grp,
+        COUNT(DISTINCT co.user_id) AS cohort_size,
+        COUNT(DISTINCT a.user_id) AS transactors,
+        COUNT(DISTINCT CASE WHEN a.is_qris = 1 THEN a.user_id END) AS qris_users,
+        ROUND(COALESCE(SUM(a.spend_idr), 0), 2) AS total_spend_idr,
+        ROUND(COALESCE(SUM(CASE WHEN a.is_qris = 1 THEN a.spend_idr ELSE 0 END), 0), 2) AS qris_spend_idr,
+        COUNT(a.user_id) AS total_txns,
+        COALESCE(SUM(a.is_qris), 0) AS qris_txns,
+        -- avg spend per ELIGIBLE user (cohort_size, not transactors)
+        ROUND(COALESCE(SUM(a.spend_idr), 0) / NULLIF(COUNT(DISTINCT co.user_id), 0), 2) AS avg_spend_per_eligible_user,
+        ROUND(CAST(COUNT(a.user_id) AS FLOAT64) / NULLIF(COUNT(DISTINCT a.user_id), 0), 1) AS txn_per_user,
+        ROUND(100.0 * COUNT(DISTINCT a.user_id) / COUNT(DISTINCT co.user_id), 1) AS sar,
+        -- For confidence intervals
+        ROUND(COALESCE((SELECT STDDEV_POP(us.total_spend) FROM user_spend us WHERE us.grp = co.grp), 0), 2) AS std_dev_spend,
+        ROUND(COALESCE((SELECT STDDEV_POP(CAST(us.txn_count AS FLOAT64)) FROM user_spend us WHERE us.grp = co.grp), 0), 2) AS std_dev_txns
+      FROM clean_cohort co
+      LEFT JOIN auth_trx a ON co.user_id = a.user_id
+      GROUP BY co.grp
+      ORDER BY co.grp`,
+      { startDate: effectiveStart, endDate },
+      env,
+    ),
+
+    // -----------------------------------------------------------------------
+    // (b) merchantClassification — QRIS at Mixed vs QRIS-Only vs E-commerce
+    // Merchant history lookup is ALL TIME (no date filter).
+    // Spend within period uses startDate/endDate.
+    // -----------------------------------------------------------------------
+    runQuery(
+      `WITH ${cohortCTEs(experimentStart)},
+      -- All-time merchant classification (no date filter)
+      merchant_history AS (
+        SELECT
+          fx_dw007_merc_name AS merchant,
+          MAX(CASE WHEN fx_dw007_rte_dest = 'L' THEN 1 ELSE 0 END) AS has_qris,
+          MAX(CASE WHEN fx_dw007_rte_dest != 'L' OR fx_dw007_rte_dest IS NULL THEN 1 ELSE 0 END) AS has_non_qris,
+          -- E-commerce detection: merchants where ALL non-QRIS txns are route 'I' (international/online)
+          -- or merchant name matches known e-commerce platforms
+          MAX(CASE WHEN fx_dw007_rte_dest != 'L' AND fx_dw007_rte_dest != 'I'
+                    AND fx_dw007_rte_dest IS NOT NULL THEN 1 ELSE 0 END) AS has_domestic_non_qris
+        FROM ${TABLES.authorized_transaction}
+        WHERE (fx_dw007_stat IS NULL OR TRIM(fx_dw007_stat) = '' OR fx_dw007_stat = ' ')
+          AND fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+        GROUP BY merchant
+      ),
+      classified AS (
+        SELECT merchant,
+          CASE
+            WHEN has_qris = 1 AND has_non_qris = 0 THEN 'QRIS-Only Merchants'
+            WHEN has_qris = 1 AND has_non_qris = 1 AND has_domestic_non_qris = 0 THEN 'E-commerce Sites'
+            WHEN has_qris = 1 AND has_non_qris = 1 THEN 'Mixed Merchants'
+            ELSE 'Other'
+          END AS merchant_type
+        FROM merchant_history
+        WHERE has_qris = 1
+      ),
+      -- Also classify by known e-commerce names as fallback
+      final_class AS (
+        SELECT merchant,
+          CASE
+            WHEN merchant_type = 'Mixed Merchants' AND (
+              UPPER(merchant) LIKE '%SHOPEE%' OR UPPER(merchant) LIKE '%TOKOPEDIA%'
+              OR UPPER(merchant) LIKE '%LAZADA%' OR UPPER(merchant) LIKE '%GRAB%'
+              OR UPPER(merchant) LIKE '%GOJEK%' OR UPPER(merchant) LIKE '%BUKALAPAK%'
+              OR UPPER(merchant) LIKE '%BLIBLI%' OR UPPER(merchant) LIKE '%TIKTOK%'
+            ) THEN 'E-commerce Sites'
+            ELSE merchant_type
+          END AS merchant_type
+        FROM classified
+      ),
+      -- Period QRIS spend by cohort at classified merchants
+      period_qris AS (
+        SELECT
+          co.grp,
+          fc.merchant_type,
+          ROUND(SUM(CAST(t.f9_dw007_amt_req AS FLOAT64) / 100.0), 2) AS qris_spend_idr,
+          COUNT(*) AS qris_txns,
+          COUNT(DISTINCT co.user_id) AS qris_users
+        FROM clean_cohort co
+        JOIN cards k ON co.loc_acct = k.f9_dw005_loc_acct
+        JOIN ${TABLES.authorized_transaction} t ON k.f9_dw005_crn = t.f9_dw007_prin_crn
+        JOIN final_class fc ON t.fx_dw007_merc_name = fc.merchant
+        WHERE t.f9_dw007_dt BETWEEN @startDate AND @endDate
+          AND t.fx_dw007_txn_typ = 'RA' AND t.fx_dw007_rte_dest = 'L'
+          AND (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '' OR t.fx_dw007_stat = ' ')
+          AND t.f9_dw007_ori_amt > 0
+        GROUP BY co.grp, fc.merchant_type
+      )
+      SELECT grp, merchant_type, qris_spend_idr, qris_txns, qris_users
+      FROM period_qris
+      ORDER BY grp, merchant_type`,
+      { startDate: effectiveStart, endDate },
+      env,
+    ),
+
+    // -----------------------------------------------------------------------
+    // (c) qrisOnlyMerchantCount — All-time count of QRIS-only merchants
+    // -----------------------------------------------------------------------
+    runQuery(
+      `SELECT
+        COUNTIF(has_qris = 1 AND has_non_qris = 0) AS qris_only_merchants,
+        COUNTIF(has_qris = 1 AND has_non_qris = 1) AS mixed_merchants,
+        COUNTIF(has_qris = 0 AND has_non_qris = 1) AS non_qris_only_merchants
+      FROM (
+        SELECT
+          fx_dw007_merc_name AS merchant,
+          MAX(CASE WHEN fx_dw007_rte_dest = 'L' THEN 1 ELSE 0 END) AS has_qris,
+          MAX(CASE WHEN fx_dw007_rte_dest != 'L' OR fx_dw007_rte_dest IS NULL THEN 1 ELSE 0 END) AS has_non_qris
+        FROM ${TABLES.authorized_transaction}
+        WHERE (fx_dw007_stat IS NULL OR TRIM(fx_dw007_stat) = '' OR fx_dw007_stat = ' ')
+          AND fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+        GROUP BY merchant
+      )`,
+      undefined,
+      env,
+    ),
+
+    // -----------------------------------------------------------------------
+    // (d) qrisOnlyMerchantGrowth — Cumulative count of QRIS-only merchants over time
+    // -----------------------------------------------------------------------
+    runQuery(
+      `WITH merchant_first_txn AS (
+        SELECT
+          fx_dw007_merc_name AS merchant,
+          MIN(f9_dw007_dt) AS first_qris_date
+        FROM ${TABLES.authorized_transaction}
+        WHERE (fx_dw007_stat IS NULL OR TRIM(fx_dw007_stat) = '' OR fx_dw007_stat = ' ')
+          AND fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+          AND fx_dw007_rte_dest = 'L'
+        GROUP BY merchant
+        HAVING merchant NOT IN (
+          SELECT DISTINCT fx_dw007_merc_name
+          FROM ${TABLES.authorized_transaction}
+          WHERE (fx_dw007_stat IS NULL OR TRIM(fx_dw007_stat) = '' OR fx_dw007_stat = ' ')
+            AND fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+            AND (fx_dw007_rte_dest != 'L' OR fx_dw007_rte_dest IS NULL)
+        )
+      ),
+      monthly AS (
+        SELECT DATE_TRUNC(first_qris_date, MONTH) AS mth, COUNT(*) AS new_merchants
+        FROM merchant_first_txn GROUP BY mth
+      )
+      SELECT
+        FORMAT_DATE('%Y-%m', mth) AS month,
+        new_merchants,
+        SUM(new_merchants) OVER (ORDER BY mth) AS cumulative_merchants
+      FROM monthly
+      ORDER BY mth`,
+      undefined,
+      env,
+    ),
+
+    // -----------------------------------------------------------------------
+    // (e) interchangeProjection — Revenue breakdown per cohort
+    // -----------------------------------------------------------------------
+    runQuery(
+      `WITH ${cohortCTEs(experimentStart)},
+      auth_trx AS (
+        SELECT
+          co.user_id, co.grp,
+          CAST(t.f9_dw007_amt_req AS FLOAT64) / 100.0 AS spend_idr,
+          CASE WHEN t.fx_dw007_txn_typ = 'RA' AND t.fx_dw007_rte_dest = 'L' THEN 1 ELSE 0 END AS is_qris
+        FROM clean_cohort co
+        JOIN cards k ON co.loc_acct = k.f9_dw005_loc_acct
+        JOIN ${TABLES.authorized_transaction} t ON k.f9_dw005_crn = t.f9_dw007_prin_crn
+        WHERE t.f9_dw007_dt BETWEEN @startDate AND @endDate
+          AND (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '' OR t.fx_dw007_stat = ' ')
+          AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+          AND t.f9_dw007_ori_amt > 0
+      )
+      SELECT
+        co.grp,
+        COUNT(DISTINCT co.user_id) AS cohort_size,
+        ROUND(COALESCE(SUM(CASE WHEN a.is_qris = 0 THEN a.spend_idr ELSE 0 END), 0), 2) AS card_spend_idr,
+        ROUND(COALESCE(SUM(CASE WHEN a.is_qris = 1 THEN a.spend_idr ELSE 0 END), 0), 2) AS qris_spend_idr,
+        ROUND(COALESCE(SUM(a.spend_idr), 0), 2) AS total_spend_idr,
+        ROUND(COALESCE(SUM(CASE WHEN a.is_qris = 0 THEN a.spend_idr ELSE 0 END), 0) * ${CARD_INTERCHANGE_RATE}, 2) AS card_interchange_idr,
+        ROUND(COALESCE(SUM(CASE WHEN a.is_qris = 1 THEN a.spend_idr ELSE 0 END), 0) * ${QRIS_ISSUER_RATE}, 2) AS qris_issuer_revenue_idr,
+        ROUND(
+          COALESCE(SUM(CASE WHEN a.is_qris = 0 THEN a.spend_idr ELSE 0 END), 0) * ${CARD_INTERCHANGE_RATE}
+          + COALESCE(SUM(CASE WHEN a.is_qris = 1 THEN a.spend_idr ELSE 0 END), 0) * ${QRIS_ISSUER_RATE},
+        2) AS total_revenue_idr,
+        ROUND(
+          (COALESCE(SUM(CASE WHEN a.is_qris = 0 THEN a.spend_idr ELSE 0 END), 0) * ${CARD_INTERCHANGE_RATE}
+           + COALESCE(SUM(CASE WHEN a.is_qris = 1 THEN a.spend_idr ELSE 0 END), 0) * ${QRIS_ISSUER_RATE})
+          / NULLIF(COUNT(DISTINCT co.user_id), 0),
+        2) AS revenue_per_user_idr
+      FROM clean_cohort co
+      LEFT JOIN auth_trx a ON co.user_id = a.user_id
+      GROUP BY co.grp
+      ORDER BY co.grp`,
+      { startDate: effectiveStart, endDate },
+      env,
+    ),
+
+    // -----------------------------------------------------------------------
+    // (f) cohortRpu — Revenue per user including fees, interest, interchange
+    // -----------------------------------------------------------------------
+    runQuery(
+      `WITH all_users AS (
+        SELECT user_id, qris_test_rollout_group AS grp FROM ${TABLES.qris_rollout}
+      ),
+      contaminated_ctrl AS (
+        SELECT DISTINCT u.user_id
+        FROM all_users u
+        JOIN ${TABLES.cms_line_of_credit} m ON u.user_id = m.user_id
+        JOIN ${TABLES.principal_card_updates} p ON p.f9_dw005_loc_acct = m.external_id
+        JOIN ${TABLES.authorized_transaction} t ON t.f9_dw007_prin_crn = p.f9_dw005_crn
+        WHERE u.grp = 'Control' AND t.fx_dw007_rte_dest = 'L'
+          AND (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '')
+      ),
+      credit_qris_exp AS (
+        SELECT user_id, grp FROM all_users
+        WHERE NOT (grp = 'Control' AND user_id IN (SELECT user_id FROM contaminated_ctrl))
+      ),
+      acct_map AS (
+        SELECT c.user_id, c.grp, m.external_id AS loc_acct
+        FROM credit_qris_exp c
+        JOIN ${TABLES.cms_line_of_credit} m ON c.user_id = m.user_id
+      ),
+      cohort_size AS (
+        SELECT grp, COUNT(DISTINCT user_id) AS sz FROM credit_qris_exp GROUP BY grp
+      ),
+      financials AS (
+        SELECT a.grp,
+          SUM(CAST(d.f9_dw004_tot_int AS FLOAT64) / 100) AS interest_idr,
+          SUM(CAST(d.f9_dw004_bil_fee_chrg_1 AS FLOAT64) / 100) AS admin_fees_idr,
+          SUM(CAST(d.f9_dw004_bil_chrg_fee AS FLOAT64) / 100) AS charge_fees_idr
+        FROM acct_map a
+        JOIN ${TABLES.financial_account_updates} d ON d.p9_dw004_loc_acct = a.loc_acct
+        WHERE d.f9_dw004_bus_dt = (
+          SELECT MAX(f9_dw004_bus_dt) FROM ${TABLES.financial_account_updates}
+          WHERE f9_dw004_bus_dt <= @endDate
+        )
+        GROUP BY a.grp
+      ),
+      txn_revenue AS (
+        SELECT c.grp,
+          ROUND(SUM(CASE WHEN t.fx_dw007_rte_dest != 'L' OR t.fx_dw007_rte_dest IS NULL
+            THEN CAST(t.f9_dw007_amt_req AS FLOAT64) / 100 * ${CARD_INTERCHANGE_RATE} ELSE 0 END), 0) AS card_interchange_idr,
+          ROUND(SUM(CASE WHEN t.fx_dw007_rte_dest = 'L'
+            THEN CAST(t.f9_dw007_amt_req AS FLOAT64) / 100 * ${QRIS_ISSUER_RATE} ELSE 0 END), 0) AS qris_revenue_idr
+        FROM ${TABLES.authorized_transaction} t
+        JOIN ${TABLES.principal_card_updates} p ON p.f9_dw005_crn = t.f9_dw007_prin_crn
+        JOIN ${TABLES.cms_line_of_credit} m ON m.external_id = p.f9_dw005_loc_acct
+        JOIN credit_qris_exp c ON c.user_id = m.user_id
+        WHERE t.f9_dw007_dt BETWEEN @startDate AND @endDate
+          AND (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '')
+          AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+        GROUP BY c.grp
+      )
+      SELECT
+        f.grp,
+        cs.sz AS cohort_size,
+        ROUND(f.interest_idr, 0) AS interest_idr,
+        ROUND(f.admin_fees_idr, 0) AS admin_fees_idr,
+        ROUND(f.charge_fees_idr, 0) AS charge_fees_idr,
+        tr.card_interchange_idr,
+        tr.qris_revenue_idr,
+        ROUND(f.interest_idr + f.admin_fees_idr + f.charge_fees_idr, 0) AS fee_revenue_idr,
+        ROUND(tr.card_interchange_idr + tr.qris_revenue_idr, 0) AS txn_revenue_idr,
+        ROUND(f.interest_idr + f.admin_fees_idr + f.charge_fees_idr + tr.card_interchange_idr + tr.qris_revenue_idr, 0) AS total_revenue_idr,
+        ROUND((f.interest_idr + f.admin_fees_idr + f.charge_fees_idr + tr.card_interchange_idr + tr.qris_revenue_idr) / cs.sz, 0) AS rpu_idr
+      FROM financials f
+      JOIN txn_revenue tr ON f.grp = tr.grp
+      JOIN cohort_size cs ON f.grp = cs.grp
+      ORDER BY f.grp`,
+      { startDate: effectiveStart, endDate },
+      env,
+    ),
+
+    // -----------------------------------------------------------------------
+    // (g) profitability — Combined revenue view with ARPU
+    // -----------------------------------------------------------------------
+    runQuery(
+      `WITH all_users AS (
+        SELECT user_id, qris_test_rollout_group AS grp FROM ${TABLES.qris_rollout}
+      ),
+      contaminated_ctrl AS (
+        SELECT DISTINCT u.user_id
+        FROM all_users u
+        JOIN ${TABLES.cms_line_of_credit} m ON u.user_id = m.user_id
+        JOIN ${TABLES.principal_card_updates} p ON p.f9_dw005_loc_acct = m.external_id
+        JOIN ${TABLES.authorized_transaction} t ON t.f9_dw007_prin_crn = p.f9_dw005_crn
+        WHERE u.grp = 'Control' AND t.fx_dw007_rte_dest = 'L'
+          AND (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '')
+      ),
+      credit_qris_exp AS (
+        SELECT user_id, grp FROM all_users
+        WHERE NOT (grp = 'Control' AND user_id IN (SELECT user_id FROM contaminated_ctrl))
+      ),
+      acct_map AS (
+        SELECT c.user_id, c.grp, m.external_id AS loc_acct
+        FROM credit_qris_exp c
+        JOIN ${TABLES.cms_line_of_credit} m ON c.user_id = m.user_id
+      ),
+      cohort_size AS (
+        SELECT grp, COUNT(DISTINCT user_id) AS sz FROM credit_qris_exp GROUP BY grp
+      ),
+      financials AS (
+        SELECT a.grp,
+          ROUND(SUM(CAST(d.f9_dw004_bil_fee_chrg_1 AS FLOAT64) / 100), 0) AS admin_fee_revenue,
+          ROUND(SUM(CAST(d.f9_dw004_tot_int AS FLOAT64) / 100), 0) AS interest_revenue,
+          ROUND(SUM(CAST(d.f9_dw004_bil_chrg_fee AS FLOAT64) / 100), 0) AS charge_fee_revenue
+        FROM acct_map a
+        JOIN ${TABLES.financial_account_updates} d ON d.p9_dw004_loc_acct = a.loc_acct
+        WHERE d.f9_dw004_bus_dt = (
+          SELECT MAX(f9_dw004_bus_dt) FROM ${TABLES.financial_account_updates}
+          WHERE f9_dw004_bus_dt <= @endDate
+        )
+        GROUP BY a.grp
+      ),
+      txn_rev AS (
+        SELECT c.grp,
+          ROUND(SUM(CASE WHEN t.fx_dw007_rte_dest != 'L' OR t.fx_dw007_rte_dest IS NULL
+            THEN CAST(t.f9_dw007_amt_req AS FLOAT64) / 100 * ${CARD_INTERCHANGE_RATE} ELSE 0 END), 0) AS card_interchange_revenue,
+          ROUND(SUM(CASE WHEN t.fx_dw007_rte_dest = 'L'
+            THEN CAST(t.f9_dw007_amt_req AS FLOAT64) / 100 * ${QRIS_ISSUER_RATE} ELSE 0 END), 0) AS qris_mdr_revenue
+        FROM ${TABLES.authorized_transaction} t
+        JOIN ${TABLES.principal_card_updates} p ON p.f9_dw005_crn = t.f9_dw007_prin_crn
+        JOIN ${TABLES.cms_line_of_credit} m ON m.external_id = p.f9_dw005_loc_acct
+        JOIN credit_qris_exp c ON c.user_id = m.user_id
+        WHERE t.f9_dw007_dt BETWEEN @startDate AND @endDate
+          AND (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '')
+          AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+        GROUP BY c.grp
+      )
+      SELECT
+        f.grp,
+        cs.sz AS cohort_size,
+        f.admin_fee_revenue,
+        f.interest_revenue,
+        f.charge_fee_revenue,
+        tr.card_interchange_revenue,
+        tr.qris_mdr_revenue,
+        ROUND(f.admin_fee_revenue + f.interest_revenue + f.charge_fee_revenue
+          + tr.card_interchange_revenue + tr.qris_mdr_revenue, 0) AS total_revenue,
+        ROUND((f.admin_fee_revenue + f.interest_revenue + f.charge_fee_revenue
+          + tr.card_interchange_revenue + tr.qris_mdr_revenue) / cs.sz, 0) AS arpu
+      FROM financials f
+      JOIN txn_rev tr ON f.grp = tr.grp
+      JOIN cohort_size cs ON f.grp = cs.grp
+      ORDER BY f.grp`,
+      { startDate: effectiveStart, endDate },
+      env,
+    ),
+  ]);
+
+  return {
+    cohortComparison,
+    merchantClassification,
+    qrisOnlyMerchantCount: (qrisOnlyMerchantCount as unknown[])[0] ?? null,
+    qrisOnlyMerchantGrowth,
+    interchangeProjection,
+    cohortRpu,
+    profitability,
+  };
+}
+
+export const onRequest = createHandler({
+  section: "qris-experiment",
+  queryFn: queryQrisExperiment,
+  cacheTtl: 1800,
+});
