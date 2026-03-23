@@ -382,12 +382,6 @@ export function UserInfoCard({ user }: UserInfoCardProps) {
         )}
       </div>
 
-      {/* Timeline Section — chronological with days since decision */}
-      <div className="mb-5 border-t border-[var(--border)] pt-4">
-        <SectionHeader icon={null} title={tSearch("timeline")} />
-        <TimelineView user={user} isDark={isDark} />
-      </div>
-
       {/* Account Snapshot Section */}
       <div className="mb-5 border-t border-[var(--border)] pt-4">
         <SectionHeader icon={<Banknote className="h-3 w-3" />} title={tSearch("accountSnapshot")} />
@@ -402,6 +396,12 @@ export function UserInfoCard({ user }: UserInfoCardProps) {
           <Field label={tSearch("cmaVersion")} value={user.cma_app_version} mono />
           <Field label={tSearch("savingsAccount")} value={user.savings_account_number ?? tSearch("notEnrolled")} mono={!!user.savings_account_number} />
         </div>
+      </div>
+
+      {/* Timeline Section — chronological with days since decision */}
+      <div className="mb-5 border-t border-[var(--border)] pt-4">
+        <SectionHeader icon={null} title={tSearch("timeline")} />
+        <TimelineView user={user} isDark={isDark} />
       </div>
 
       {/* Delivery Section */}
