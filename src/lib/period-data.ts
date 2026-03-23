@@ -20,17 +20,29 @@ export function getPeriodLabels(period: Cycle): string[] {
   }
 }
 
-/** Period-aware data range display string */
+/** Period-aware data range — computes from current date for chart rangeDays calculation */
 export function getPeriodRange(period: Cycle): { start: string; end: string } {
+  const now = new Date();
+  const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  // Return a range spanning enough days for the period so all increment options are enabled
+  // The handler extends startDate by 6 periods, so charts get at least this much data
   switch (period) {
-    case "weekly":
-      return { start: "Feb 2, 2026", end: "Mar 15, 2026" };
-    case "monthly":
-      return { start: "Mar 1, 2026", end: "Mar 16, 2026" };
-    case "quarterly":
-      return { start: "Jan 1, 2026", end: "Mar 16, 2026" };
-    case "yearly":
-      return { start: "Jan 1, 2026", end: "Mar 16, 2026" };
+    case "weekly": {
+      const start = new Date(now); start.setDate(start.getDate() - 6 * 7);
+      return { start: fmt(start), end: fmt(now) };
+    }
+    case "monthly": {
+      const start = new Date(now); start.setMonth(start.getMonth() - 6);
+      return { start: fmt(start), end: fmt(now) };
+    }
+    case "quarterly": {
+      const start = new Date(now); start.setMonth(start.getMonth() - 18);
+      return { start: fmt(start), end: fmt(now) };
+    }
+    case "yearly": {
+      const start = new Date(now); start.setFullYear(start.getFullYear() - 6);
+      return { start: fmt(start), end: fmt(now) };
+    }
   }
 }
 
