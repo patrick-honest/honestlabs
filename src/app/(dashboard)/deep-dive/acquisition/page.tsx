@@ -3,6 +3,8 @@
 import { useCallback, useMemo, useState, useEffect, useRef } from "react";
 import useSWR from "swr";
 import { ChartCard } from "@/components/dashboard/chart-card";
+import type { ChartIncrement } from "@/components/dashboard/chart-card";
+import { aggregateByIncrement } from "@/lib/aggregate-by-increment";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
@@ -448,22 +450,27 @@ export default function AcquisitionPage() {
       {approvalRateTrend ? (
         <ChartCard
           title="Approval Rate Trend"
-          subtitle="Weekly approval rate (%)"
+          subtitle="Approval rate (%)"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
           onRefresh={handleRefresh}
           liveData
+          showIncrement
         >
-          <DashboardLineChart
-            data={approvalRateTrend.map((r: { week_start: string; approval_rate: number }) => ({
-              date: r.week_start,
-              rate: r.approval_rate,
-            }))}
-            lines={[{ key: "rate", color: "#22c55e", label: "Approval Rate %" }]}
-            valueType="percent"
-            height={300}
-          />
-          <ChartInsights insights={approvalRateInsights} />
+          {(increment: ChartIncrement) => (
+            <>
+              <DashboardLineChart
+                data={aggregateByIncrement(approvalRateTrend.map((r: { week_start: string; approval_rate: number }) => ({
+                  date: r.week_start,
+                  rate: r.approval_rate,
+                })), increment, "date")}
+                lines={[{ key: "rate", color: "#22c55e", label: "Approval Rate %" }]}
+                valueType="percent"
+                height={300}
+              />
+              <ChartInsights insights={approvalRateInsights} />
+            </>
+          )}
         </ChartCard>
       ) : isLoading ? (
         <ChartSkeleton />

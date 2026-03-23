@@ -4,6 +4,8 @@ import { useMemo } from "react";
 import useSWR from "swr";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
+import type { ChartIncrement } from "@/components/dashboard/chart-card";
+import { aggregateByIncrement } from "@/lib/aggregate-by-increment";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
@@ -219,10 +221,10 @@ export default function BillingCyclePage() {
 
       {/* Charts Row 1: Revolve Rate Trend + Utilization */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <ChartCard title="Revolve Rate Trend by Cycle" subtitle="Monthly revolve rate (%) — revolvers / accounts with balance" asOf={apiData?.asOf ?? ""} dataRange={apiData?.dataRange ?? { start: "", end: "" }}>
-          {revolveTrendData.length > 0 ? (
+        <ChartCard title="Revolve Rate Trend by Cycle" subtitle="Revolve rate (%) — revolvers / accounts with balance" asOf={apiData?.asOf ?? ""} dataRange={apiData?.dataRange ?? { start: "", end: "" }} showIncrement>
+          {(increment: ChartIncrement) => revolveTrendData.length > 0 ? (
             <DashboardLineChart
-              data={revolveTrendData}
+              data={aggregateByIncrement(revolveTrendData, increment, "date")}
               xAxisKey="date"
               lines={[
                 { key: "Cycle 4th", label: "Cycle 4th", color: isDark ? "#7C4DFF" : "#D00083" },
@@ -270,10 +272,10 @@ export default function BillingCyclePage() {
           )}
         </ChartCard>
 
-        <ChartCard title="Avg Balance Trend" subtitle="Monthly average outstanding balance (IDR thousands) by cycle" asOf={apiData?.asOf ?? ""} dataRange={apiData?.dataRange ?? { start: "", end: "" }}>
-          {balanceTrendData.length > 0 ? (
+        <ChartCard title="Avg Balance Trend" subtitle="Average outstanding balance (IDR thousands) by cycle" asOf={apiData?.asOf ?? ""} dataRange={apiData?.dataRange ?? { start: "", end: "" }} showIncrement>
+          {(increment: ChartIncrement) => balanceTrendData.length > 0 ? (
             <DashboardLineChart
-              data={balanceTrendData}
+              data={aggregateByIncrement(balanceTrendData, increment, "date")}
               xAxisKey="date"
               lines={[
                 { key: "Cycle 4th", label: "Cycle 4th", color: isDark ? "#7C4DFF" : "#D00083" },

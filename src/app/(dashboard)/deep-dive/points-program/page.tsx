@@ -3,6 +3,8 @@
 import { useMemo, useCallback } from "react";
 import useSWR from "swr";
 import { ChartCard } from "@/components/dashboard/chart-card";
+import type { ChartIncrement } from "@/components/dashboard/chart-card";
+import { aggregateByIncrement } from "@/lib/aggregate-by-increment";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
@@ -214,29 +216,34 @@ export default function PointsProgramPage() {
       {/* Points flow trend */}
       {flowTrend ? (
         <ChartCard
-          title="Monthly Points Flow"
+          title="Points Flow Trend"
           subtitle="Earned, redeemed, expired, and net change"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
           onRefresh={handleRefresh}
           liveData={isLive}
+          showIncrement
         >
-          <DashboardBarChart
-            data={flowTrend.map((r) => ({
-              month: r.month,
-              earned: r.earned,
-              redeemed: r.redeemed,
-              expired: r.expired,
-            }))}
-            bars={[
-              { key: "earned", color: "#22c55e", label: "Earned" },
-              { key: "redeemed", color: "#6366f1", label: "Redeemed" },
-              { key: "expired", color: "#ef4444", label: "Expired" },
-            ]}
-            xAxisKey="month"
-            height={300}
-          />
-          <ChartInsights insights={flowInsights} />
+          {(increment: ChartIncrement) => (
+            <>
+              <DashboardBarChart
+                data={aggregateByIncrement(flowTrend.map((r) => ({
+                  month: r.month,
+                  earned: r.earned,
+                  redeemed: r.redeemed,
+                  expired: r.expired,
+                })), increment, "month")}
+                bars={[
+                  { key: "earned", color: "#22c55e", label: "Earned" },
+                  { key: "redeemed", color: "#6366f1", label: "Redeemed" },
+                  { key: "expired", color: "#ef4444", label: "Expired" },
+                ]}
+                xAxisKey="month"
+                height={300}
+              />
+              <ChartInsights insights={flowInsights} />
+            </>
+          )}
         </ChartCard>
       ) : isLoading ? (
         <ChartSkeleton />
@@ -252,21 +259,26 @@ export default function PointsProgramPage() {
         {closingBalance ? (
           <ChartCard
             title="Outstanding Points Liability"
-            subtitle="Total closing points balance by month"
+            subtitle="Total closing points balance"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
             onRefresh={handleRefresh}
             liveData
+            showIncrement
           >
-            <DashboardLineChart
-              data={closingBalance.map((r) => ({
-                date: r.month,
-                points: r.total_points,
-              }))}
-              lines={[{ key: "points", color: "#f59e0b", label: "Total Points" }]}
-              height={280}
-            />
-            <ChartInsights insights={closingInsights} />
+            {(increment: ChartIncrement) => (
+              <>
+                <DashboardLineChart
+                  data={aggregateByIncrement(closingBalance.map((r) => ({
+                    date: r.month,
+                    points: r.total_points,
+                  })), increment, "date")}
+                  lines={[{ key: "points", color: "#f59e0b", label: "Total Points" }]}
+                  height={280}
+                />
+                <ChartInsights insights={closingInsights} />
+              </>
+            )}
           </ChartCard>
         ) : isLoading ? (
           <ChartSkeleton />
@@ -311,22 +323,25 @@ export default function PointsProgramPage() {
       {/* Weekly summary trend */}
       {summaryData ? (
         <ChartCard
-          title="Weekly Redemption Rate Trend"
-          subtitle="% of awarded points redeemed per week"
+          title="Redemption Rate Trend"
+          subtitle="% of awarded points redeemed"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
           onRefresh={handleRefresh}
           liveData
+          showIncrement
         >
-          <DashboardLineChart
-            data={summaryData.map((r) => ({
-              date: r.week_start,
-              rate: r.redemption_rate,
-            }))}
-            lines={[{ key: "rate", color: "#22c55e", label: "Redemption Rate %" }]}
-            valueType="percent"
-            height={300}
-          />
+          {(increment: ChartIncrement) => (
+            <DashboardLineChart
+              data={aggregateByIncrement(summaryData.map((r) => ({
+                date: r.week_start,
+                rate: r.redemption_rate,
+              })), increment, "date")}
+              lines={[{ key: "rate", color: "#22c55e", label: "Redemption Rate %" }]}
+              valueType="percent"
+              height={300}
+            />
+          )}
         </ChartCard>
       ) : isLoading ? (
         <ChartSkeleton />

@@ -4,6 +4,8 @@ import { useMemo } from "react";
 import useSWR from "swr";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
+import type { ChartIncrement } from "@/components/dashboard/chart-card";
+import { aggregateByIncrement } from "@/lib/aggregate-by-increment";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { DashboardLineChart } from "@/components/charts/line-chart";
@@ -228,20 +230,23 @@ export default function UsersDeepDivePage() {
       {growthTrend ? (
         <ChartCard
           title="Account Growth Trend"
-          subtitle="Monthly total accounts and net new accounts from DW004"
+          subtitle="Total accounts and net new accounts from DW004"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
           liveData={growthIsLive}
+          showIncrement
         >
-          <DashboardLineChart
-            data={growthTrend}
-            lines={[
-              { key: "totalAccounts", color: "#3b82f6", label: "Total Accounts" },
-              { key: "newAccounts", color: "#22c55e", label: "New Accounts" },
-            ]}
-            xAxisKey="date"
-            height={300}
-          />
+          {(increment: ChartIncrement) => (
+            <DashboardLineChart
+              data={aggregateByIncrement(growthTrend, increment, "date")}
+              lines={[
+                { key: "totalAccounts", color: "#3b82f6", label: "Total Accounts" },
+                { key: "newAccounts", color: "#22c55e", label: "New Accounts" },
+              ]}
+              xAxisKey="date"
+              height={300}
+            />
+          )}
         </ChartCard>
       ) : isLoading ? (
         <ChartSkeleton />

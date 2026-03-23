@@ -6,6 +6,8 @@ import { useTranslations } from "next-intl";
 import { Header } from "@/components/layout/header";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
+import type { ChartIncrement } from "@/components/dashboard/chart-card";
+import { aggregateByIncrement } from "@/lib/aggregate-by-increment";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
@@ -208,33 +210,39 @@ function DashboardCharts({ chartData, dataRange, isLive }: { chartData: Record<s
       {eligible && eligible.length > 0 && (
         <ChartCard
           title="Spend Active Rate Trend"
-          subtitle="% of eligible accounts transacting each week"
+          subtitle="% of eligible accounts transacting"
           asOf={dataRange.end}
           dataRange={dataRange}
           liveData={isLive}
+          showIncrement
         >
-          <DashboardLineChart
-            data={eligible.map((r) => ({ date: r.date, rate: r.rate }))}
-            lines={[{ key: "rate", color: "#22c55e", label: "SAR %" }]}
-            valueType="percent"
-            height={280}
-          />
+          {(increment: ChartIncrement) => (
+            <DashboardLineChart
+              data={aggregateByIncrement(eligible.map((r) => ({ date: r.date, rate: r.rate })), increment, "date")}
+              lines={[{ key: "rate", color: "#22c55e", label: "SAR %" }]}
+              valueType="percent"
+              height={280}
+            />
+          )}
         </ChartCard>
       )}
       {spend && spend.length > 0 && (
         <ChartCard
-          title="Weekly Total Spend"
+          title="Total Spend Trend"
           subtitle="Total transaction volume (IDR)"
           asOf={dataRange.end}
           dataRange={dataRange}
           liveData={isLive}
+          showIncrement
         >
-          <DashboardBarChart
-            data={spend.map((r) => ({ week: r.date, spend: r.total }))}
-            bars={[{ key: "spend", color: "#6366f1", label: "Total Spend (IDR)" }]}
-            xAxisKey="week"
-            height={280}
-          />
+          {(increment: ChartIncrement) => (
+            <DashboardBarChart
+              data={aggregateByIncrement(spend.map((r) => ({ week: r.date, spend: r.total })), increment, "week")}
+              bars={[{ key: "spend", color: "#6366f1", label: "Total Spend (IDR)" }]}
+              xAxisKey="week"
+              height={280}
+            />
+          )}
         </ChartCard>
       )}
     </div>

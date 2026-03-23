@@ -4,6 +4,8 @@ import { useCallback, useMemo } from "react";
 import useSWR from "swr";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
+import type { ChartIncrement } from "@/components/dashboard/chart-card";
+import { aggregateByIncrement } from "@/lib/aggregate-by-increment";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
@@ -177,17 +179,20 @@ export default function PortfolioPage() {
           {/* Active Accounts Trend */}
           <ChartCard
             title="Active Accounts Trend"
-            subtitle="Weekly active account count (status G or N)"
+            subtitle="Active account count (status G or N)"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
             liveData={snapshotIsLive}
+            showIncrement
           >
-            <DashboardLineChart
-              data={snapshotTrend}
-              lines={[{ key: "activeAccounts", color: "#3b82f6", label: "Active Accounts" }]}
-              xAxisKey="date"
-              height={300}
-            />
+            {(increment: ChartIncrement) => (
+              <DashboardLineChart
+                data={aggregateByIncrement(snapshotTrend, increment, "date")}
+                lines={[{ key: "activeAccounts", color: "#3b82f6", label: "Active Accounts" }]}
+                xAxisKey="date"
+                height={300}
+              />
+            )}
           </ChartCard>
 
           {/* Credit Utilization Trend */}
@@ -197,14 +202,17 @@ export default function PortfolioPage() {
             asOf={AS_OF}
             dataRange={DATA_RANGE}
             liveData={snapshotIsLive}
+            showIncrement
           >
-            <DashboardLineChart
-              data={snapshotTrend}
-              lines={[{ key: "utilizationPct", color: "#8b5cf6", label: "Utilization %" }]}
-              xAxisKey="date"
-              valueType="percent"
-              height={300}
-            />
+            {(increment: ChartIncrement) => (
+              <DashboardLineChart
+                data={aggregateByIncrement(snapshotTrend, increment, "date")}
+                lines={[{ key: "utilizationPct", color: "#8b5cf6", label: "Utilization %" }]}
+                xAxisKey="date"
+                valueType="percent"
+                height={300}
+              />
+            )}
           </ChartCard>
         </>
       ) : isLoading ? (

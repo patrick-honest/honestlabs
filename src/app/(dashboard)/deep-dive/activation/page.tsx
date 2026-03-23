@@ -3,6 +3,8 @@
 import { useCallback, useMemo } from "react";
 import useSWR from "swr";
 import { ChartCard } from "@/components/dashboard/chart-card";
+import type { ChartIncrement } from "@/components/dashboard/chart-card";
+import { aggregateByIncrement } from "@/lib/aggregate-by-increment";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { DashboardLineChart } from "@/components/charts/line-chart";
@@ -240,14 +242,19 @@ export default function ActivationPage() {
           dataRange={DATA_RANGE}
           onRefresh={handleRefresh}
           liveData={activationIsLive}
+          showIncrement
         >
-          <DashboardLineChart
-            data={periodActivationRate}
-            lines={[{ key: "rate", color: "#22c55e", label: "Activation Rate %" }]}
-            valueType="percent"
-            height={300}
-          />
-          <ChartInsights insights={activationRateInsights} />
+          {(increment: ChartIncrement) => (
+            <>
+              <DashboardLineChart
+                data={aggregateByIncrement(periodActivationRate, increment, "date")}
+                lines={[{ key: "rate", color: "#22c55e", label: "Activation Rate %" }]}
+                valueType="percent"
+                height={300}
+              />
+              <ChartInsights insights={activationRateInsights} />
+            </>
+          )}
         </ChartCard>
       ) : isLoading ? (
         <ChartSkeleton />

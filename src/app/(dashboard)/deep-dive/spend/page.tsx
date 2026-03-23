@@ -4,6 +4,8 @@ import { useCallback, useMemo } from "react";
 import useSWR from "swr";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
+import type { ChartIncrement } from "@/components/dashboard/chart-card";
+import { aggregateByIncrement } from "@/lib/aggregate-by-increment";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
@@ -266,15 +268,20 @@ export default function SpendPage() {
             asOf={AS_OF}
             dataRange={DATA_RANGE}
             liveData={trendIsLive}
+            showIncrement
           >
-            <DashboardLineChart
-              data={weeklyTrend}
-              lines={[{ key: "rate", color: "#3b82f6", label: "SAR %" }]}
-              xAxisKey="date"
-              valueType="percent"
-              height={300}
-            />
-            <ChartInsights insights={spendActiveRateInsights} />
+            {(increment: ChartIncrement) => (
+              <>
+                <DashboardLineChart
+                  data={aggregateByIncrement(weeklyTrend, increment, "date")}
+                  lines={[{ key: "rate", color: "#3b82f6", label: "SAR %" }]}
+                  xAxisKey="date"
+                  valueType="percent"
+                  height={300}
+                />
+                <ChartInsights insights={spendActiveRateInsights} />
+              </>
+            )}
           </ChartCard>
 
           {/* Eligible vs Transactors */}
@@ -285,37 +292,47 @@ export default function SpendPage() {
               asOf={AS_OF}
               dataRange={DATA_RANGE}
               liveData={trendIsLive}
+              showIncrement
             >
-              <DashboardBarChart
-                data={weeklyTrend}
-                bars={[
-                  { key: "eligible", color: "#475569", label: "Eligible" },
-                  { key: "transactors", color: "#3b82f6", label: "Transactors" },
-                ]}
-                xAxisKey="date"
-                height={280}
-              />
-              <ChartInsights insights={eligibleVsTransactorsInsights} />
+              {(increment: ChartIncrement) => (
+                <>
+                  <DashboardBarChart
+                    data={aggregateByIncrement(weeklyTrend, increment, "date")}
+                    bars={[
+                      { key: "eligible", color: "#475569", label: "Eligible" },
+                      { key: "transactors", color: "#3b82f6", label: "Transactors" },
+                    ]}
+                    xAxisKey="date"
+                    height={280}
+                  />
+                  <ChartInsights insights={eligibleVsTransactorsInsights} />
+                </>
+              )}
             </ChartCard>
 
             <ChartCard
               title="Spend by Category"
-              subtitle="Online / Offline / QRIS weekly spend"
+              subtitle="Online / Offline / QRIS spend"
               asOf={AS_OF}
               dataRange={DATA_RANGE}
               liveData={trendIsLive}
+              showIncrement
             >
-              <DashboardBarChart
-                data={weeklyTrend}
-                bars={[
-                  { key: "online", color: "#3b82f6", label: "Online" },
-                  { key: "offline", color: "#8b5cf6", label: "Offline" },
-                  { key: "qris", color: "#06b6d4", label: "QRIS" },
-                ]}
-                xAxisKey="date"
-                height={280}
-              />
-              <ChartInsights insights={spendByCategoryInsights} />
+              {(increment: ChartIncrement) => (
+                <>
+                  <DashboardBarChart
+                    data={aggregateByIncrement(weeklyTrend, increment, "date")}
+                    bars={[
+                      { key: "online", color: "#3b82f6", label: "Online" },
+                      { key: "offline", color: "#8b5cf6", label: "Offline" },
+                      { key: "qris", color: "#06b6d4", label: "QRIS" },
+                    ]}
+                    xAxisKey="date"
+                    height={280}
+                  />
+                  <ChartInsights insights={spendByCategoryInsights} />
+                </>
+              )}
             </ChartCard>
           </div>
 
@@ -323,19 +340,24 @@ export default function SpendPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <ChartCard
               title="Total Spend Volume"
-              subtitle="Weekly authorized transaction volume (IDR)"
+              subtitle="Authorized transaction volume (IDR)"
               asOf={AS_OF}
               dataRange={DATA_RANGE}
               liveData={trendIsLive}
+              showIncrement
             >
-              <DashboardLineChart
-                data={weeklyTrend}
-                lines={[{ key: "totalSpend", color: "#8b5cf6", label: "Total Spend (IDR)" }]}
-                xAxisKey="date"
-                valueType="currency"
-                height={260}
-              />
-              <ChartInsights insights={totalSpendVolumeInsights} />
+              {(increment: ChartIncrement) => (
+                <>
+                  <DashboardLineChart
+                    data={aggregateByIncrement(weeklyTrend, increment, "date")}
+                    lines={[{ key: "totalSpend", color: "#8b5cf6", label: "Total Spend (IDR)" }]}
+                    xAxisKey="date"
+                    valueType="currency"
+                    height={260}
+                  />
+                  <ChartInsights insights={totalSpendVolumeInsights} />
+                </>
+              )}
             </ChartCard>
 
             <ChartCard
@@ -344,32 +366,40 @@ export default function SpendPage() {
               asOf={AS_OF}
               dataRange={DATA_RANGE}
               liveData={trendIsLive}
+              showIncrement
             >
-              <DashboardLineChart
-                data={weeklyTrend}
-                lines={[{ key: "avgTicket", color: "#06b6d4", label: "Avg Ticket (IDR)" }]}
-                xAxisKey="date"
-                valueType="currency"
-                height={260}
-              />
+              {(increment: ChartIncrement) => (
+                <DashboardLineChart
+                  data={aggregateByIncrement(weeklyTrend, increment, "date")}
+                  lines={[{ key: "avgTicket", color: "#06b6d4", label: "Avg Ticket (IDR)" }]}
+                  xAxisKey="date"
+                  valueType="currency"
+                  height={260}
+                />
+              )}
             </ChartCard>
           </div>
 
           {/* Txn per Eligible */}
           <ChartCard
             title="Transaction Frequency"
-            subtitle="Average transactions per eligible user per week"
+            subtitle="Average transactions per eligible user"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
             liveData={trendIsLive}
+            showIncrement
           >
-            <DashboardLineChart
-              data={weeklyTrend}
-              lines={[{ key: "txnPerUser", color: "#22c55e", label: "Txn/User" }]}
-              xAxisKey="date"
-              height={260}
-            />
-            <ChartInsights insights={txnPerEligibleInsights} />
+            {(increment: ChartIncrement) => (
+              <>
+                <DashboardLineChart
+                  data={aggregateByIncrement(weeklyTrend, increment, "date")}
+                  lines={[{ key: "txnPerUser", color: "#22c55e", label: "Txn/User" }]}
+                  xAxisKey="date"
+                  height={260}
+                />
+                <ChartInsights insights={txnPerEligibleInsights} />
+              </>
+            )}
           </ChartCard>
         </>
       ) : isLoading ? (
@@ -498,13 +528,18 @@ export default function SpendPage() {
               asOf={AS_OF}
               dataRange={DATA_RANGE}
               liveData={!!spendAnalysis?.qrisMerchantGrowth}
+              showIncrement
             >
-              <DashboardLineChart
-                data={qrisMerchantLineData}
-                lines={[{ key: "cumulative", color: "#06b6d4", label: "QRIS-Only Merchants" }]}
-                height={300}
-              />
-              <ChartInsights insights={qrisMerchantInsights} />
+              {(increment: ChartIncrement) => (
+                <>
+                  <DashboardLineChart
+                    data={aggregateByIncrement(qrisMerchantLineData, increment, "date")}
+                    lines={[{ key: "cumulative", color: "#06b6d4", label: "QRIS-Only Merchants" }]}
+                    height={300}
+                  />
+                  <ChartInsights insights={qrisMerchantInsights} />
+                </>
+              )}
             </ChartCard>
           </>
         ) : isLoading ? (

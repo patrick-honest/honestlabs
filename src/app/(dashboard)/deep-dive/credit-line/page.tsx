@@ -3,6 +3,8 @@
 import { useCallback, useMemo } from "react";
 import useSWR from "swr";
 import { ChartCard } from "@/components/dashboard/chart-card";
+import type { ChartIncrement } from "@/components/dashboard/chart-card";
+import { aggregateByIncrement } from "@/lib/aggregate-by-increment";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
@@ -194,27 +196,32 @@ export default function CreditLinePage() {
       {/* Weekly CLI trend */}
       {trendData ? (
         <ChartCard
-          title="Weekly CLI Activity"
-          subtitle="Credit line increases and unique recipients per week"
+          title="CLI Activity Trend"
+          subtitle="Credit line increases and unique recipients"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
           onRefresh={handleRefresh}
           liveData={isLive}
+          showIncrement
         >
-          <DashboardBarChart
-            data={trendData.map((r) => ({
-              week: r.week_start,
-              clis: r.cli_count,
-              users: r.unique_users,
-            }))}
-            bars={[
-              { key: "clis", color: "#6366f1", label: "CLIs" },
-              { key: "users", color: "#22c55e", label: "Unique Users" },
-            ]}
-            xAxisKey="week"
-            height={300}
-          />
-          <ChartInsights insights={trendInsights} />
+          {(increment: ChartIncrement) => (
+            <>
+              <DashboardBarChart
+                data={aggregateByIncrement(trendData.map((r) => ({
+                  week: r.week_start,
+                  clis: r.cli_count,
+                  users: r.unique_users,
+                })), increment, "week")}
+                bars={[
+                  { key: "clis", color: "#6366f1", label: "CLIs" },
+                  { key: "users", color: "#22c55e", label: "Unique Users" },
+                ]}
+                xAxisKey="week"
+                height={300}
+              />
+              <ChartInsights insights={trendInsights} />
+            </>
+          )}
         </ChartCard>
       ) : isLoading ? (
         <ChartSkeleton />
@@ -263,23 +270,28 @@ export default function CreditLinePage() {
         {/* Monthly volume trend */}
         {volumeTrend ? (
           <ChartCard
-            title="Monthly CLI Volume"
-            subtitle="Total CLIs and IDR increase by month"
+            title="CLI Volume Trend"
+            subtitle="Total CLIs and IDR increase"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
             onRefresh={handleRefresh}
             liveData
+            showIncrement
           >
-            <DashboardBarChart
-              data={volumeTrend.map((r) => ({
-                month: r.month,
-                count: r.cli_count,
-              }))}
-              bars={[{ key: "count", color: "#8b5cf6", label: "CLI Count" }]}
-              xAxisKey="month"
-              height={280}
-            />
-            <ChartInsights insights={volumeInsights} />
+            {(increment: ChartIncrement) => (
+              <>
+                <DashboardBarChart
+                  data={aggregateByIncrement(volumeTrend.map((r) => ({
+                    month: r.month,
+                    count: r.cli_count,
+                  })), increment, "month")}
+                  bars={[{ key: "count", color: "#8b5cf6", label: "CLI Count" }]}
+                  xAxisKey="month"
+                  height={280}
+                />
+                <ChartInsights insights={volumeInsights} />
+              </>
+            )}
           </ChartCard>
         ) : isLoading ? (
           <ChartSkeleton />

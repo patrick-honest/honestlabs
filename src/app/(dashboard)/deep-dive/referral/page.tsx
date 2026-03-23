@@ -3,6 +3,8 @@
 import { useMemo, useCallback } from "react";
 import useSWR from "swr";
 import { ChartCard } from "@/components/dashboard/chart-card";
+import type { ChartIncrement } from "@/components/dashboard/chart-card";
+import { aggregateByIncrement } from "@/lib/aggregate-by-increment";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
@@ -179,27 +181,32 @@ export default function ReferralPage() {
       {/* Weekly conversion trend */}
       {funnelData ? (
         <ChartCard
-          title="Weekly Referral Conversion"
-          subtitle="Started vs approved referrals per week"
+          title="Referral Conversion Trend"
+          subtitle="Started vs approved referrals"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
           onRefresh={handleRefresh}
           liveData={isLive}
+          showIncrement
         >
-          <DashboardBarChart
-            data={funnelData.map((r) => ({
-              week: r.week_start,
-              started: r.started,
-              approved: r.approved,
-            }))}
-            bars={[
-              { key: "started", color: "#6366f1", label: "Started" },
-              { key: "approved", color: "#22c55e", label: "Approved" },
-            ]}
-            xAxisKey="week"
-            height={300}
-          />
-          <ChartInsights insights={funnelInsights} />
+          {(increment: ChartIncrement) => (
+            <>
+              <DashboardBarChart
+                data={aggregateByIncrement(funnelData.map((r) => ({
+                  week: r.week_start,
+                  started: r.started,
+                  approved: r.approved,
+                })), increment, "week")}
+                bars={[
+                  { key: "started", color: "#6366f1", label: "Started" },
+                  { key: "approved", color: "#22c55e", label: "Approved" },
+                ]}
+                xAxisKey="week"
+                height={300}
+              />
+              <ChartInsights insights={funnelInsights} />
+            </>
+          )}
         </ChartCard>
       ) : isLoading ? (
         <ChartSkeleton />
@@ -278,29 +285,34 @@ export default function ReferralPage() {
       {/* Monthly funnel trend */}
       {funnelTrend ? (
         <ChartCard
-          title="Monthly Referral Trend"
-          subtitle="Shared, started, and approved referrals by month"
+          title="Referral Funnel Trend"
+          subtitle="Shared, started, and approved referrals"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
           onRefresh={handleRefresh}
           liveData
+          showIncrement
         >
-          <DashboardBarChart
-            data={funnelTrend.map((r) => ({
-              month: r.month,
-              shared: r.shared,
-              started: r.started,
-              approved: r.approved,
-            }))}
-            bars={[
-              { key: "shared", color: "#94a3b8", label: "Shared" },
-              { key: "started", color: "#6366f1", label: "Started" },
-              { key: "approved", color: "#22c55e", label: "Approved" },
-            ]}
-            xAxisKey="month"
-            height={300}
-          />
-          <ChartInsights insights={trendInsights} />
+          {(increment: ChartIncrement) => (
+            <>
+              <DashboardBarChart
+                data={aggregateByIncrement(funnelTrend.map((r) => ({
+                  month: r.month,
+                  shared: r.shared,
+                  started: r.started,
+                  approved: r.approved,
+                })), increment, "month")}
+                bars={[
+                  { key: "shared", color: "#94a3b8", label: "Shared" },
+                  { key: "started", color: "#6366f1", label: "Started" },
+                  { key: "approved", color: "#22c55e", label: "Approved" },
+                ]}
+                xAxisKey="month"
+                height={300}
+              />
+              <ChartInsights insights={trendInsights} />
+            </>
+          )}
         </ChartCard>
       ) : isLoading ? (
         <ChartSkeleton />
@@ -315,21 +327,24 @@ export default function ReferralPage() {
       {approvalRate ? (
         <ChartCard
           title="Referral Approval Rate Trend"
-          subtitle="Monthly conversion rate (%)"
+          subtitle="Conversion rate (%)"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
           onRefresh={handleRefresh}
           liveData
+          showIncrement
         >
-          <DashboardLineChart
-            data={approvalRate.map((r) => ({
-              date: r.month,
-              rate: r.rate,
-            }))}
-            lines={[{ key: "rate", color: "#22c55e", label: "Conversion Rate %" }]}
-            valueType="percent"
-            height={300}
-          />
+          {(increment: ChartIncrement) => (
+            <DashboardLineChart
+              data={aggregateByIncrement(approvalRate.map((r) => ({
+                date: r.month,
+                rate: r.rate,
+              })), increment, "date")}
+              lines={[{ key: "rate", color: "#22c55e", label: "Conversion Rate %" }]}
+              valueType="percent"
+              height={300}
+            />
+          )}
         </ChartCard>
       ) : isLoading ? (
         <ChartSkeleton />

@@ -4,6 +4,8 @@ import { useCallback, useMemo } from "react";
 import useSWR from "swr";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
+import type { ChartIncrement } from "@/components/dashboard/chart-card";
+import { aggregateByIncrement } from "@/lib/aggregate-by-increment";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
@@ -176,41 +178,47 @@ export default function RiskPage() {
           {/* DPD Distribution Trend — stacked bar */}
           <ChartCard
             title="DPD Distribution Trend"
-            subtitle="Account counts by days-past-due bucket, weekly snapshot (Sunday)"
+            subtitle="Account counts by days-past-due bucket"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
             liveData={trendIsLive}
+            showIncrement
           >
-            <DashboardBarChart
-              data={dpdTrend}
-              bars={[
-                { key: "current", color: "#22c55e", label: "Current" },
-                { key: "dpd_1_30", color: "#eab308", label: "1-30 DPD" },
-                { key: "dpd_31_60", color: "#f97316", label: "31-60 DPD" },
-                { key: "dpd_61_90", color: "#ef4444", label: "61-90 DPD" },
-                { key: "dpd_90_plus", color: "#991b1b", label: "90+ DPD" },
-              ]}
-              xAxisKey="date"
-              height={320}
-              stacked
-            />
+            {(increment: ChartIncrement) => (
+              <DashboardBarChart
+                data={aggregateByIncrement(dpdTrend, increment, "date")}
+                bars={[
+                  { key: "current", color: "#22c55e", label: "Current" },
+                  { key: "dpd_1_30", color: "#eab308", label: "1-30 DPD" },
+                  { key: "dpd_31_60", color: "#f97316", label: "31-60 DPD" },
+                  { key: "dpd_61_90", color: "#ef4444", label: "61-90 DPD" },
+                  { key: "dpd_90_plus", color: "#991b1b", label: "90+ DPD" },
+                ]}
+                xAxisKey="date"
+                height={320}
+                stacked
+              />
+            )}
           </ChartCard>
 
           {/* Delinquency Rate (30+ DPD) — line chart */}
           <ChartCard
             title="Delinquency Rate (30+ DPD)"
-            subtitle="Percentage of accounts more than 30 days past due, by week"
+            subtitle="Percentage of accounts more than 30 days past due"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
             liveData={trendIsLive}
+            showIncrement
           >
-            <DashboardLineChart
-              data={dpdTrend}
-              lines={[{ key: "delinquency_rate", color: "#ef4444", label: "30+ DPD Rate %" }]}
-              xAxisKey="date"
-              valueType="percent"
-              height={300}
-            />
+            {(increment: ChartIncrement) => (
+              <DashboardLineChart
+                data={aggregateByIncrement(dpdTrend, increment, "date")}
+                lines={[{ key: "delinquency_rate", color: "#ef4444", label: "30+ DPD Rate %" }]}
+                xAxisKey="date"
+                valueType="percent"
+                height={300}
+              />
+            )}
           </ChartCard>
         </>
       ) : isLoading ? (

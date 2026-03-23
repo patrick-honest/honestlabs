@@ -4,6 +4,8 @@ import { useCallback, useMemo } from "react";
 import useSWR from "swr";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
+import type { ChartIncrement } from "@/components/dashboard/chart-card";
+import { aggregateByIncrement } from "@/lib/aggregate-by-increment";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
@@ -205,39 +207,45 @@ export default function RepaymentsPage() {
             />
           </div>
 
-          {/* Weekly Payment Count Trend */}
+          {/* Payment Count Trend */}
           <ChartCard
-            title="Weekly Repayment Trend"
-            subtitle="Payment count and unique accounts per ISO week (PM + RF transactions)"
+            title="Repayment Trend"
+            subtitle="Payment count and unique accounts (PM + RF transactions)"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
             liveData={weeklyIsLive}
+            showIncrement
           >
-            <DashboardLineChart
-              data={weeklyTrend}
-              lines={[
-                { key: "paymentCount", color: "#3b82f6", label: "Payment Count" },
-                { key: "uniqueAccounts", color: "#22c55e", label: "Unique Accounts" },
-              ]}
-              xAxisKey="date"
-              height={300}
-            />
+            {(increment: ChartIncrement) => (
+              <DashboardLineChart
+                data={aggregateByIncrement(weeklyTrend, increment, "date")}
+                lines={[
+                  { key: "paymentCount", color: "#3b82f6", label: "Payment Count" },
+                  { key: "uniqueAccounts", color: "#22c55e", label: "Unique Accounts" },
+                ]}
+                xAxisKey="date"
+                height={300}
+              />
+            )}
           </ChartCard>
 
-          {/* Weekly Amount Trend */}
+          {/* Repayment Amount Trend */}
           <ChartCard
-            title="Weekly Repayment Amount"
-            subtitle="Total repayment amount (IDR) per ISO week"
+            title="Repayment Amount Trend"
+            subtitle="Total repayment amount (IDR)"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
             liveData={weeklyIsLive}
+            showIncrement
           >
-            <DashboardBarChart
-              data={weeklyTrend}
-              bars={[{ key: "totalAmountIdr", color: "#8b5cf6", label: "Amount (IDR)" }]}
-              xAxisKey="date"
-              height={300}
-            />
+            {(increment: ChartIncrement) => (
+              <DashboardBarChart
+                data={aggregateByIncrement(weeklyTrend, increment, "date")}
+                bars={[{ key: "totalAmountIdr", color: "#8b5cf6", label: "Amount (IDR)" }]}
+                xAxisKey="date"
+                height={300}
+              />
+            )}
           </ChartCard>
         </>
       ) : isLoading ? (
@@ -252,18 +260,21 @@ export default function RepaymentsPage() {
       {/* Monthly Volume Trend */}
       {volumeTrend ? (
         <ChartCard
-          title="Monthly Repayment Volume"
-          subtitle="Payment count by month (PM transactions)"
+          title="Repayment Volume Trend"
+          subtitle="Payment count (PM transactions)"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
           liveData={volumeIsLive}
+          showIncrement
         >
-          <DashboardBarChart
-            data={volumeTrend}
-            bars={[{ key: "count", color: "#06b6d4", label: "Payments" }]}
-            xAxisKey="date"
-            height={300}
-          />
+          {(increment: ChartIncrement) => (
+            <DashboardBarChart
+              data={aggregateByIncrement(volumeTrend, increment, "date")}
+              bars={[{ key: "count", color: "#06b6d4", label: "Payments" }]}
+              xAxisKey="date"
+              height={300}
+            />
+          )}
         </ChartCard>
       ) : isLoading ? (
         <ChartSkeleton />
@@ -328,18 +339,21 @@ export default function RepaymentsPage() {
       {ratioData ? (
         <ChartCard
           title="Payment-to-Balance Ratio"
-          subtitle="Average monthly repayment as % of outstanding balance"
+          subtitle="Average repayment as % of outstanding balance"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
           liveData={ratioIsLive}
+          showIncrement
         >
-          <DashboardLineChart
-            data={ratioData}
-            lines={[{ key: "avgRatio", color: "#ec4899", label: "Avg Ratio %" }]}
-            xAxisKey="date"
-            valueType="percent"
-            height={300}
-          />
+          {(increment: ChartIncrement) => (
+            <DashboardLineChart
+              data={aggregateByIncrement(ratioData, increment, "date")}
+              lines={[{ key: "avgRatio", color: "#ec4899", label: "Avg Ratio %" }]}
+              xAxisKey="date"
+              valueType="percent"
+              height={300}
+            />
+          )}
         </ChartCard>
       ) : isLoading ? (
         <ChartSkeleton />

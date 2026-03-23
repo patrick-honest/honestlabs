@@ -4,6 +4,8 @@ import { useMemo } from "react";
 import useSWR from "swr";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
+import type { ChartIncrement } from "@/components/dashboard/chart-card";
+import { aggregateByIncrement } from "@/lib/aggregate-by-increment";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
@@ -163,73 +165,85 @@ export default function TransactionAuthPage() {
           {/* Auth Approval Rate Trend */}
           <ChartCard
             title="Auth Approval Rate Trend"
-            subtitle="% of authorizations approved per week (excludes PM, RF, BE)"
+            subtitle="% of authorizations approved (excludes PM, RF, BE)"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
             liveData={trendIsLive}
+            showIncrement
           >
-            <DashboardLineChart
-              data={weeklyTrend}
-              lines={[{ key: "approvalRate", color: "#22c55e", label: "Approval Rate %" }]}
-              xAxisKey="date"
-              valueType="percent"
-              height={300}
-            />
+            {(increment: ChartIncrement) => (
+              <DashboardLineChart
+                data={aggregateByIncrement(weeklyTrend, increment, "date")}
+                lines={[{ key: "approvalRate", color: "#22c55e", label: "Approval Rate %" }]}
+                xAxisKey="date"
+                valueType="percent"
+                height={300}
+              />
+            )}
           </ChartCard>
 
           {/* Total Auths Trend */}
           <ChartCard
             title="Total Auths Trend"
-            subtitle="Weekly authorization volume (all statuses)"
+            subtitle="Authorization volume (all statuses)"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
             liveData={trendIsLive}
+            showIncrement
           >
-            <DashboardBarChart
-              data={weeklyTrend}
-              bars={[{ key: "totalAuths", color: "#3b82f6", label: "Total Auths" }]}
-              xAxisKey="date"
-              height={300}
-            />
+            {(increment: ChartIncrement) => (
+              <DashboardBarChart
+                data={aggregateByIncrement(weeklyTrend, increment, "date")}
+                bars={[{ key: "totalAuths", color: "#3b82f6", label: "Total Auths" }]}
+                xAxisKey="date"
+                height={300}
+              />
+            )}
           </ChartCard>
 
           {/* Channel Mix — stacked bar */}
           <ChartCard
             title="Channel Mix"
-            subtitle="Online / QRIS / Offline authorizations per week"
+            subtitle="Online / QRIS / Offline authorizations"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
             liveData={trendIsLive}
+            showIncrement
           >
-            <DashboardBarChart
-              data={weeklyTrend}
-              bars={[
-                { key: "online", color: "#3b82f6", label: "Online" },
-                { key: "qris", color: "#06b6d4", label: "QRIS" },
-                { key: "offline", color: "#8b5cf6", label: "Offline" },
-              ]}
-              xAxisKey="date"
-              stacked
-              height={300}
-            />
+            {(increment: ChartIncrement) => (
+              <DashboardBarChart
+                data={aggregateByIncrement(weeklyTrend, increment, "date")}
+                bars={[
+                  { key: "online", color: "#3b82f6", label: "Online" },
+                  { key: "qris", color: "#06b6d4", label: "QRIS" },
+                  { key: "offline", color: "#8b5cf6", label: "Offline" },
+                ]}
+                xAxisKey="date"
+                stacked
+                height={300}
+              />
+            )}
           </ChartCard>
 
           {/* Two-column: Avg Ticket Size + Foreign Txn % */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <ChartCard
               title="Avg Ticket Size Trend"
-              subtitle="Average approved transaction amount (IDR) per week"
+              subtitle="Average approved transaction amount (IDR)"
               asOf={AS_OF}
               dataRange={DATA_RANGE}
               liveData={trendIsLive}
+              showIncrement
             >
-              <DashboardLineChart
-                data={weeklyTrend}
-                lines={[{ key: "avgTicket", color: "#f59e0b", label: "Avg Ticket (IDR)" }]}
-                xAxisKey="date"
-                valueType="currency"
-                height={260}
-              />
+              {(increment: ChartIncrement) => (
+                <DashboardLineChart
+                  data={aggregateByIncrement(weeklyTrend, increment, "date")}
+                  lines={[{ key: "avgTicket", color: "#f59e0b", label: "Avg Ticket (IDR)" }]}
+                  xAxisKey="date"
+                  valueType="currency"
+                  height={260}
+                />
+              )}
             </ChartCard>
 
             <ChartCard
@@ -238,14 +252,17 @@ export default function TransactionAuthPage() {
               asOf={AS_OF}
               dataRange={DATA_RANGE}
               liveData={trendIsLive}
+              showIncrement
             >
-              <DashboardLineChart
-                data={weeklyTrend}
-                lines={[{ key: "foreignPct", color: "#ef4444", label: "Foreign Txn %" }]}
-                xAxisKey="date"
-                valueType="percent"
-                height={260}
-              />
+              {(increment: ChartIncrement) => (
+                <DashboardLineChart
+                  data={aggregateByIncrement(weeklyTrend, increment, "date")}
+                  lines={[{ key: "foreignPct", color: "#ef4444", label: "Foreign Txn %" }]}
+                  xAxisKey="date"
+                  valueType="percent"
+                  height={260}
+                />
+              )}
             </ChartCard>
           </div>
 

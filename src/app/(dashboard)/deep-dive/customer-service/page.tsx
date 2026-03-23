@@ -4,6 +4,8 @@ import { useMemo } from "react";
 import useSWR from "swr";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
+import type { ChartIncrement } from "@/components/dashboard/chart-card";
+import { aggregateByIncrement } from "@/lib/aggregate-by-increment";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { ChartSkeleton, MetricCardsSkeleton } from "@/components/dashboard/chart-skeleton";
@@ -173,49 +175,58 @@ export default function CustomerServicePage() {
           {/* Ticket Volume Trend */}
           <ChartCard
             title="Ticket Volume Trend"
-            subtitle="Weekly ticket count"
+            subtitle="Ticket count"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
             liveData={isLive}
+            showIncrement
           >
-            <DashboardBarChart
-              data={weeklyTrend}
-              bars={[{ key: "ticket_count", color: "#3b82f6", label: "Tickets" }]}
-              xAxisKey="date"
-              height={300}
-            />
+            {(increment: ChartIncrement) => (
+              <DashboardBarChart
+                data={aggregateByIncrement(weeklyTrend, increment, "date")}
+                bars={[{ key: "ticket_count", color: "#3b82f6", label: "Tickets" }]}
+                xAxisKey="date"
+                height={300}
+              />
+            )}
           </ChartCard>
 
           {/* Response & Resolution Time Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <ChartCard
               title="Avg First Response Time"
-              subtitle="Hours to first agent response, by week"
+              subtitle="Hours to first agent response"
               asOf={AS_OF}
               dataRange={DATA_RANGE}
               liveData={isLive}
+              showIncrement
             >
-              <DashboardLineChart
-                data={weeklyTrend}
-                lines={[{ key: "avg_first_response_hrs", color: "#f59e0b", label: "First Response (hrs)" }]}
-                xAxisKey="date"
-                height={280}
-              />
+              {(increment: ChartIncrement) => (
+                <DashboardLineChart
+                  data={aggregateByIncrement(weeklyTrend, increment, "date")}
+                  lines={[{ key: "avg_first_response_hrs", color: "#f59e0b", label: "First Response (hrs)" }]}
+                  xAxisKey="date"
+                  height={280}
+                />
+              )}
             </ChartCard>
 
             <ChartCard
               title="Avg Resolution Time"
-              subtitle="Hours to ticket resolution, by week"
+              subtitle="Hours to ticket resolution"
               asOf={AS_OF}
               dataRange={DATA_RANGE}
               liveData={isLive}
+              showIncrement
             >
-              <DashboardLineChart
-                data={weeklyTrend}
-                lines={[{ key: "avg_resolution_hrs", color: "#ef4444", label: "Resolution (hrs)" }]}
-                xAxisKey="date"
-                height={280}
-              />
+              {(increment: ChartIncrement) => (
+                <DashboardLineChart
+                  data={aggregateByIncrement(weeklyTrend, increment, "date")}
+                  lines={[{ key: "avg_resolution_hrs", color: "#ef4444", label: "Resolution (hrs)" }]}
+                  xAxisKey="date"
+                  height={280}
+                />
+              )}
             </ChartCard>
           </div>
 
