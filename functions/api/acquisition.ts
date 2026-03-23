@@ -20,7 +20,7 @@ const STAGE_LABELS: Record<string, string> = {
   "Tutorial complete": "Tutorial Complete", "Delivery Address Entered": "Delivery Address", "PIN set": "PIN Set",
 };
 
-async function queryAcquisition(startDate: string, endDate: string, env: Env, filters: ParsedFilters) {
+async function queryAcquisition(startDate: string, endDate: string, env: Env, filters: ParsedFilters, rawStartDate?: string) {
   const stageList = FUNNEL_STAGES.map(s => `'${s}'`).join(", ");
   const flagCols = FUNNEL_STAGES.map((s, i) => `MAX(CASE WHEN stage='${s}' THEN 1 ELSE 0 END) AS s${i}`).join(",\n");
   const cumulativeUnions = FUNNEL_STAGES.map((s, i) => {
@@ -88,4 +88,112 @@ async function queryAcquisition(startDate: string, endDate: string, env: Env, fi
   return { funnel, decisionBreakdown, productMix, approvalRateTrend, creditLimitTrend };
 }
 
-export const onRequest = createHandler({ section: "acquisition", queryFn: queryAcquisition });
+// Custom handler that also runs comparison funnel for prev period
+export async function onRequest(context: { request: Request; env: Env }): Promise<Response> {
+  const { request, env } = context;
+  const url = new URL(request.url);
+  const rawStart = url.searchParams.get("startDate");
+  const endDate = url.searchParams.get("endDate");
+  const prevStart = url.searchParams.get("prevStartDate");
+  const prevEnd = url.searchParams.get("prevEndDate");
+  const period = url.searchParams.get("period") || "monthly";
+
+  const action = url.searchParams.get("action");
+
+  if (!rawStart || !endDate) {
+    return new Response(JSON.stringify({ error: "Missing startDate or endDate" }), { status: 400, headers: { "Content-Type": "application/json" } });
+  }
+
+  // Handle dropoff CSV download
+  if (action === "dropoff") {
+    const stage = url.searchParams.get("stage") ?? "";
+    const stageIdx = FUNNEL_STAGES.indexOf(stage) !== -1 ? FUNNEL_STAGES.indexOf(stage) : FUNNEL_STAGES.findIndex(s => (STAGE_LABELS[s] ?? s) === stage);
+    if (stageIdx <= 0) {
+      return new Response(JSON.stringify({ users: [] }), { headers: { "Content-Type": "application/json" } });
+    }
+    const stageList = FUNNEL_STAGES.map(s => `'${s}'`).join(", ");
+    const flagCols = FUNNEL_STAGES.map((s, i) => `MAX(CASE WHEN stage='${s}' THEN 1 ELSE 0 END) AS s${i}`).join(",\n");
+    const prevFlags = Array.from({ length: stageIdx }, (_, j) => `s${j}=1`).join(" AND ");
+    const rows = await runQuery<{ user_id: string }>(
+      `WITH user_stages AS (
+        SELECT user_id, application_status AS stage FROM ${TABLES.milestone_complete}
+        WHERE DATE(timestamp,'Asia/Jakarta') BETWEEN @startDate AND @endDate AND application_status IN (${stageList})
+        GROUP BY user_id, application_status
+      ), user_stage_flags AS (SELECT user_id, ${flagCols} FROM user_stages GROUP BY user_id)
+      SELECT user_id FROM user_stage_flags WHERE ${prevFlags} AND s${stageIdx}=0`,
+      { startDate: rawStart, endDate }, env,
+    );
+    return new Response(JSON.stringify({ users: rows.map(r => r.user_id) }), { headers: { "Content-Type": "application/json" } });
+  }
+
+  // Extend startDate for chart context (same logic as createHandler)
+  const d = new Date(rawStart + "T00:00:00Z");
+  switch (period) {
+    case "weekly": d.setUTCDate(d.getUTCDate() - 42); break;
+    case "monthly": d.setUTCMonth(d.getUTCMonth() - 6); break;
+    case "quarterly": d.setUTCMonth(d.getUTCMonth() - 18); break;
+    default: d.setUTCMonth(d.getUTCMonth() - 6);
+  }
+  const startDate = d.toISOString().slice(0, 10);
+
+  const { parseFilters } = await import("../_shared/filters");
+  const filters = parseFilters(url);
+
+  try {
+    const mainResult = await queryAcquisition(startDate, endDate, env, filters, rawStart) as Record<string, unknown>;
+
+    // Run comparison funnel if prev dates available
+    if (prevStart && prevEnd) {
+      const stageList = FUNNEL_STAGES.map(s => `'${s}'`).join(", ");
+      const flagCols = FUNNEL_STAGES.map((s, i) => `MAX(CASE WHEN stage='${s}' THEN 1 ELSE 0 END) AS s${i}`).join(",\n");
+      const cumulativeUnions = FUNNEL_STAGES.map((s, i) => {
+        const conds = Array.from({ length: i + 1 }, (_, j) => `s${j}=1`).join(" AND ");
+        return `SELECT '${s}' AS stage, COUNT(*) AS count FROM user_stage_flags WHERE ${conds}`;
+      }).join("\nUNION ALL\n");
+
+      const prevFunnelRows = await runQuery<{ stage: string; count: number }>(
+        `WITH user_stages AS (
+          SELECT user_id, application_status AS stage FROM ${TABLES.milestone_complete}
+          WHERE DATE(timestamp,'Asia/Jakarta') BETWEEN @startDate AND @endDate AND application_status IN (${stageList})
+          GROUP BY user_id, application_status
+        ), user_stage_flags AS (SELECT user_id, ${flagCols} FROM user_stages GROUP BY user_id),
+        cumulative_funnel AS (${cumulativeUnions})
+        SELECT stage, count FROM cumulative_funnel`,
+        { startDate: prevStart, endDate: prevEnd }, env,
+      );
+
+      const prevCountMap = new Map(prevFunnelRows.map(r => [r.stage, r.count]));
+      const prevFunnel = FUNNEL_STAGES.map(stage => ({
+        stage,
+        label: STAGE_LABELS[stage] ?? stage,
+        count: prevCountMap.get(stage) ?? 0,
+      }));
+      mainResult.prevFunnel = prevFunnel;
+
+      // Dropoff user queries — for each stage where current > 0 and there's a drop
+      const dropoffQueries: Record<string, string> = {};
+      for (let i = 1; i < FUNNEL_STAGES.length; i++) {
+        const prev = FUNNEL_STAGES[i - 1];
+        const curr = FUNNEL_STAGES[i];
+        const prevFlags = Array.from({ length: i }, (_, j) => `s${j}=1`).join(" AND ");
+        const currFlag = `s${i}=0`;
+        dropoffQueries[curr] = `WITH user_stages AS (
+          SELECT user_id, application_status AS stage FROM ${TABLES.milestone_complete}
+          WHERE DATE(timestamp,'Asia/Jakarta') BETWEEN @startDate AND @endDate AND application_status IN (${stageList})
+          GROUP BY user_id, application_status
+        ), user_stage_flags AS (SELECT user_id, ${flagCols} FROM user_stages GROUP BY user_id)
+        SELECT user_id FROM user_stage_flags WHERE ${prevFlags} AND ${currFlag}`;
+      }
+      mainResult.dropoffQueries = dropoffQueries;
+    }
+
+    return new Response(JSON.stringify(mainResult), {
+      headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=300" },
+    });
+  } catch (error) {
+    return new Response(
+      JSON.stringify({ error: "Failed to fetch acquisition data", message: error instanceof Error ? error.message : String(error) }),
+      { status: 500, headers: { "Content-Type": "application/json" } },
+    );
+  }
+}

@@ -17,15 +17,18 @@ export function useApiParams(): {
   apiParams: string;
   startDate: string;
   endDate: string;
+  prevStartDate: string;
+  prevEndDate: string;
 } {
-  const { dateParams, startDate, endDate } = useDateParams();
+  const { dateParams, startDate, endDate, prevStartDate, prevEndDate } = useDateParams();
   const { filters } = useFilters();
 
   const apiParams = useMemo(() => {
     const filterParams = filtersToQueryParams(filters);
     const filterQs = filterParams.toString();
-    return filterQs ? `${dateParams}&${filterQs}` : dateParams;
-  }, [dateParams, filters]);
+    const base = `${dateParams}&prevStartDate=${prevStartDate}&prevEndDate=${prevEndDate}`;
+    return filterQs ? `${base}&${filterQs}` : base;
+  }, [dateParams, filters, prevStartDate, prevEndDate]);
 
-  return { apiParams, startDate, endDate };
+  return { apiParams, startDate, endDate, prevStartDate, prevEndDate };
 }

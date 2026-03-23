@@ -17,6 +17,7 @@ import { useApiParams } from "@/hooks/use-api-params";
 import { useCurrency } from "@/hooks/use-currency";
 import { formatAmountCompact } from "@/lib/currency";
 import { useTranslations } from "next-intl";
+import { cn } from "@/lib/utils";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
@@ -99,14 +100,45 @@ export default function AcquisitionPage() {
   const funnelIsLive = !!apiData?.funnel?.length;
 
   // Use real funnel data
-  const periodFunnel = useMemo((): { stage: string; count: number; rate: number | null }[] | null => {
+  const periodFunnel = useMemo((): { stage: string; count: number; rate: number | null; prevCount: number | null; pctChange: number | null }[] | null => {
     if (!apiData?.funnel?.length) return null;
-    return apiData.funnel.map((s: { stage: string; label: string; count: number; conversion_from_prev_pct: number | null }) => ({
-      stage: s.label,
-      count: s.count,
-      rate: s.conversion_from_prev_pct,
-    }));
+    const prevFunnel = apiData.prevFunnel as { label: string; count: number }[] | undefined;
+    return apiData.funnel.map((s: { stage: string; label: string; count: number; conversion_from_prev_pct: number | null }) => {
+      const prev = prevFunnel?.find((p: { label: string }) => p.label === s.label);
+      const prevCount = prev?.count ?? null;
+      const pctChange = prevCount !== null && prevCount > 0 ? Math.round(((s.count - prevCount) / prevCount) * 10000) / 100 : null;
+      return { stage: s.label, count: s.count, rate: s.conversion_from_prev_pct, prevCount, pctChange };
+    });
   }, [apiData]);
+
+  // Dropoff SQL queries from API (for CSV download)
+  const dropoffQueries = apiData?.dropoffQueries as Record<string, string> | undefined;
+
+  // Download dropoff users as CSV
+  const downloadDropoffCsv = useCallback(async (stageName: string, sql: string) => {
+    try {
+      // Execute the query via the API
+      const resp = await fetch(`/api/acquisition?${apiParams}&action=dropoff&stage=${encodeURIComponent(stageName)}`);
+      if (!resp.ok) {
+        // Fallback: copy SQL to clipboard
+        navigator.clipboard.writeText(sql);
+        return;
+      }
+      const data = await resp.json();
+      const userIds = (data.users as string[]) ?? [];
+      const csvContent = "user_id\n" + userIds.join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `dropoff_${stageName.replace(/\s+/g, "_").toLowerCase()}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // Fallback: copy SQL
+      navigator.clipboard.writeText(sql);
+    }
+  }, [apiParams]);
 
   // Decision breakdown data
   const decisionBreakdown = useMemo(() => {
@@ -314,7 +346,7 @@ export default function AcquisitionPage() {
           {(() => {
             // Use max count across all stages as the 100% reference
             const maxCount = Math.max(...periodFunnel.map((s: { count: number }) => s.count));
-            return periodFunnel.map((stage: { stage: string; count: number; rate: number | null }, i: number) => {
+            return periodFunnel.map((stage: { stage: string; count: number; rate: number | null; prevCount: number | null; pctChange: number | null }, i: number) => {
               const widthPct = maxCount > 0 ? (stage.count / maxCount) * 100 : 0;
               const convColor =
                 stage.rate === null
@@ -327,13 +359,15 @@ export default function AcquisitionPage() {
               // Gradient intensity decreases down the funnel
               const opacity = 0.9 - (i / periodFunnel.length) * 0.4;
 
+              const hasDropoff = i > 0 && stage.count < (periodFunnel[i - 1]?.count ?? 0);
+              const dropoffStageKey = apiData?.funnel?.[i]?.stage as string | undefined;
+
               return (
                 <div key={stage.stage} className="flex items-center gap-3">
                   <span className="w-36 text-xs text-[var(--text-secondary)] text-right shrink-0">
                     {stage.stage}
                   </span>
                   <div className="flex-1 h-7 relative flex justify-center">
-                    {/* Centered funnel bar */}
                     <div
                       className="h-full rounded flex items-center justify-center px-2 cursor-context-menu"
                       style={{
@@ -353,6 +387,28 @@ export default function AcquisitionPage() {
                     </span>
                   ) : (
                     <span className="w-14 shrink-0" />
+                  )}
+                  {/* % change from comparison period */}
+                  {stage.pctChange !== null ? (
+                    <span className={cn("w-16 text-[10px] font-semibold text-right shrink-0",
+                      stage.pctChange >= 0 ? "text-emerald-500" : "text-red-500"
+                    )}>
+                      {stage.pctChange >= 0 ? "+" : ""}{stage.pctChange.toFixed(1)}%
+                    </span>
+                  ) : (
+                    <span className="w-16 shrink-0" />
+                  )}
+                  {/* CSV download for dropoff users */}
+                  {hasDropoff && dropoffStageKey && dropoffQueries?.[dropoffStageKey] ? (
+                    <button
+                      onClick={() => downloadDropoffCsv(stage.stage, dropoffQueries[dropoffStageKey])}
+                      className="shrink-0 text-[9px] text-blue-400 hover:text-blue-300 underline"
+                      title={`Download dropoff user IDs at ${stage.stage}`}
+                    >
+                      CSV
+                    </button>
+                  ) : (
+                    <span className="w-6 shrink-0" />
                   )}
                 </div>
               );
