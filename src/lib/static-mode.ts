@@ -29,7 +29,7 @@ export const STATIC_SESSION = {
 /** Hardcoded credentials for static export login */
 export const STATIC_CREDENTIALS = {
   username: "User",
-  password: "HonestInfo1234",
+  password: "HonestInfo123",
 };
 
 /**
