@@ -155,6 +155,34 @@ export default function SpendPage() {
     total_spend_idr: number; spend_active_rate: number; avg_spend_per_txn_idr: number;
   } | null ?? null;
 
+  // Onboarding activation summary
+  const onboardingSummary = spendAnalysis?.onboardingSummary as {
+    rp1_total: number; rp1_funded_count: number; rp1_funded_rate: number; rp1_avg_first_amount: number;
+    regfee_total: number; regfee_paid_count: number; regfee_paid_rate: number;
+    unblocked_total: number; spend_activated_count: number; spend_activation_rate: number;
+  } | null ?? null;
+
+  // Onboarding weekly trend
+  const onboardingTrend = useMemo(() => {
+    if (!spendAnalysis?.onboardingTrend?.length) return null;
+    return (spendAnalysis.onboardingTrend as { week_start: string; rp1_funded_rate: number; regfee_paid_rate: number; spend_activation_rate: number }[]).map(r => ({
+      date: r.week_start.replace("2025-", "").replace("2026-", "").slice(0, 5),
+      rp1Rate: r.rp1_funded_rate ?? 0,
+      regfeeRate: r.regfee_paid_rate ?? 0,
+      activationRate: r.spend_activation_rate ?? 0,
+    }));
+  }, [spendAnalysis]);
+
+  // First transaction channel breakdown
+  const firstTxnChannel = useMemo(() => {
+    if (!spendAnalysis?.firstTxnChannel?.length) return null;
+    return (spendAnalysis.firstTxnChannel as { channel: string; user_count: number; avg_first_amount: number }[]).map(r => ({
+      channel: r.channel,
+      users: r.user_count,
+      avgAmount: r.avg_first_amount,
+    }));
+  }, [spendAnalysis]);
+
   // Latest weekly values for trend comparison
   const latestWeek = weeklyTrend?.[weeklyTrend.length - 1];
   const prevWeek = weeklyTrend && weeklyTrend.length >= 2 ? weeklyTrend[weeklyTrend.length - 2] : null;
@@ -213,18 +241,31 @@ export default function SpendPage() {
     { text: "The rapid QRIS merchant growth curve suggests network effects are kicking in — expect continued acceleration through 2026.", type: "hypothesis" },
   ], []);
 
+  // Computed headline KPIs
+  const avgSpendPerUser = periodSummary
+    ? Math.round((periodSummary.total_spend_idr / Math.max(periodSummary.eligible_count, 1)) * 100) / 100
+    : null;
+  const avgTxnPerUser = periodSummary
+    ? Math.round((periodSummary.total_transactions / Math.max(periodSummary.eligible_count, 1)) * 100) / 100
+    : null;
+
   return (
     <div className="space-y-6">
       <ActiveFiltersBanner />
 
-      {/* KPI row + Trend charts */}
+      {/* ================================================================== */}
+      {/* SECTION 1: Headline KPIs                                           */}
+      {/* ================================================================== */}
       {weeklyTrend && latestWeek ? (
         <>
-          {/* KPI Row */}
+          <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
+            <span className="i-lucide-gauge w-5 h-5" aria-hidden="true" />
+            {tSpend("headlineKpis")}
+          </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard
               metricKey="spend_active_rate"
-              label="Spend Active Rate"
+              label={tSpend("spendActiveRate")}
               value={periodSummary?.spend_active_rate ?? latestWeek.rate}
               unit="percent"
               asOf={AS_OF}
@@ -233,9 +274,18 @@ export default function SpendPage() {
               liveData={trendIsLive}
             />
             <MetricCard
-              metricKey="spend_eligible"
-              label="Eligible to Spend (Cum. EoP)"
-              value={periodSummary?.eligible_count ?? latestWeek.eligible}
+              metricKey="spend_avg_per_user"
+              label={tSpend("avgSpendPerUser")}
+              value={avgSpendPerUser ?? 0}
+              unit="idr"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              liveData={trendIsLive}
+            />
+            <MetricCard
+              metricKey="spend_avg_txn_per_user"
+              label={tSpend("avgTxnPerUser")}
+              value={avgTxnPerUser ?? 0}
               unit="count"
               asOf={AS_OF}
               dataRange={DATA_RANGE}
@@ -243,23 +293,120 @@ export default function SpendPage() {
             />
             <MetricCard
               metricKey="spend_total_volume"
-              label="Total Spend Volume"
+              label={tSpend("totalSpend")}
               value={periodSummary?.total_spend_idr ?? latestWeek.totalSpend}
               unit="idr"
               asOf={AS_OF}
               dataRange={DATA_RANGE}
               liveData={trendIsLive}
             />
-            <MetricCard
-              metricKey="spend_txn_per_eligible"
-              label="Txn per Eligible User"
-              value={periodSummary ? Math.round((periodSummary.total_transactions / Math.max(periodSummary.eligible_count, 1)) * 100) / 100 : Math.round(latestWeek.txnPerUser * 100) / 100}
-              unit="count"
-              asOf={AS_OF}
-              dataRange={DATA_RANGE}
-              liveData={trendIsLive}
-            />
           </div>
+
+          {/* ================================================================== */}
+          {/* SECTION 2: Onboarding & Activation                                 */}
+          {/* ================================================================== */}
+          <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2 mt-8">
+            <span className="i-lucide-rocket w-5 h-5" aria-hidden="true" />
+            {tSpend("onboardingActivation")}
+          </h2>
+
+          {onboardingSummary ? (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <MetricCard
+                    metricKey="rp1_funded_rate"
+                    label={tSpend("rp1FundedRate")}
+                    value={onboardingSummary.rp1_funded_rate ?? 0}
+                    unit="percent"
+                    asOf={AS_OF}
+                    dataRange={DATA_RANGE}
+                    liveData={true}
+                  />
+                  {onboardingSummary.rp1_avg_first_amount ? (
+                    <p className="mt-1 text-[10px] text-[var(--text-muted)] text-center">
+                      {tSpend("avgFirstAmount")}: {fmtCur(onboardingSummary.rp1_avg_first_amount)}
+                    </p>
+                  ) : null}
+                </div>
+                <MetricCard
+                  metricKey="regfee_paid_rate"
+                  label={tSpend("regfeePaidRate")}
+                  value={onboardingSummary.regfee_paid_rate ?? 0}
+                  unit="percent"
+                  asOf={AS_OF}
+                  dataRange={DATA_RANGE}
+                  liveData={true}
+                />
+                <MetricCard
+                  metricKey="spend_activation_rate"
+                  label={tSpend("spendActivationRate")}
+                  value={onboardingSummary.spend_activation_rate ?? 0}
+                  unit="percent"
+                  asOf={AS_OF}
+                  dataRange={DATA_RANGE}
+                  liveData={true}
+                />
+              </div>
+
+              {onboardingTrend && (
+                <ChartCard
+                  title={tSpend("weeklyOnboardingTrend")}
+                  subtitle={tSpend("weeklyOnboardingTrendSub")}
+                  asOf={AS_OF}
+                  dataRange={DATA_RANGE}
+                  liveData={true}
+                  showIncrement
+                >
+                  {(increment: ChartIncrement) => (
+                    <DashboardLineChart
+                      data={aggregateByIncrement(onboardingTrend, increment, "date")}
+                      lines={[
+                        { key: "rp1Rate", color: "#3b82f6", label: tSpend("rp1FundedRate") },
+                        { key: "regfeeRate", color: "#8b5cf6", label: tSpend("regfeePaidRate") },
+                        { key: "activationRate", color: "#22c55e", label: tSpend("spendActivationRate") },
+                      ]}
+                      xAxisKey="date"
+                      valueType="percent"
+                      height={300}
+                    />
+                  )}
+                </ChartCard>
+              )}
+
+              {firstTxnChannel && (
+                <ChartCard
+                  title={tSpend("firstTxnChannel")}
+                  subtitle={tSpend("firstTxnChannelSub")}
+                  asOf={AS_OF}
+                  dataRange={DATA_RANGE}
+                  liveData={true}
+                >
+                  <DashboardBarChart
+                    data={firstTxnChannel}
+                    bars={[{ key: "users", color: "#06b6d4", label: tSpend("userCount") }]}
+                    xAxisKey="channel"
+                    height={260}
+                  />
+                </ChartCard>
+              )}
+            </>
+          ) : isLoading ? (
+            <><MetricCardsSkeleton /><ChartSkeleton /></>
+          ) : (
+            <SampleDataBanner
+              dataset="mart_finexus"
+              reason="Onboarding activation data requires decision_completed, principal_card_updates, and authorized_transaction"
+            />
+          )}
+
+          {/* ================================================================== */}
+          {/* SECTION 3: Spend Trends                                            */}
+          {/* ================================================================== */}
+          <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2 mt-8">
+            <span className="i-lucide-trending-up w-5 h-5" aria-hidden="true" />
+            {tSpend("spendTrends")}
+          </h2>
 
           {/* Spend Active Rate Trend */}
           <ChartCard
@@ -412,10 +559,13 @@ export default function SpendPage() {
       )}
 
       {/* ================================================================== */}
-      {/* NEW SECTION 1: Transaction Channel Analysis                        */}
+      {/* SECTION 4: Channel Analysis                                        */}
       {/* ================================================================== */}
       <div className="space-y-4">
-        <h2 className="text-lg font-semibold text-[var(--text-primary)]">Transaction Channel Analysis</h2>
+        <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
+          <span className="i-lucide-git-branch w-5 h-5" aria-hidden="true" />
+          {tSpend("channelAnalysis")}
+        </h2>
 
         {channelBarData ? (
           <>
@@ -478,11 +628,16 @@ export default function SpendPage() {
       </div>
 
       {/* ================================================================== */}
-      {/* NEW SECTION 2: Transaction Declines                                */}
+      {/* SECTION 5: Transaction Quality                                     */}
       {/* ================================================================== */}
+      <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
+        <span className="i-lucide-shield-check w-5 h-5" aria-hidden="true" />
+        {tSpend("transactionQuality")}
+      </h2>
+
       {declineBarData && declineData ? (
         <ChartCard
-          title="Transaction Decline Breakdown"
+          title={tSpend("declineBreakdown")}
           subtitle="Non-approved transaction status codes with count and explanation"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
@@ -514,11 +669,9 @@ export default function SpendPage() {
         />
       )}
 
-      {/* ================================================================== */}
-      {/* NEW SECTION 3: QRIS Merchant Analysis                              */}
-      {/* ================================================================== */}
+      {/* QRIS Merchant Ecosystem */}
       <div className="space-y-4">
-        <h2 className="text-lg font-semibold text-[var(--text-primary)]">QRIS Merchant Ecosystem</h2>
+        <h2 className="text-lg font-semibold text-[var(--text-primary)]">{tSpend("merchantEcosystem")}</h2>
 
         {qrisMerchantLineData ? (
           <>

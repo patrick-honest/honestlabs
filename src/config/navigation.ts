@@ -43,7 +43,7 @@ export const navigation: NavItem[] = [
 
   // ── Deep Dive: Revenue ──
   {
-    label: "Revenue", tKey: "revenue",
+    label: "Spend & Revenue", tKey: "spendRevenue",
     href: "#",
     icon: "Wallet",
     children: [
