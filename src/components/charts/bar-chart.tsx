@@ -12,7 +12,8 @@ import {
   Legend,
 } from "recharts";
 import { useTheme } from "@/hooks/use-theme";
-import { formatNumber } from "@/lib/utils";
+import { useCurrency } from "@/hooks/use-currency";
+import { formatNumber, formatCurrency, formatPercent } from "@/lib/utils";
 
 interface BarConfig {
   key: string;
@@ -26,6 +27,7 @@ interface DashboardBarChartProps {
   xAxisKey?: string;
   height?: number;
   stacked?: boolean;
+  valueType?: "count" | "percent" | "currency";
   /** Previous period data to overlay as dashed lines */
   prevPeriodData?: Record<string, string | number>[];
   prevPeriodLabel?: string;
@@ -37,10 +39,23 @@ export function DashboardBarChart({
   xAxisKey = "date",
   height = 300,
   stacked = false,
+  valueType = "count",
   prevPeriodData,
   prevPeriodLabel = "Prev Period",
 }: DashboardBarChartProps) {
   const { isDark } = useTheme();
+  const { currency } = useCurrency();
+
+  const formatValue = (value: number) => {
+    switch (valueType) {
+      case "percent":
+        return formatPercent(value);
+      case "currency":
+        return formatCurrency(value, currency);
+      default:
+        return formatNumber(value, { compact: true });
+    }
+  };
 
   const grid = isDark ? "#2D2955" : "#F0D9F7";
   const axis = isDark ? "#6B6394" : "#9B87A8";
@@ -78,7 +93,7 @@ export function DashboardBarChart({
             tick={{ fill: axis, fontSize: 11 }}
             axisLine={false}
             tickLine={false}
-            tickFormatter={(v) => formatNumber(v as number, { compact: true })}
+            tickFormatter={(v) => formatValue(v as number)}
           />
           <Tooltip
             contentStyle={{
@@ -95,7 +110,7 @@ export function DashboardBarChart({
               const label = isPrev
                 ? `${bar?.label ?? baseKey} (${prevPeriodLabel})`
                 : bar?.label ?? String(name);
-              return [formatNumber(Number(value)), label];
+              return [formatValue(Number(value)), label];
             }}
           />
           <Legend

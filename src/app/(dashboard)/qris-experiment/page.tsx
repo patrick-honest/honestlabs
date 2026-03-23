@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useCallback } from "react";
 import useSWR from "swr";
 import { Header } from "@/components/layout/header";
 import { useTranslations } from "next-intl";
@@ -10,6 +10,8 @@ import { QrCode, CheckCircle2, TrendingUp, Users, CreditCard, ArrowUpRight, Star
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
 import { usePeriod } from "@/hooks/use-period";
+import { useCurrency } from "@/hooks/use-currency";
+import { formatAmountCompact } from "@/lib/currency";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { DashboardLineChart } from "@/components/charts/line-chart";
@@ -183,15 +185,18 @@ function ComparisonRow({
   label: string;
   testValue: number;
   controlValue: number;
-  format?: "number" | "usd" | "percent" | "decimal";
+  format?: "number" | "usd" | "percent" | "decimal" | "currency";
   higherIsBetter?: boolean;
   live?: boolean;
 }) {
+  const { currency } = useCurrency();
   const diff = controlValue !== 0 ? ((testValue - controlValue) / Math.abs(controlValue)) * 100 : 0;
   const isPositive = higherIsBetter ? diff > 0 : diff < 0;
 
   function fmt(v: number): string {
     switch (format) {
+      case "currency":
+        return formatAmountCompact(v, currency);
       case "usd":
         return `$${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
       case "percent":
@@ -373,6 +378,9 @@ export default function QrisExperimentPage() {
   const { dateParams, startDate, endDate } = useDateParams();
   const { isDark } = useTheme();
   const tNav = useTranslations("nav");
+  const t = useTranslations("qrisExperiment");
+  const { currency } = useCurrency();
+  const fmtCur = useCallback((v: number) => formatAmountCompact(v, currency), [currency]);
 
   const apiUrl = startDate && endDate
     ? `/api/qris-experiment?${dateParams}`
@@ -617,8 +625,8 @@ export default function QrisExperimentPage() {
                   <QrCode className="h-5 w-5 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-bold text-white">QRIS Experiment Report</h2>
-                  <p className="text-sm text-white/70">Quick Response Code Indonesian Standard &middot; A/B Test — 10K User Rollout</p>
+                  <h2 className="text-2xl font-bold text-white">{t("title")}</h2>
+                  <p className="text-sm text-white/70">{t("subtitle")} &middot; {t("abTest")}</p>
                 </div>
               </div>
 
@@ -635,7 +643,7 @@ export default function QrisExperimentPage() {
               {hasData && (
                 <div className="flex flex-wrap gap-6 mt-4 pt-4 border-t border-white/20">
                   <div>
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-white/50">Spend Lift</p>
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-white/50">{t("spendLift")}</p>
                     <p className="text-2xl font-bold text-white">+{spendLift.toFixed(1)}%</p>
                     {spendCI && (
                       <p className="text-[9px] text-white/40">
@@ -644,21 +652,21 @@ export default function QrisExperimentPage() {
                     )}
                   </div>
                   <div>
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-white/50">QRIS Adoption</p>
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-white/50">{t("qrisAdoption")}</p>
                     <p className="text-2xl font-bold text-white">{qrisAdoptionRate.toFixed(1)}%</p>
                   </div>
                   <div>
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-white/50">SAR Lift</p>
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-white/50">{t("sarLift")}</p>
                     <p className="text-2xl font-bold text-white">+{(test.sar - control.sar).toFixed(1)}pp</p>
                   </div>
                   {rpuTest && rpuControl && (
                     <div>
-                      <p className="text-[11px] font-medium uppercase tracking-wider text-white/50">RPU Delta</p>
+                      <p className="text-[11px] font-medium uppercase tracking-wider text-white/50">{t("rpuDelta")}</p>
                       <p className={cn("text-2xl font-bold", rpuDelta >= 0 ? "text-[#06D6A0]" : "text-[#FF6B6B]")}>
                         {rpuDelta >= 0 ? "+" : ""}{rpuDelta.toFixed(1)}%
                       </p>
                       <p className="text-[9px] text-white/40">
-                        Test: Rp {(rpuTest / 1000).toFixed(0)}K · Ctrl: Rp {(rpuControl / 1000).toFixed(0)}K
+                        Test: {fmtCur(rpuTest)} · Ctrl: {fmtCur(rpuControl)}
                       </p>
                     </div>
                   )}
@@ -670,10 +678,10 @@ export default function QrisExperimentPage() {
             <div className="shrink-0">
               <div className="flex flex-col items-center rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 px-8 py-5">
                 <AlertTriangle className="h-8 w-8 text-[#FFD166] mb-2" />
-                <span className="text-xs font-semibold uppercase tracking-widest text-white/60 mb-1">Verdict</span>
-                <span className="text-lg font-bold text-[#FFD166]">NEEDS REVIEW</span>
+                <span className="text-xs font-semibold uppercase tracking-widest text-white/60 mb-1">{t("verdict")}</span>
+                <span className="text-lg font-bold text-[#FFD166]">{t("needsReview")}</span>
                 <span className="text-[11px] text-white/50 mt-1 text-center max-w-[150px]">
-                  Higher engagement but lower RPU
+                  {t("verdictDetail")}
                 </span>
               </div>
             </div>
@@ -684,7 +692,7 @@ export default function QrisExperimentPage() {
         {isLoading && (
           <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] p-8 text-center">
             <div className="animate-spin h-6 w-6 border-2 border-emerald-500 border-t-transparent rounded-full mx-auto mb-3" />
-            <p className="text-sm text-[var(--text-muted)]">Loading A/B test cohort data from BigQuery...</p>
+            <p className="text-sm text-[var(--text-muted)]">{t("loading")}</p>
           </div>
         )}
 
@@ -693,14 +701,14 @@ export default function QrisExperimentPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <KpiCard
               icon={<Users className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />}
-              label="Test Cohort"
+              label={t("testCohort")}
               value={test.cohort_size.toLocaleString()}
               subtext={`${test.transactors.toLocaleString()} transactors`}
               live
             />
             <KpiCard
               icon={<Users className="h-4 w-4 text-slate-600 dark:text-slate-400" />}
-              label="Control Cohort"
+              label={t("controlCohort")}
               value={control.cohort_size.toLocaleString()}
               subtext={`${control.transactors.toLocaleString()} transactors`}
               accent="bg-slate-100 dark:bg-slate-800/30"
@@ -708,7 +716,7 @@ export default function QrisExperimentPage() {
             />
             <KpiCard
               icon={<QrCode className="h-4 w-4 text-violet-600 dark:text-violet-400" />}
-              label="QRIS Transactors"
+              label={t("qrisTransactors")}
               value={test.qris_users.toLocaleString()}
               subtext={`${qrisAdoptionRate.toFixed(1)}% of test transactors`}
               accent="bg-violet-100 dark:bg-violet-900/30"
@@ -716,8 +724,8 @@ export default function QrisExperimentPage() {
             />
             <KpiCard
               icon={<TrendingUp className="h-4 w-4 text-amber-600 dark:text-amber-400" />}
-              label="Total Spend Lift"
-              value={`Rp ${((getSpend(test) - getSpend(control)) / 1e6).toFixed(0)}M`}
+              label={t("totalSpendLift")}
+              value={fmtCur(getSpend(test) - getSpend(control))}
               subtext={`+${spendLift.toFixed(1)}% vs Control${spendCI ? ` (CI: ${spendCI.pctLow >= 0 ? '+' : ''}${spendCI.pctLow.toFixed(1)}% to ${spendCI.pctHigh >= 0 ? '+' : ''}${spendCI.pctHigh.toFixed(1)}%)` : ''}`}
               accent="bg-amber-100 dark:bg-amber-900/30"
               live
@@ -729,46 +737,46 @@ export default function QrisExperimentPage() {
         {hasData && (
           <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-semibold text-[var(--text-primary)]">Test vs Control Comparison</h3>
+              <h3 className="text-base font-semibold text-[var(--text-primary)]">{t("testVsControl")}</h3>
               <LiveBadge />
             </div>
             <ComparisonRow
-              label="Spend Active Rate"
+              label={t("spendActiveRate")}
               testValue={test.sar}
               controlValue={control.sar}
               format="percent"
               live
             />
             <ComparisonRow
-              label="Avg Spend per Eligible User (IDR)"
+              label={t("avgSpendPerUser")}
               testValue={getAvgSpend(test)}
               controlValue={getAvgSpend(control)}
-              format="number"
+              format="currency"
               live
             />
             <ComparisonRow
-              label="Transactions per User"
+              label={t("txnPerUser")}
               testValue={test.txn_per_user}
               controlValue={control.txn_per_user}
               format="decimal"
               live
             />
             <ComparisonRow
-              label="Total Transactions"
+              label={t("totalTransactions")}
               testValue={test.total_txns}
               controlValue={control.total_txns}
               format="number"
               live
             />
             <ComparisonRow
-              label="QRIS Adoption (% of transactors)"
+              label={t("qrisAdoptionPct")}
               testValue={test.transactors > 0 ? test.qris_users / test.transactors * 100 : 0}
               controlValue={0}
               format="percent"
               live
             />
             <ComparisonRow
-              label="QRIS Share of Spend"
+              label={t("qrisShareOfSpend")}
               testValue={getSpend(test) > 0 ? getQrisSpend(test) / getSpend(test) * 100 : 0}
               controlValue={0}
               format="percent"
@@ -787,26 +795,26 @@ export default function QrisExperimentPage() {
           )}>
             <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
               <TrendingUp className="h-4 w-4 text-emerald-600" />
-              Average Spend per Eligible User
+              {t("avgSpendTitle")}
               <LiveBadge />
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               <div className="text-center">
-                <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">Control</p>
+                <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">{t("control")}</p>
                 <p className="text-2xl font-bold text-[var(--text-secondary)]">
-                  Rp {(getAvgSpend(control) / 1000).toFixed(0)}K
+                  {fmtCur(getAvgSpend(control))}
                 </p>
-                <p className="text-[10px] text-[var(--text-muted)]">{control.cohort_size.toLocaleString()} eligible users</p>
+                <p className="text-[10px] text-[var(--text-muted)]">{control.cohort_size.toLocaleString()} {t("eligibleUsers")}</p>
               </div>
               <div className="text-center">
-                <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">Test</p>
+                <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">{t("test")}</p>
                 <p className="text-2xl font-bold text-[var(--text-primary)]">
-                  Rp {(getAvgSpend(test) / 1000).toFixed(0)}K
+                  {fmtCur(getAvgSpend(test))}
                 </p>
-                <p className="text-[10px] text-[var(--text-muted)]">{test.cohort_size.toLocaleString()} eligible users</p>
+                <p className="text-[10px] text-[var(--text-muted)]">{test.cohort_size.toLocaleString()} {t("eligibleUsers")}</p>
               </div>
               <div className="text-center">
-                <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">Lift (95% CI)</p>
+                <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">{t("liftCI")}</p>
                 <p className={cn("text-2xl font-bold", spendCI.pctDiff >= 0 ? "text-emerald-600" : "text-red-600")}>
                   {spendCI.pctDiff >= 0 ? '+' : ''}{spendCI.pctDiff.toFixed(1)}%
                 </p>
@@ -829,7 +837,6 @@ export default function QrisExperimentPage() {
           // Cannibalization analysis: compare card spend at Mixed/E-commerce merchants
           // QRIS-Only spend is truly incremental (no card alternative)
           // Mixed/E-commerce: Test QRIS spend partially cannibalizes card spend
-          const fmtM = (v: number) => v >= 1e9 ? `Rp ${(v / 1e9).toFixed(2)}B` : `Rp ${(v / 1e6).toFixed(1)}M`;
           const types = ['QRIS-Only Merchants', 'Mixed Merchants', 'E-commerce Sites'];
 
           // Compute incremental spend = QRIS-Only total + (Test total - Control total at Mixed & E-com)
@@ -873,7 +880,7 @@ export default function QrisExperimentPage() {
             <div className="space-y-4">
               <div className="flex items-center gap-2">
                 <Store className={cn("h-5 w-5", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")} />
-                <h2 className="text-lg font-semibold text-[var(--text-primary)]">QRIS Merchant Reach & Spend Analysis</h2>
+                <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t("merchantReach")}</h2>
                 <LiveBadge />
               </div>
 
@@ -923,15 +930,15 @@ export default function QrisExperimentPage() {
                               {isQrisOnly && <span className="ml-2 text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">100% INCREMENTAL</span>}
                             </td>
                             <td className="text-right px-4 py-2.5 font-mono text-xs font-semibold text-[var(--text-primary)]">
-                              {t ? fmtM(t.qris_spend_idr) : '-'}
+                              {t ? fmtCur(t.qris_spend_idr) : '-'}
                               <div className="text-[10px] text-[var(--text-muted)] font-normal">{t?.qris_txns?.toLocaleString() ?? 0} txns</div>
                             </td>
                             <td className="text-right px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">
-                              {isQrisOnly ? <span className="text-[var(--text-muted)]">N/A</span> : tCard > 0 ? fmtM(tCard) : '-'}
+                              {isQrisOnly ? <span className="text-[var(--text-muted)]">N/A</span> : tCard > 0 ? fmtCur(tCard) : '-'}
                               {!isQrisOnly && <div className="text-[10px] text-[var(--text-muted)]">{t?.card_txns?.toLocaleString() ?? 0} txns</div>}
                             </td>
                             <td className="text-right px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">
-                              {isQrisOnly ? <span className="text-[var(--text-muted)]">N/A</span> : cCard > 0 ? fmtM(cCard) : '-'}
+                              {isQrisOnly ? <span className="text-[var(--text-muted)]">N/A</span> : cCard > 0 ? fmtCur(cCard) : '-'}
                               {!isQrisOnly && <div className="text-[10px] text-[var(--text-muted)]">{c?.card_txns?.toLocaleString() ?? 0} txns</div>}
                             </td>
                             <td className="text-right px-4 py-2.5">
@@ -953,7 +960,7 @@ export default function QrisExperimentPage() {
                       <tr className="bg-[var(--surface)] font-semibold border-t-2 border-[var(--border)]">
                         <td className="px-4 py-2.5 text-[var(--text-primary)]">Incremental Spend</td>
                         <td className="text-right px-4 py-2.5 font-mono text-xs text-emerald-600 dark:text-emerald-400" colSpan={5}>
-                          {fmtM(incrementalSpend)}
+                          {fmtCur(incrementalSpend)}
                           <span className="ml-2 text-[10px] text-[var(--text-muted)] font-normal">
                             = QRIS-Only spend + net new spend at Mixed &amp; E-commerce
                           </span>
@@ -1014,7 +1021,7 @@ export default function QrisExperimentPage() {
           const tRevUser = interchangeTest.revenue_per_user_idr;
           const cRevUser = interchangeControl.revenue_per_user_idr;
 
-          const fmtIdr = (v: number) => `Rp ${(v / 1e6).toFixed(2)}M`;
+          const fmtIdr = (v: number) => fmtCur(v);
           const delta = (t: number, c: number) => c !== 0 ? ((t - c) / Math.abs(c)) * 100 : (t > 0 ? 100 : 0);
           const deltaFmt = (t: number, c: number) => {
             const d = delta(t, c);
@@ -1023,20 +1030,20 @@ export default function QrisExperimentPage() {
 
           type RowDef = { label: string; test: number; control: number; isNew?: boolean; higherIsBetter?: boolean };
           const rows: RowDef[] = [
-            { label: "Card Spend (IDR)", test: tCard, control: cCard, higherIsBetter: true },
-            { label: "QRIS Spend (IDR)", test: tQris, control: cQris, isNew: true },
-            { label: "Total Spend (IDR)", test: tTotal, control: cTotal, higherIsBetter: true },
+            { label: "Card Spend", test: tCard, control: cCard, higherIsBetter: true },
+            { label: "QRIS Spend", test: tQris, control: cQris, isNew: true },
+            { label: "Total Spend", test: tTotal, control: cTotal, higherIsBetter: true },
             { label: "Card Interchange @ 1.6%", test: tCardIx, control: cCardIx, higherIsBetter: true },
             { label: "QRIS Revenue @ 0.2035%", test: tQrisRev, control: cQrisRev, isNew: true },
             { label: "Total Revenue", test: tTotalRev, control: cTotalRev, higherIsBetter: true },
-            { label: "Revenue per User (IDR)", test: tRevUser, control: cRevUser, higherIsBetter: true },
+            { label: "Revenue per User", test: tRevUser, control: cRevUser, higherIsBetter: true },
           ];
 
           return (
             <div className="space-y-4">
               <div className="flex items-center gap-2">
                 <DollarSign className={cn("h-5 w-5", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")} />
-                <h2 className="text-lg font-semibold text-[var(--text-primary)]">Interchange Revenue Analysis</h2>
+                <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t("interchangeRevenue")}</h2>
                 <LiveBadge />
               </div>
 
@@ -1069,10 +1076,10 @@ export default function QrisExperimentPage() {
                             </span>
                           </td>
                           <td className="text-right px-4 py-3 text-[var(--text-secondary)] font-mono text-xs">
-                            {row.label === "Revenue per User (IDR)" ? `Rp ${row.control.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : fmtIdr(row.control)}
+                            {fmtIdr(row.control)}
                           </td>
                           <td className="text-right px-4 py-3 font-semibold text-[var(--text-primary)] font-mono text-xs">
-                            {row.label === "Revenue per User (IDR)" ? `Rp ${row.test.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : fmtIdr(row.test)}
+                            {fmtIdr(row.test)}
                           </td>
                           <td className="text-right px-4 py-3">
                             <span className={cn(
@@ -1144,8 +1151,8 @@ export default function QrisExperimentPage() {
                   monthly_spend: Math.round(r.qris_spend_idr / 1e6),
                 }))}
                 lines={[
-                  { key: "cumulative_spend", color: "#06b6d4", label: "Cumulative Spend (IDR M)" },
-                  { key: "monthly_spend", color: "#8b5cf6", label: "Monthly Spend (IDR M)" },
+                  { key: "cumulative_spend", color: "#06b6d4", label: `Cumulative Spend (${currency === "USD" ? "USD K" : "IDR M"})` },
+                  { key: "monthly_spend", color: "#8b5cf6", label: `Monthly Spend (${currency === "USD" ? "USD K" : "IDR M"})` },
                 ]}
                 xAxisKey="date"
                 height={300}
@@ -1167,7 +1174,7 @@ export default function QrisExperimentPage() {
                   <LiveBadge />
                 </div>
                 <p className="text-2xl font-bold text-[var(--text-primary)]">
-                  Rp {(qrisOnlySpendCumulative[qrisOnlySpendCumulative.length - 1]?.cumulative_spend_idr / 1e9).toFixed(2)}B
+                  {fmtCur(qrisOnlySpendCumulative[qrisOnlySpendCumulative.length - 1]?.cumulative_spend_idr ?? 0)}
                 </p>
               </div>
               <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] p-4 text-center">
@@ -1185,7 +1192,7 @@ export default function QrisExperimentPage() {
                   <LiveBadge />
                 </div>
                 <p className="text-2xl font-bold text-[var(--text-primary)]">
-                  Rp {((qrisOnlySpendCumulative[qrisOnlySpendCumulative.length - 1]?.qris_spend_idr ?? 0) / 1e6).toFixed(1)}M
+                  {fmtCur(qrisOnlySpendCumulative[qrisOnlySpendCumulative.length - 1]?.qris_spend_idr ?? 0)}
                 </p>
               </div>
             </div>
@@ -1210,7 +1217,7 @@ export default function QrisExperimentPage() {
                       <tr className="text-[10px] text-[var(--text-muted)] border-b border-[var(--border)]">
                         <th className="pb-1.5 text-left font-medium">Merchant</th>
                         <th className="pb-1.5 text-right font-medium">Txns</th>
-                        <th className="pb-1.5 text-right font-medium">Spend (IDR)</th>
+                        <th className="pb-1.5 text-right font-medium">Spend</th>
                       </tr>
                     </thead>
                     <tbody className="text-[var(--text-secondary)]">
@@ -1218,7 +1225,7 @@ export default function QrisExperimentPage() {
                         <tr key={m.merchant} className="border-b border-[var(--border)]/20">
                           <td className="py-1.5 font-medium truncate max-w-[180px]">{m.merchant}</td>
                           <td className="py-1.5 text-right font-mono">{m.txn_count.toLocaleString()}</td>
-                          <td className="py-1.5 text-right font-mono">{m.total_spend_idr >= 1e9 ? `Rp ${(m.total_spend_idr/1e9).toFixed(1)}B` : m.total_spend_idr >= 1e6 ? `Rp ${(m.total_spend_idr/1e6).toFixed(0)}M` : `Rp ${m.total_spend_idr.toLocaleString()}`}</td>
+                          <td className="py-1.5 text-right font-mono">{fmtCur(m.total_spend_idr)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1239,7 +1246,7 @@ export default function QrisExperimentPage() {
                     <thead>
                       <tr className="text-[10px] text-[var(--text-muted)] border-b border-[var(--border)]">
                         <th className="pb-1.5 text-left font-medium">Merchant</th>
-                        <th className="pb-1.5 text-right font-medium">Spend (IDR)</th>
+                        <th className="pb-1.5 text-right font-medium">Spend</th>
                         <th className="pb-1.5 text-right font-medium">Txns</th>
                       </tr>
                     </thead>
@@ -1247,7 +1254,7 @@ export default function QrisExperimentPage() {
                       {apiData.topMerchantsBySpend.map((m: { merchant: string; txn_count: number; total_spend_idr: number }) => (
                         <tr key={m.merchant} className="border-b border-[var(--border)]/20">
                           <td className="py-1.5 font-medium truncate max-w-[180px]">{m.merchant}</td>
-                          <td className="py-1.5 text-right font-mono">{m.total_spend_idr >= 1e9 ? `Rp ${(m.total_spend_idr/1e9).toFixed(1)}B` : m.total_spend_idr >= 1e6 ? `Rp ${(m.total_spend_idr/1e6).toFixed(0)}M` : `Rp ${m.total_spend_idr.toLocaleString()}`}</td>
+                          <td className="py-1.5 text-right font-mono">{fmtCur(m.total_spend_idr)}</td>
                           <td className="py-1.5 text-right font-mono">{m.txn_count.toLocaleString()}</td>
                         </tr>
                       ))}
@@ -1269,7 +1276,7 @@ export default function QrisExperimentPage() {
           const tst = fins.find(r => r.grp === 'Test');
           if (!ctrl || !tst) return null;
 
-          const fmtI = (v: number) => v >= 1e9 ? `Rp ${(v/1e9).toFixed(1)}B` : v >= 1e6 ? `Rp ${(v/1e6).toFixed(0)}M` : `Rp ${v.toLocaleString()}`;
+          const fmtI = (v: number) => fmtCur(v);
           const normC = (v: number) => Math.round(v / ctrl.cohort_size * 1000);
           const normT = (v: number) => Math.round(v / tst.cohort_size * 1000);
           const dlt = (t: number, c: number) => { const d = ((t-c)/Math.abs(c||1))*100; return d > 0 ? `+${d.toFixed(1)}%` : `${d.toFixed(1)}%`; };
@@ -1323,7 +1330,7 @@ export default function QrisExperimentPage() {
         {/* ============================================================ */}
         {profData && (() => {
           const { ctrl, tst } = profData;
-          const fmtR = (v: number) => v >= 1e9 ? `Rp ${(v/1e9).toFixed(2)}B` : v >= 1e6 ? `Rp ${(v/1e6).toFixed(1)}M` : `Rp ${v.toLocaleString()}`;
+          const fmtR = (v: number) => fmtCur(v);
           const dlt = (t: number, c: number) => {
             if (c === 0) return t > 0 ? 'new' : '-';
             const d = ((t - c) / Math.abs(c)) * 100;
@@ -1344,7 +1351,7 @@ export default function QrisExperimentPage() {
             <div className="space-y-4">
               <div className="flex items-center gap-2">
                 <DollarSign className={cn("h-5 w-5", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")} />
-                <h2 className="text-lg font-semibold text-[var(--text-primary)]">Profitability Analysis</h2>
+                <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t("profitability")}</h2>
                 <LiveBadge />
               </div>
 
@@ -1405,12 +1412,12 @@ export default function QrisExperimentPage() {
                   ? "border-l-violet-500 bg-violet-950/20 border border-violet-900/30"
                   : "border-l-violet-500 bg-violet-50 border border-violet-200",
               )}>
-                <p className="text-sm font-semibold text-[var(--text-primary)] mb-1">Graduation Projection</p>
+                <p className="text-sm font-semibold text-[var(--text-primary)] mb-1">{t("graduationProjection")}</p>
                 <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-                  If the Test group ARPU of Rp {(tst.arpu / 1000).toFixed(0)}K holds at scale,
+                  If the Test group ARPU of {fmtCur(tst.arpu)} holds at scale,
                   {tst.arpu > ctrl.arpu
-                    ? ` graduating QRIS to the full portfolio would increase per-user revenue by Rp ${((tst.arpu - ctrl.arpu) / 1000).toFixed(0)}K (+${(((tst.arpu - ctrl.arpu) / ctrl.arpu) * 100).toFixed(1)}%).`
-                    : ` graduating QRIS would reduce per-user revenue by Rp ${((ctrl.arpu - tst.arpu) / 1000).toFixed(0)}K (${(((tst.arpu - ctrl.arpu) / ctrl.arpu) * 100).toFixed(1)}%).`
+                    ? ` graduating QRIS to the full portfolio would increase per-user revenue by ${fmtCur(tst.arpu - ctrl.arpu)} (+${(((tst.arpu - ctrl.arpu) / ctrl.arpu) * 100).toFixed(1)}%).`
+                    : ` graduating QRIS would reduce per-user revenue by ${fmtCur(ctrl.arpu - tst.arpu)} (${(((tst.arpu - ctrl.arpu) / ctrl.arpu) * 100).toFixed(1)}%).`
                   }
                   {' '}Consider LTV impact, churn reduction, and BI regulatory trajectory before decision.
                 </p>
@@ -1447,13 +1454,13 @@ export default function QrisExperimentPage() {
             <div className="space-y-4">
               <div className="flex items-center gap-2">
                 <TrendingUp className={cn("h-5 w-5", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")} />
-                <h2 className="text-lg font-semibold text-[var(--text-primary)]">Revenue Trajectory & Breakeven</h2>
+                <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t("revenueTrajectory")}</h2>
                 <LiveBadge />
               </div>
 
               {/* Monthly RPU comparison chart */}
               <ChartCard
-                title="Monthly RPU: Test vs Control (Rp K)"
+                title={`Monthly RPU: Test vs Control (${currency === "USD" ? "USD" : "Rp K"})`}
                 subtitle="Per-user revenue by month. Fee RPU = admin fees + interest + charge fees. Txn RPU = card interchange + QRIS MDR."
                 asOf={AS_OF}
                 dataRange={{ start: chartData[0]?.month ?? '', end: chartData[chartData.length - 1]?.month ?? '' }}
@@ -1479,7 +1486,7 @@ export default function QrisExperimentPage() {
 
               {/* Fee surplus vs interchange deficit delta chart */}
               <ChartCard
-                title="Test vs Control: Revenue Delta per User (Rp K)"
+                title={`Test vs Control: Revenue Delta per User (${currency === "USD" ? "USD" : "Rp K"})`}
                 subtitle="Positive = Test earns more. Fee surplus is growing as revolving balances compound; interchange deficit from QRIS cannibalization."
                 asOf={AS_OF}
                 dataRange={{ start: combinedForDelta[0]?.month ?? '', end: combinedForDelta[combinedForDelta.length - 1]?.month ?? '' }}
@@ -1525,20 +1532,20 @@ export default function QrisExperimentPage() {
                       return (
                         <tr key={d.month} className="border-b border-[var(--border)] last:border-b-0">
                           <td className="px-4 py-2 font-medium text-[var(--text-primary)]">{d.month}</td>
-                          <td className="text-right px-4 py-2 font-mono text-xs text-[var(--text-primary)]">Rp {d.test_fee_rpu.toLocaleString()}K</td>
-                          <td className="text-right px-4 py-2 font-mono text-xs text-[var(--text-secondary)]">Rp {d.ctrl_fee_rpu.toLocaleString()}K</td>
+                          <td className="text-right px-4 py-2 font-mono text-xs text-[var(--text-primary)]">{fmtCur(d.test_fee_rpu * 1000)}</td>
+                          <td className="text-right px-4 py-2 font-mono text-xs text-[var(--text-secondary)]">{fmtCur(d.ctrl_fee_rpu * 1000)}</td>
                           <td className="text-right px-4 py-2">
                             <span className={cn("text-xs font-semibold", d.fee_delta >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400")}>
-                              {d.fee_delta >= 0 ? '+' : ''}{d.fee_delta}K
+                              {d.fee_delta >= 0 ? '+' : ''}{fmtCur(d.fee_delta * 1000)}
                             </span>
                           </td>
-                          <td className="text-right px-4 py-2 font-mono text-xs text-[var(--text-primary)]">Rp {d.test_txn_rpu.toLocaleString()}K</td>
-                          <td className="text-right px-4 py-2 font-mono text-xs text-[var(--text-secondary)]">Rp {d.ctrl_txn_rpu.toLocaleString()}K</td>
+                          <td className="text-right px-4 py-2 font-mono text-xs text-[var(--text-primary)]">{fmtCur(d.test_txn_rpu * 1000)}</td>
+                          <td className="text-right px-4 py-2 font-mono text-xs text-[var(--text-secondary)]">{fmtCur(d.ctrl_txn_rpu * 1000)}</td>
                           <td className="text-right px-4 py-2">
                             <span className={cn("inline-flex items-center gap-1 text-xs font-semibold rounded-full px-2 py-0.5",
                               netD >= 0 ? "text-emerald-600 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-950/30" : "text-red-600 bg-red-50 dark:text-red-400 dark:bg-red-950/30",
                             )}>
-                              {netD >= 0 ? '+' : ''}{netD}K
+                              {netD >= 0 ? '+' : ''}{fmtCur(netD * 1000)}
                             </span>
                           </td>
                         </tr>
@@ -1563,8 +1570,8 @@ export default function QrisExperimentPage() {
                     const last = chartData[chartData.length - 1];
                     const feeSurplusTrend = last.fee_delta >= 0 ? 'positive' : 'negative';
                     return breakeven
-                      ? `Fee revenue surplus is growing at Rp ${Math.abs(last.fee_delta)}K/user per month and is already ${feeSurplusTrend}. At this trajectory, the cumulative fee surplus will overcome the interchange deficit by ${breakeven}. Key driver: QRIS users carry higher revolving balances → more interest and admin fee income.`
-                      : `Fee revenue delta is ${feeSurplusTrend} (Rp ${last.fee_delta}K/user) but the interchange deficit (Rp ${Math.abs(last.txn_delta)}K/user) is growing faster. At current rates, fee surplus does not overcome interchange loss within 12 months. However, interest compounds on revolving balances — accelerating fee growth over time may close the gap.`;
+                      ? `Fee revenue surplus is growing at ${fmtCur(Math.abs(last.fee_delta) * 1000)}/user per month and is already ${feeSurplusTrend}. At this trajectory, the cumulative fee surplus will overcome the interchange deficit by ${breakeven}. Key driver: QRIS users carry higher revolving balances → more interest and admin fee income.`
+                      : `Fee revenue delta is ${feeSurplusTrend} (${fmtCur(last.fee_delta * 1000)}/user) but the interchange deficit (${fmtCur(Math.abs(last.txn_delta) * 1000)}/user) is growing faster. At current rates, fee surplus does not overcome interchange loss within 12 months. However, interest compounds on revolving balances — accelerating fee growth over time may close the gap.`;
                   })()}
                 </p>
               </div>

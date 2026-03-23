@@ -19,6 +19,7 @@ import { generateReportPdf } from "@/lib/report-pdf";
 import { SampleDataBanner, SampleDataBadge } from "@/components/dashboard/sample-data-banner";
 import { useTranslations } from "next-intl";
 import { useCurrency } from "@/hooks/use-currency";
+import { formatAmountCompact } from "@/lib/currency";
 import { useLanguage } from "@/hooks/use-language";
 
 import type { QueryInfo } from "@/components/query-inspector/query-inspector";
@@ -654,12 +655,7 @@ const funnelRows: FunnelRow[] = [
 
 // ── Formatting helpers ──────────────────────────────────────────────────────
 
-function formatIDR(value: number): string {
-  if (value >= 1_000_000_000_000) return `Rp ${(value / 1_000_000_000_000).toFixed(2)}T`;
-  if (value >= 1_000_000_000) return `Rp ${(value / 1_000_000_000).toFixed(2)}B`;
-  if (value >= 1_000_000) return `Rp ${(value / 1_000_000).toFixed(0)}M`;
-  return `Rp ${value.toLocaleString()}`;
-}
+// formatIDR replaced by imported formatAmountCompact(value, currency)
 
 function gapColor(gap: string): string {
   if (gap === "--" || gap === "") return "text-[var(--text-muted)]";
@@ -1098,7 +1094,7 @@ export default function OricoPageContent() {
                               {row.newlyAccounts.toLocaleString()}
                             </td>
                             <td className="py-2 px-3 text-right text-[var(--text-primary)]">
-                              {formatIDR(row.newlyLimit)}
+                              {formatAmountCompact(row.newlyLimit, currency)}
                             </td>
                             <td className="py-2 px-3 text-right text-[var(--text-primary)]">
                               {row.cumBookedCustomer.toLocaleString()}
@@ -1116,7 +1112,7 @@ export default function OricoPageContent() {
                         {portfolioSummary.reduce((s, r) => s + r.newlyAccounts, 0).toLocaleString()}
                       </td>
                       <td className="py-2 px-3 text-right text-[var(--text-primary)]">
-                        {formatIDR(portfolioSummary.reduce((s, r) => s + r.newlyLimit, 0))}
+                        {formatAmountCompact(portfolioSummary.reduce((s, r) => s + r.newlyLimit, 0), currency)}
                       </td>
                       <td className="py-2 px-3 text-right text-[var(--text-primary)]">
                         {portfolioSummary.reduce((s, r) => s + r.cumBookedCustomer, 0).toLocaleString()}
@@ -1152,10 +1148,10 @@ export default function OricoPageContent() {
                       <tr key={row.segment} className="border-b border-[var(--border)]">
                         <td className="py-2 px-3 text-[var(--text-primary)] font-medium">{row.segment}</td>
                         <td className="py-2 px-3 text-right text-[var(--text-primary)]">
-                          {formatIDR(row.provision)}
+                          {formatAmountCompact(row.provision, currency)}
                         </td>
                         <td className="py-2 px-3 text-right text-[var(--text-primary)]">
-                          {row.undrawnLimit > 0 ? formatIDR(row.undrawnLimit) : "--"}
+                          {row.undrawnLimit > 0 ? formatAmountCompact(row.undrawnLimit, currency) : "--"}
                         </td>
                         <td className="py-2 px-3 text-right font-medium text-[var(--text-primary)]">
                           {((row.provision / totalProvision) * 100).toFixed(1)}%
@@ -1164,8 +1160,8 @@ export default function OricoPageContent() {
                     ))}
                     <tr className="border-t-2 border-[var(--border)] font-semibold">
                       <td className="py-2 px-3 text-[var(--text-primary)]">Total</td>
-                      <td className="py-2 px-3 text-right text-[var(--text-primary)]">{formatIDR(totalProvision)}</td>
-                      <td className="py-2 px-3 text-right text-[var(--text-primary)]">{formatIDR(totalUndrawn)}</td>
+                      <td className="py-2 px-3 text-right text-[var(--text-primary)]">{formatAmountCompact(totalProvision, currency)}</td>
+                      <td className="py-2 px-3 text-right text-[var(--text-primary)]">{formatAmountCompact(totalUndrawn, currency)}</td>
                       <td className="py-2 px-3 text-right text-[var(--text-primary)]">100%</td>
                     </tr>
                   </tbody>
