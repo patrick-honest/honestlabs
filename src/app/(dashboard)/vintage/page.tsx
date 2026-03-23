@@ -7,7 +7,7 @@ import { usePeriod } from "@/hooks/use-period";
 import { useTranslations } from "next-intl";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 
-const AS_OF = "Mar 15, 2026";
+const AS_OF = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
 const actionItems: ActionItem[] = [
   {

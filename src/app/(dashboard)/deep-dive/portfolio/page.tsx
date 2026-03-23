@@ -16,8 +16,9 @@ import { useApiParams } from "@/hooks/use-api-params";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange } from "@/lib/period-data";
 import { useTranslations } from "next-intl";
+import { PrintStyles } from "@/components/layout/print-styles";
 
-const AS_OF = "Mar 15, 2026";
+const AS_OF = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -153,6 +154,7 @@ export default function PortfolioPage() {
 
   return (
     <div className="space-y-6">
+      <PrintStyles />
       <ActiveFiltersBanner />
 
       {/* KPI Row + Charts from weekly snapshot */}

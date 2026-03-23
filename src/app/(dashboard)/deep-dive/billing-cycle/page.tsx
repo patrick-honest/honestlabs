@@ -16,6 +16,7 @@ import { usePeriod } from "@/hooks/use-period";
 import { useApiParams } from "@/hooks/use-api-params";
 import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
+import { PrintStyles } from "@/components/layout/print-styles";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -163,6 +164,7 @@ export default function BillingCyclePage() {
 
   return (
     <div className="space-y-6 mt-4">
+      <PrintStyles />
       <ActiveFiltersBanner />
 
       {!overview && (

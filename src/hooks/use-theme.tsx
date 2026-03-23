@@ -26,7 +26,7 @@ function getStoredTheme(): Theme {
     const stored = localStorage.getItem("honest-theme");
     if (stored === "light" || stored === "dark") return stored;
   } catch { /* SSR or localStorage blocked */ }
-  return "light";
+  return "dark";
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {

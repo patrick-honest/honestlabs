@@ -24,7 +24,7 @@ import { useLanguage } from "@/hooks/use-language";
 
 import type { QueryInfo } from "@/components/query-inspector/query-inspector";
 
-const AS_OF = "Mar 15, 2026";
+const AS_OF = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
 // ── Print styles (injected once) ────────────────────────────────────────────
 const PRINT_STYLES = `

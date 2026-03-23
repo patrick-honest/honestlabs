@@ -21,8 +21,9 @@ import { useTranslations } from "next-intl";
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange, getPeriodInsightLabels } from "@/lib/period-data";
+import { PrintStyles } from "@/components/layout/print-styles";
 
-const AS_OF = "Mar 15, 2026";
+const AS_OF = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
 const stageToSqlValue: Record<string, string> = {
   "Mobile Verified": "Mobile verified",
@@ -253,6 +254,7 @@ export default function AcquisitionPage() {
 
   return (
     <div className="space-y-6">
+      <PrintStyles />
       <ActiveFiltersBanner />
 
       {/* KPI row — Decision Breakdown as MetricCards */}

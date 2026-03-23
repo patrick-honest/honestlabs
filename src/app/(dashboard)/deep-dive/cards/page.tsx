@@ -13,9 +13,11 @@ import { MetricCard } from "@/components/dashboard/metric-card";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 
+import { PrintStyles } from "@/components/layout/print-styles";
+
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
-const AS_OF = "Mar 19, 2026";
+const AS_OF = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
 const actionItems: ActionItem[] = [
   {
@@ -106,6 +108,7 @@ export default function CardsOverviewPage() {
 
   return (
     <div className="space-y-6">
+      <PrintStyles />
       <ActiveFiltersBanner />
 
       {/* KPI Metric Cards */}

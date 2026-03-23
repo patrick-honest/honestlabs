@@ -16,8 +16,9 @@ import { usePeriod } from "@/hooks/use-period";
 import { useApiParams } from "@/hooks/use-api-params";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange, getPeriodInsightLabels, scaleTrendData } from "@/lib/period-data";
+import { PrintStyles } from "@/components/layout/print-styles";
 
-const AS_OF = "Mar 15, 2026";
+const AS_OF = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 // DATA_RANGE is now computed inside the component via useMemo
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -179,6 +180,7 @@ export default function ActivationPage() {
 
   return (
     <div className="space-y-6">
+      <PrintStyles />
       <ActiveFiltersBanner />
 
       {/* KPI row — Activation summary MetricCards */}

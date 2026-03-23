@@ -93,7 +93,7 @@ const PRINT_STYLES = `
 [data-print-only] { display: none; }
 `;
 
-const AS_OF = "2026-03-19";
+const AS_OF = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
 // -- Action items --
 const actionItems: ActionItem[] = [

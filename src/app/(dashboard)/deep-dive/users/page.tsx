@@ -17,9 +17,11 @@ import { useApiParams } from "@/hooks/use-api-params";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange } from "@/lib/period-data";
 
+import { PrintStyles } from "@/components/layout/print-styles";
+
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
-const AS_OF = "Mar 19, 2026";
+const AS_OF = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
 const STATUS_LABELS: Record<string, string> = {
   G: "Good",
@@ -150,6 +152,7 @@ export default function UsersDeepDivePage() {
 
   return (
     <div className="space-y-6">
+      <PrintStyles />
       <ActiveFiltersBanner />
 
       {/* KPI Row */}

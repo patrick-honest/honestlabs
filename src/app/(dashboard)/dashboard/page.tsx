@@ -23,6 +23,7 @@ import { ChartSkeleton, MetricCardsSkeleton } from "@/components/dashboard/chart
 import { cn } from "@/lib/utils";
 import type { KpiMetric, Cycle } from "@/types/reports";
 import Link from "next/link";
+import { PrintStyles } from "@/components/layout/print-styles";
 
 // ── Health score computation ────────────────────────────────────────────────
 
@@ -322,6 +323,7 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col">
+      <PrintStyles />
       <Header title={tDash("title")} />
 
       <div className="flex-1 space-y-5 p-6">

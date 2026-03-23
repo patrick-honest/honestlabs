@@ -16,7 +16,7 @@ import { useApiParams } from "@/hooks/use-api-params";
 import { getPeriodRange } from "@/lib/period-data";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 
-const AS_OF = "2026-03-17";
+const AS_OF = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 const actionItems: ActionItem[] = [
