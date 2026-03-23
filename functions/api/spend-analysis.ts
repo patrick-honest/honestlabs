@@ -308,7 +308,7 @@ async function querySpendAnalysis(startDate: string, endDate: string, env: Env, 
         UNION DISTINCT SELECT DISTINCT week_start FROM regfee_per_week
         UNION DISTINCT SELECT DISTINCT week_start FROM unblocked_per_week
       )
-      SELECT FORMAT_DATE('%Y-%m-%d', w.week_start) AS week_start,
+      SELECT FORMAT_DATE('%Y-%m-%d', w.week_start + 7) AS week_start,
         ROUND(SAFE_DIVIDE(COALESCE(r.rp1_funded, 0), NULLIF(COALESCE(r.rp1_total, 0), 0)) * 100, 2) AS rp1_funded_rate,
         ROUND(SAFE_DIVIDE(COALESCE(rf.regfee_paid, 0), NULLIF(COALESCE(rf.regfee_total, 0), 0)) * 100, 2) AS regfee_paid_rate,
         ROUND(SAFE_DIVIDE(COALESCE(u.spend_activated, 0), NULLIF(COALESCE(u.unblocked_total, 0), 0)) * 100, 2) AS spend_activation_rate
