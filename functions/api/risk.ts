@@ -1,8 +1,10 @@
 import { runQuery, TABLES } from "../_shared/bigquery-client";
 import { createHandler } from "../_shared/handler";
 import type { Env } from "../_shared/bigquery-auth";
+import type { ParsedFilters } from "../_shared/filters";
+import { cycleDateWhere } from "../_shared/filters";
 
-async function queryRisk(startDate: string, endDate: string, env: Env) {
+async function queryRisk(startDate: string, endDate: string, env: Env, filters: ParsedFilters) {
   const [dpdTrend, balanceExposure] = await Promise.all([
     // DPD Distribution Trend — weekly snapshot with buckets
     // The page expects: week_start, current_count, dpd_1_30, dpd_31_60, dpd_61_90, dpd_90_plus, total_accounts, delinquency_rate_30plus
@@ -17,9 +19,10 @@ async function queryRisk(startDate: string, endDate: string, env: Env) {
             PARTITION BY p9_dw004_loc_acct, FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(f9_dw004_bus_dt, ISOWEEK))
             ORDER BY f9_dw004_bus_dt DESC
           ) AS rn
-        FROM ${TABLES.financial_account_updates}
-        WHERE f9_dw004_bus_dt BETWEEN @startDate AND @endDate
-          AND fx_dw004_loc_stat IN ('G', 'N')
+        FROM ${TABLES.financial_account_updates} dw4
+        WHERE dw4.f9_dw004_bus_dt BETWEEN @startDate AND @endDate
+          AND dw4.fx_dw004_loc_stat IN ('G', 'N')
+          ${cycleDateWhere(filters, 'dw4')}
       ),
       snapshot AS (
         SELECT * FROM weekly_snapshot WHERE rn = 1
@@ -49,9 +52,10 @@ async function queryRisk(startDate: string, endDate: string, env: Env) {
             PARTITION BY p9_dw004_loc_acct
             ORDER BY f9_dw004_bus_dt DESC
           ) AS rn
-        FROM ${TABLES.financial_account_updates}
-        WHERE f9_dw004_bus_dt <= @endDate
-          AND fx_dw004_loc_stat IN ('G', 'N')
+        FROM ${TABLES.financial_account_updates} dw4
+        WHERE dw4.f9_dw004_bus_dt <= @endDate
+          AND dw4.fx_dw004_loc_stat IN ('G', 'N')
+          ${cycleDateWhere(filters, 'dw4')}
       ),
       snapshot AS (
         SELECT * FROM ranked WHERE rn = 1

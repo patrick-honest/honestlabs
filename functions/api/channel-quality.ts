@@ -1,8 +1,10 @@
 import { runQuery, TABLES } from "../_shared/bigquery-client";
 import { createHandler } from "../_shared/handler";
 import type { Env } from "../_shared/bigquery-auth";
+import type { ParsedFilters } from "../_shared/filters";
+import { productTypeWhere, cycleDateWhere } from "../_shared/filters";
 
-async function queryChannelQuality(startDate: string, endDate: string, env: Env) {
+async function queryChannelQuality(startDate: string, endDate: string, env: Env, filters: ParsedFilters) {
   const channelQuality = await runQuery(
     `WITH applicants AS (
       SELECT user_id, COALESCE(NULLIF(context_traits_first_utm_source, ''), 'organic') AS utm_source
@@ -11,8 +13,9 @@ async function queryChannelQuality(startDate: string, endDate: string, env: Env)
       GROUP BY user_id, utm_source
     ),
     decisions AS (
-      SELECT user_id, decision FROM ${TABLES.decision_completed}
-      WHERE DATE(timestamp, 'Asia/Jakarta') BETWEEN @startDate AND @endDate
+      SELECT user_id, decision FROM ${TABLES.decision_completed} dc
+      WHERE DATE(dc.timestamp, 'Asia/Jakarta') BETWEEN @startDate AND @endDate
+        ${productTypeWhere(filters, 'dc')}
     ),
     approved_users AS (
       SELECT DISTINCT d.user_id, a.utm_source FROM decisions d
@@ -23,6 +26,7 @@ async function queryChannelQuality(startDate: string, endDate: string, env: Env)
       FROM ${TABLES.financial_account_updates} dw4
       JOIN ${TABLES.cms_line_of_credit} cloc ON dw4.p9_dw004_loc_acct = cloc.external_id
       WHERE dw4.f9_dw004_bus_dt = (SELECT MAX(f9_dw004_bus_dt) FROM ${TABLES.financial_account_updates})
+        ${cycleDateWhere(filters, 'dw4')}
     )
     SELECT a.utm_source,
       COUNT(DISTINCT a.user_id) AS reached_decision,

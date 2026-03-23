@@ -1,15 +1,16 @@
 /**
  * Generic request handler for deep-dive endpoints.
- * Each endpoint provides a query function that receives date params and env,
+ * Each endpoint provides a query function that receives date params, filters, and env,
  * and returns the data to send as JSON.
  */
 
 import type { Env } from "./bigquery-auth";
 import { getCached, setCached, cacheKey } from "./cache";
+import { parseFilters, hasAnyFilter, type ParsedFilters } from "./filters";
 
 interface HandlerOptions {
   section: string;
-  queryFn: (startDate: string, endDate: string, env: Env) => Promise<unknown>;
+  queryFn: (startDate: string, endDate: string, env: Env, filters: ParsedFilters) => Promise<unknown>;
   cacheTtl?: number;
 }
 
@@ -29,32 +30,46 @@ export function createHandler(options: HandlerOptions) {
       );
     }
 
-    try {
-      const key = cacheKey(section, "query", startDate);
+    const filters = parseFilters(url);
+    const hasFilters = hasAnyFilter(filters);
 
-      // Check cache
-      const cached = await getCached<unknown>(key, env.KPI_CACHE);
-      if (cached && cached.fresh) {
-        return new Response(JSON.stringify(cached.data), {
-          headers: {
-            "Content-Type": "application/json",
-            "Cache-Control": "public, max-age=300",
-            "X-Cache": "HIT-FRESH",
-          },
-        });
+    try {
+      // Include filter params in cache key so filtered/unfiltered results are cached separately
+      const filterKey = hasFilters
+        ? Object.entries(filters)
+            .filter(([, v]) => v.length > 0)
+            .map(([k, v]) => `${k}=${v.sort().join("+")}`)
+            .join("&")
+        : "";
+      const key = cacheKey(section, "query", `${startDate}:${filterKey}`);
+
+      // Check cache (skip cache for filtered queries to keep it simple)
+      if (!hasFilters) {
+        const cached = await getCached<unknown>(key, env.KPI_CACHE);
+        if (cached && cached.fresh) {
+          return new Response(JSON.stringify(cached.data), {
+            headers: {
+              "Content-Type": "application/json",
+              "Cache-Control": "public, max-age=300",
+              "X-Cache": "HIT-FRESH",
+            },
+          });
+        }
       }
 
-      // Query BigQuery
-      const result = await queryFn(startDate, endDate, env);
+      // Query BigQuery with filters
+      const result = await queryFn(startDate, endDate, env, filters);
 
-      // Cache
-      await setCached(key, result, env.KPI_CACHE, cacheTtl);
+      // Cache unfiltered results only
+      if (!hasFilters) {
+        await setCached(key, result, env.KPI_CACHE, cacheTtl);
+      }
 
       return new Response(JSON.stringify(result), {
         headers: {
           "Content-Type": "application/json",
-          "Cache-Control": "public, max-age=300",
-          "X-Cache": cached ? "HIT-STALE" : "MISS",
+          "Cache-Control": hasFilters ? "no-cache" : "public, max-age=300",
+          "X-Cache": "MISS",
         },
       });
     } catch (error) {

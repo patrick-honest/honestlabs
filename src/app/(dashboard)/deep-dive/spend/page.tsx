@@ -9,7 +9,8 @@ import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
-import { usePeriod, useDateParams } from "@/hooks/use-period";
+import { usePeriod } from "@/hooks/use-period";
+import { useApiParams } from "@/hooks/use-api-params";
 import { useFilters } from "@/hooks/use-filters";
 import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { getPeriodRange, getPeriodInsightLabels } from "@/lib/period-data";
@@ -50,7 +51,7 @@ const actionItems: ActionItem[] = [
 
 export default function SpendPage() {
   const { period } = usePeriod();
-  const { dateParams } = useDateParams();
+  const { apiParams } = useApiParams();
   const { filters } = useFilters();
   const { locale } = useLanguage();
   const { currency } = useCurrency();
@@ -117,9 +118,9 @@ export default function SpendPage() {
   }, []);
 
   // --- Spend Analysis SWR (with mock fallback) ---
-  // dateParams changes when the user adjusts the time selector → triggers SWR refetch
+  // apiParams changes when the user adjusts the time selector → triggers SWR refetch
   const { data: spendAnalysis } = useSWR(
-    `/api/spend-analysis?${dateParams}`,
+    `/api/spend-analysis?${apiParams}`,
     fetcher,
     { fallbackData: null, revalidateOnFocus: false },
   );

@@ -1,6 +1,8 @@
 import { runQuery, TABLES } from "../_shared/bigquery-client";
 import { createHandler } from "../_shared/handler";
 import type { Env } from "../_shared/bigquery-auth";
+import type { ParsedFilters } from "../_shared/filters";
+import { productTypeWhere } from "../_shared/filters";
 
 const FUNNEL_STAGES = [
   "OTP login started", "Mobile verified", "Application agreements accepted", "KYC complete",
@@ -18,7 +20,7 @@ const STAGE_LABELS: Record<string, string> = {
   "Tutorial complete": "Tutorial Complete", "Delivery Address Entered": "Delivery Address", "PIN set": "PIN Set",
 };
 
-async function queryAcquisition(startDate: string, endDate: string, env: Env) {
+async function queryAcquisition(startDate: string, endDate: string, env: Env, filters: ParsedFilters) {
   const stageList = FUNNEL_STAGES.map(s => `'${s}'`).join(", ");
   const flagCols = FUNNEL_STAGES.map((s, i) => `MAX(CASE WHEN stage='${s}' THEN 1 ELSE 0 END) AS s${i}`).join(",\n");
   const cumulativeUnions = FUNNEL_STAGES.map((s, i) => {
@@ -37,9 +39,9 @@ async function queryAcquisition(startDate: string, endDate: string, env: Env) {
       SELECT stage, count FROM cumulative_funnel`,
       { startDate, endDate }, env,
     ),
-    runQuery(`SELECT decision, COUNT(*) AS cnt FROM ${TABLES.decision_completed} WHERE DATE(timestamp,'Asia/Jakarta') BETWEEN @startDate AND @endDate GROUP BY decision`, { startDate, endDate }, env),
-    runQuery(`SELECT CASE WHEN is_prepaid_card_applicable=TRUE THEN 'RP1' WHEN is_account_opening_fee_applicable=TRUE THEN 'Registration Fee' ELSE 'Standard CC' END AS product_type, COUNT(*) AS cnt FROM ${TABLES.decision_completed} WHERE decision='APPROVED' AND DATE(timestamp,'Asia/Jakarta') BETWEEN @startDate AND @endDate GROUP BY product_type`, { startDate, endDate }, env),
-    runQuery(`SELECT FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(DATE(timestamp,'Asia/Jakarta'), WEEK(MONDAY))) AS week_start, COUNT(*) AS total, COUNTIF(decision='APPROVED') AS approved, ROUND(SAFE_DIVIDE(COUNTIF(decision='APPROVED'), COUNT(*))*100,2) AS approval_rate FROM ${TABLES.decision_completed} WHERE DATE(timestamp,'Asia/Jakarta') BETWEEN @startDate AND @endDate GROUP BY week_start ORDER BY week_start`, { startDate, endDate }, env),
+    runQuery(`SELECT decision, COUNT(*) AS cnt FROM ${TABLES.decision_completed} dc WHERE DATE(dc.timestamp,'Asia/Jakarta') BETWEEN @startDate AND @endDate ${productTypeWhere(filters, 'dc')} GROUP BY decision`, { startDate, endDate }, env),
+    runQuery(`SELECT CASE WHEN dc.is_prepaid_card_applicable=TRUE THEN 'RP1' WHEN dc.is_account_opening_fee_applicable=TRUE THEN 'Registration Fee' ELSE 'Standard CC' END AS product_type, COUNT(*) AS cnt FROM ${TABLES.decision_completed} dc WHERE dc.decision='APPROVED' AND DATE(dc.timestamp,'Asia/Jakarta') BETWEEN @startDate AND @endDate ${productTypeWhere(filters, 'dc')} GROUP BY product_type`, { startDate, endDate }, env),
+    runQuery(`SELECT FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(DATE(dc.timestamp,'Asia/Jakarta'), WEEK(MONDAY))) AS week_start, COUNT(*) AS total, COUNTIF(dc.decision='APPROVED') AS approved, ROUND(SAFE_DIVIDE(COUNTIF(dc.decision='APPROVED'), COUNT(*))*100,2) AS approval_rate FROM ${TABLES.decision_completed} dc WHERE DATE(dc.timestamp,'Asia/Jakarta') BETWEEN @startDate AND @endDate ${productTypeWhere(filters, 'dc')} GROUP BY week_start ORDER BY week_start`, { startDate, endDate }, env),
   ]);
 
   // Build funnel with conversion rates

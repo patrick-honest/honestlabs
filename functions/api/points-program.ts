@@ -1,8 +1,9 @@
 import { runQuery, TABLES } from "../_shared/bigquery-client";
 import { createHandler } from "../_shared/handler";
 import type { Env } from "../_shared/bigquery-auth";
+import type { ParsedFilters } from "../_shared/filters";
 
-async function queryPointsProgram(startDate: string, endDate: string, env: Env) {
+async function queryPointsProgram(startDate: string, endDate: string, env: Env, filters: ParsedFilters) {
   const [summary, flowTrend, closingBalance, redemptionBreakdown] = await Promise.all([
     runQuery(
       `SELECT FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(data_delivered_date, ISOWEEK)) AS week_start,

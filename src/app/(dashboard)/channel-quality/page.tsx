@@ -10,7 +10,8 @@ import { ActionItems, type ActionItem } from "@/components/dashboard/action-item
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
-import { usePeriod, useDateParams } from "@/hooks/use-period";
+import { usePeriod } from "@/hooks/use-period";
+import { useApiParams } from "@/hooks/use-api-params";
 import { useFilters } from "@/hooks/use-filters";
 import { getPeriodRange } from "@/lib/period-data";
 import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
@@ -59,12 +60,12 @@ interface ChannelRow {
 export default function ChannelQualityPage() {
   const tNav = useTranslations("nav");
   const { period } = usePeriod();
-  const { dateParams } = useDateParams();
+  const { apiParams } = useApiParams();
   const { filters } = useFilters();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
   const { data: apiData } = useSWR(
-    `/api/channel-quality?${dateParams}`,
+    `/api/channel-quality?${apiParams}`,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 300_000 },
   );

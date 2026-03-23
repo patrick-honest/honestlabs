@@ -1,20 +1,23 @@
 import { runQuery, TABLES } from "../_shared/bigquery-client";
 import { createHandler } from "../_shared/handler";
 import type { Env } from "../_shared/bigquery-auth";
+import type { ParsedFilters } from "../_shared/filters";
+import { cycleDateWhere } from "../_shared/filters";
 
-async function queryUsersOverview(startDate: string, endDate: string, env: Env) {
+async function queryUsersOverview(startDate: string, endDate: string, env: Env, filters: ParsedFilters) {
   const [statusBreakdown, deviceBreakdown, geoDeepDive, accountGrowth] = await Promise.all([
     // Account Status Distribution from latest DW004 snapshot
     // Page expects: status, accounts
     runQuery(
       `SELECT
-        fx_dw004_loc_stat AS status,
-        COUNT(DISTINCT p9_dw004_loc_acct) AS accounts
-      FROM ${TABLES.financial_account_updates}
-      WHERE f9_dw004_bus_dt = (
+        dw4.fx_dw004_loc_stat AS status,
+        COUNT(DISTINCT dw4.p9_dw004_loc_acct) AS accounts
+      FROM ${TABLES.financial_account_updates} dw4
+      WHERE dw4.f9_dw004_bus_dt = (
         SELECT MAX(f9_dw004_bus_dt)
         FROM ${TABLES.financial_account_updates}
       )
+        ${cycleDateWhere(filters, 'dw4')}
       GROUP BY status
       ORDER BY accounts DESC`,
       undefined,
@@ -59,15 +62,16 @@ async function queryUsersOverview(startDate: string, endDate: string, env: Env) 
     runQuery(
       `WITH monthly AS (
         SELECT
-          FORMAT_DATE('%Y-%m', f9_dw004_bus_dt) AS month,
-          p9_dw004_loc_acct,
+          FORMAT_DATE('%Y-%m', dw4.f9_dw004_bus_dt) AS month,
+          dw4.p9_dw004_loc_acct,
           ROW_NUMBER() OVER (
-            PARTITION BY p9_dw004_loc_acct, FORMAT_DATE('%Y-%m', f9_dw004_bus_dt)
-            ORDER BY f9_dw004_bus_dt DESC
+            PARTITION BY dw4.p9_dw004_loc_acct, FORMAT_DATE('%Y-%m', dw4.f9_dw004_bus_dt)
+            ORDER BY dw4.f9_dw004_bus_dt DESC
           ) AS rn
-        FROM ${TABLES.financial_account_updates}
-        WHERE f9_dw004_bus_dt BETWEEN @startDate AND @endDate
-          AND fx_dw004_loc_stat IN ('G', 'N')
+        FROM ${TABLES.financial_account_updates} dw4
+        WHERE dw4.f9_dw004_bus_dt BETWEEN @startDate AND @endDate
+          AND dw4.fx_dw004_loc_stat IN ('G', 'N')
+          ${cycleDateWhere(filters, 'dw4')}
       ),
       monthly_counts AS (
         SELECT

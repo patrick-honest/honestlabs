@@ -1,8 +1,9 @@
 import { runQuery, TABLES } from "../_shared/bigquery-client";
 import { createHandler } from "../_shared/handler";
 import type { Env } from "../_shared/bigquery-auth";
+import type { ParsedFilters } from "../_shared/filters";
 
-async function queryCustomerService(startDate: string, endDate: string, env: Env) {
+async function queryCustomerService(startDate: string, endDate: string, env: Env, filters: ParsedFilters) {
   const [weeklyTicketTrend, topContactReasons] = await Promise.all([
     // Weekly Ticket Trend — volume, resolved, response & resolution times
     // Page expects: week_start, ticket_count, resolved_count, avg_first_response_hrs, avg_resolution_hrs

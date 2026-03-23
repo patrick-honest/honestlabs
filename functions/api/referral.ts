@@ -1,8 +1,9 @@
 import { runQuery, TABLES } from "../_shared/bigquery-client";
 import { createHandler } from "../_shared/handler";
 import type { Env } from "../_shared/bigquery-auth";
+import type { ParsedFilters } from "../_shared/filters";
 
-async function queryReferral(startDate: string, endDate: string, env: Env) {
+async function queryReferral(startDate: string, endDate: string, env: Env, filters: ParsedFilters) {
   const [funnel, byChannel, funnelTrend, approvalRate, perUser] = await Promise.all([
     // Weekly referral funnel
     runQuery(

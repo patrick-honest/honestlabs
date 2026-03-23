@@ -9,7 +9,8 @@ import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { HorizontalBar } from "@/components/charts/horizontal-bar";
-import { usePeriod, useDateParams } from "@/hooks/use-period";
+import { usePeriod } from "@/hooks/use-period";
+import { useApiParams } from "@/hooks/use-api-params";
 import { useFilters } from "@/hooks/use-filters";
 import { getPeriodRange, getPeriodInsightLabels } from "@/lib/period-data";
 import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
@@ -21,7 +22,7 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export default function CustomerServicePage() {
   const { period } = usePeriod();
-  const { dateParams } = useDateParams();
+  const { apiParams } = useApiParams();
   const { filters } = useFilters();
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
@@ -55,7 +56,7 @@ export default function CustomerServicePage() {
 
   // --- SWR fetch ---
   const { data: csData } = useSWR(
-    `/api/customer-service?${dateParams}`,
+    `/api/customer-service?${apiParams}`,
     fetcher,
     { fallbackData: null, revalidateOnFocus: false },
   );

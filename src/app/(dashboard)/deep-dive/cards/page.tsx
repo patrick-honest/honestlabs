@@ -2,7 +2,8 @@
 
 import { useCallback, useMemo } from "react";
 import useSWR from "swr";
-import { usePeriod, useDateParams } from "@/hooks/use-period";
+import { usePeriod } from "@/hooks/use-period";
+import { useApiParams } from "@/hooks/use-api-params";
 import { useFilters } from "@/hooks/use-filters";
 import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { getPeriodRange } from "@/lib/period-data";
@@ -40,12 +41,12 @@ const actionItems: ActionItem[] = [
 
 export default function CardsOverviewPage() {
   const { period } = usePeriod();
-  const { dateParams } = useDateParams();
+  const { apiParams } = useApiParams();
   const { filters } = useFilters();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
   const { data: apiData } = useSWR(
-    `/api/cards-overview?${dateParams}`,
+    `/api/cards-overview?${apiParams}`,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 300_000 },
   );

@@ -9,7 +9,8 @@ import { DashboardLineChart } from "@/components/charts/line-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
-import { usePeriod, useDateParams } from "@/hooks/use-period";
+import { usePeriod } from "@/hooks/use-period";
+import { useApiParams } from "@/hooks/use-api-params";
 import { useFilters } from "@/hooks/use-filters";
 import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { useTheme } from "@/hooks/use-theme";
@@ -23,13 +24,13 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export default function BillingCyclePage() {
   const { period, dateRange } = usePeriod();
-  const { dateParams } = useDateParams();
+  const { apiParams } = useApiParams();
   const { isDark } = useTheme();
   const { filters } = useFilters();
 
   // Fetch real data from BigQuery
   const { data: apiData } = useSWR(
-    `/api/billing-cycle?${dateParams}`,
+    `/api/billing-cycle?${apiParams}`,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 300_000 },
   );

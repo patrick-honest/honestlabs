@@ -1,19 +1,22 @@
 import { runQuery, TABLES } from "../_shared/bigquery-client";
 import { createHandler } from "../_shared/handler";
 import type { Env } from "../_shared/bigquery-auth";
+import type { ParsedFilters } from "../_shared/filters";
+import { cardTypeWhere } from "../_shared/filters";
 
-async function queryCardsOverview(startDate: string, endDate: string, env: Env) {
+async function queryCardsOverview(startDate: string, endDate: string, env: Env, filters: ParsedFilters) {
   const [cardStatusRaw, cardProgramBreakdown, verificationBreakdown] = await Promise.all([
     // Card Status Distribution (latest DW005 snapshot, last 7 days)
     // Page expects cardStatusBreakdown: { status, accounts }
     // Raw query returns card_status + brand, we'll aggregate to just status
     runQuery(
       `SELECT
-        COALESCE(fx_dw005_crd_stat, 'Active') AS card_status,
-        fx_dw005_crd_brn AS brand,
-        COUNT(DISTINCT f9_dw005_loc_acct) AS accounts
-      FROM ${TABLES.principal_card_updates}
-      WHERE f9_dw005_upd_tms >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
+        COALESCE(pc.fx_dw005_crd_stat, 'Active') AS card_status,
+        pc.fx_dw005_crd_brn AS brand,
+        COUNT(DISTINCT pc.f9_dw005_loc_acct) AS accounts
+      FROM ${TABLES.principal_card_updates} pc
+      WHERE pc.f9_dw005_upd_tms >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
+        ${cardTypeWhere(filters, 'pc')}
       GROUP BY 1, 2
       ORDER BY accounts DESC`,
       undefined,
@@ -24,11 +27,12 @@ async function queryCardsOverview(startDate: string, endDate: string, env: Env) 
     // Page expects: card_pgm, brand, accounts
     runQuery(
       `SELECT
-        fx_dw005_crd_pgm AS card_pgm,
-        fx_dw005_crd_brn AS brand,
-        COUNT(DISTINCT f9_dw005_loc_acct) AS accounts
-      FROM ${TABLES.principal_card_updates}
-      WHERE f9_dw005_upd_tms >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
+        pc.fx_dw005_crd_pgm AS card_pgm,
+        pc.fx_dw005_crd_brn AS brand,
+        COUNT(DISTINCT pc.f9_dw005_loc_acct) AS accounts
+      FROM ${TABLES.principal_card_updates} pc
+      WHERE pc.f9_dw005_upd_tms >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
+        ${cardTypeWhere(filters, 'pc')}
       GROUP BY 1, 2
       ORDER BY accounts DESC`,
       undefined,

@@ -1,8 +1,10 @@
 import { runQuery, TABLES } from "../_shared/bigquery-client";
 import { createHandler } from "../_shared/handler";
 import type { Env } from "../_shared/bigquery-auth";
+import type { ParsedFilters } from "../_shared/filters";
+import { cycleDateWhere } from "../_shared/filters";
 
-async function queryRepayments(startDate: string, endDate: string, env: Env) {
+async function queryRepayments(startDate: string, endDate: string, env: Env, filters: ParsedFilters) {
   const [weeklyTrend, byVendor, timeliness] = await Promise.all([
     // Weekly Repayment Trend (from DW009 posted_transaction, payment codes)
     runQuery(
@@ -35,10 +37,11 @@ async function queryRepayments(startDate: string, endDate: string, env: Env) {
     // Repayment Timeliness (DPD bucket snapshot from DW004)
     runQuery(
       `WITH latest AS (
-        SELECT p9_dw004_loc_acct, f9_dw004_curr_dpd,
-          ROW_NUMBER() OVER (PARTITION BY p9_dw004_loc_acct ORDER BY f9_dw004_bus_dt DESC) AS rn
-        FROM ${TABLES.financial_account_updates}
-        WHERE f9_dw004_bus_dt <= @endDate AND fx_dw004_loc_stat IN ('G','N')
+        SELECT dw4.p9_dw004_loc_acct, dw4.f9_dw004_curr_dpd,
+          ROW_NUMBER() OVER (PARTITION BY dw4.p9_dw004_loc_acct ORDER BY dw4.f9_dw004_bus_dt DESC) AS rn
+        FROM ${TABLES.financial_account_updates} dw4
+        WHERE dw4.f9_dw004_bus_dt <= @endDate AND dw4.fx_dw004_loc_stat IN ('G','N')
+          ${cycleDateWhere(filters, 'dw4')}
       ),
       bucketed AS (
         SELECT CASE

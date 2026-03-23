@@ -8,7 +8,8 @@ import { ActionItems, type ActionItem } from "@/components/dashboard/action-item
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
-import { usePeriod, useDateParams } from "@/hooks/use-period";
+import { usePeriod } from "@/hooks/use-period";
+import { useApiParams } from "@/hooks/use-api-params";
 import { useFilters } from "@/hooks/use-filters";
 import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
@@ -43,10 +44,10 @@ export default function RiskPage() {
   const { period } = usePeriod();
   const { filters } = useFilters();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
-  const { dateParams } = useDateParams();
+  const { apiParams } = useApiParams();
 
   const { data: apiData } = useSWR(
-    `/api/risk?${dateParams}`,
+    `/api/risk?${apiParams}`,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 300_000 },
   );

@@ -4,7 +4,8 @@ import { useCallback, useMemo } from "react";
 import useSWR from "swr";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
-import { usePeriod, useDateParams } from "@/hooks/use-period";
+import { usePeriod } from "@/hooks/use-period";
+import { useApiParams } from "@/hooks/use-api-params";
 import { useFilters } from "@/hooks/use-filters";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange, getPeriodInsightLabels } from "@/lib/period-data";
@@ -15,13 +16,13 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export default function CollectionsPage() {
   const { period } = usePeriod();
-  const { dateParams } = useDateParams();
+  const { apiParams } = useApiParams();
   const { filters } = useFilters();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
   const { data: apiData } = useSWR(
-    `/api/collections?${dateParams}`,
+    `/api/collections?${apiParams}`,
     fetcher,
     { fallbackData: null, revalidateOnFocus: false },
   );

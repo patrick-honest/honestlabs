@@ -9,7 +9,8 @@ import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
-import { usePeriod, useDateParams } from "@/hooks/use-period";
+import { usePeriod } from "@/hooks/use-period";
+import { useApiParams } from "@/hooks/use-api-params";
 import { useFilters } from "@/hooks/use-filters";
 import { applyFilterToData } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
@@ -45,12 +46,12 @@ const actionItems: ActionItem[] = [
 export default function ActivationPage() {
   const { period } = usePeriod();
   const { filters } = useFilters();
-  const { dateParams } = useDateParams();
+  const { apiParams } = useApiParams();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
   const { data: apiData } = useSWR(
-    `/api/activation?${dateParams}`,
+    `/api/activation?${apiParams}`,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 300_000 },
   );

@@ -9,7 +9,8 @@ import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-i
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
-import { usePeriod, useDateParams } from "@/hooks/use-period";
+import { usePeriod } from "@/hooks/use-period";
+import { useApiParams } from "@/hooks/use-api-params";
 import { useFilters } from "@/hooks/use-filters";
 import { getPeriodRange, getPeriodInsightLabels } from "@/lib/period-data";
 import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
@@ -47,13 +48,13 @@ const actionItems: ActionItem[] = [
 
 export default function ReferralPage() {
   const { period } = usePeriod();
-  const { dateParams } = useDateParams();
+  const { apiParams } = useApiParams();
   const { filters } = useFilters();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
 
   const { data: apiData } = useSWR(
-    `/api/referral?${dateParams}`,
+    `/api/referral?${apiParams}`,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 300_000 },
   );

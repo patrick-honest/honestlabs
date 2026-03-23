@@ -9,7 +9,8 @@ import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { HorizontalBar } from "@/components/charts/horizontal-bar";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
-import { usePeriod, useDateParams } from "@/hooks/use-period";
+import { usePeriod } from "@/hooks/use-period";
+import { useApiParams } from "@/hooks/use-api-params";
 import { useFilters } from "@/hooks/use-filters";
 import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
@@ -54,12 +55,12 @@ const actionItems: ActionItem[] = [
 
 export default function UsersDeepDivePage() {
   const { period } = usePeriod();
-  const { dateParams } = useDateParams();
+  const { apiParams } = useApiParams();
   const { filters } = useFilters();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
   const { data: apiData } = useSWR(
-    `/api/users-overview?${dateParams}`,
+    `/api/users-overview?${apiParams}`,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 300_000 },
   );

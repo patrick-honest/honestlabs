@@ -9,7 +9,8 @@ import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
 import { HorizontalBar } from "@/components/charts/horizontal-bar";
-import { usePeriod, useDateParams } from "@/hooks/use-period";
+import { usePeriod } from "@/hooks/use-period";
+import { useApiParams } from "@/hooks/use-api-params";
 import { useFilters } from "@/hooks/use-filters";
 import { getPeriodRange } from "@/lib/period-data";
 import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
@@ -49,14 +50,14 @@ const actionItems: ActionItem[] = [
 
 export default function TransactionAuthPage() {
   const { period } = usePeriod();
-  const { dateParams } = useDateParams();
+  const { apiParams } = useApiParams();
   const { filters } = useFilters();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
   // --- SWR fetch from API ---
   const { data: apiData } = useSWR(
-    `/api/transaction-auth?${dateParams}`,
+    `/api/transaction-auth?${apiParams}`,
     fetcher,
     { fallbackData: null, revalidateOnFocus: false },
   );

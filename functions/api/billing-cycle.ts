@@ -1,8 +1,10 @@
 import { runQuery, TABLES } from "../_shared/bigquery-client";
 import { createHandler } from "../_shared/handler";
 import type { Env } from "../_shared/bigquery-auth";
+import type { ParsedFilters } from "../_shared/filters";
+import { cycleDateWhere } from "../_shared/filters";
 
-async function queryBillingCycle(startDate: string, endDate: string, env: Env) {
+async function queryBillingCycle(startDate: string, endDate: string, env: Env, filters: ParsedFilters) {
   const [overview, revolveTrend, utilizationDistribution, dpdDistribution, balanceTrend, paymentBehavior] = await Promise.all([
     // 1. Cycle Overview — snapshot for endDate (latest business date)
     // Page expects: cycle_day, total_accounts, with_balance, revolving, revolve_rate,
