@@ -84,8 +84,23 @@ async function queryQrisExperiment(
           AND t.f9_dw007_ori_amt > 0
       ),
       user_spend AS (
-        SELECT user_id, grp, SUM(spend_idr) AS total_spend, COUNT(*) AS txn_count
+        SELECT user_id, grp, COALESCE(SUM(spend_idr), 0) AS total_spend, COUNT(*) AS txn_count
         FROM auth_trx GROUP BY user_id, grp
+      ),
+      -- Include non-transactors (spend=0) for accurate stddev across entire cohort
+      cohort_user_spend AS (
+        SELECT co.user_id, co.grp,
+          COALESCE(us.total_spend, 0) AS total_spend,
+          COALESCE(us.txn_count, 0) AS txn_count
+        FROM clean_cohort co
+        LEFT JOIN user_spend us ON co.user_id = us.user_id
+      ),
+      grp_stddev AS (
+        SELECT grp,
+          ROUND(STDDEV_POP(total_spend), 2) AS std_dev_spend,
+          ROUND(STDDEV_POP(CAST(txn_count AS FLOAT64)), 2) AS std_dev_txns
+        FROM cohort_user_spend
+        GROUP BY grp
       )
       SELECT
         co.grp,
@@ -100,12 +115,13 @@ async function queryQrisExperiment(
         ROUND(COALESCE(SUM(a.spend_idr), 0) / NULLIF(COUNT(DISTINCT co.user_id), 0), 2) AS avg_spend_per_eligible_user,
         ROUND(CAST(COUNT(a.user_id) AS FLOAT64) / NULLIF(COUNT(DISTINCT a.user_id), 0), 1) AS txn_per_user,
         ROUND(100.0 * COUNT(DISTINCT a.user_id) / COUNT(DISTINCT co.user_id), 1) AS sar,
-        -- For confidence intervals
-        ROUND(COALESCE((SELECT STDDEV_POP(us.total_spend) FROM user_spend us WHERE us.grp = co.grp), 0), 2) AS std_dev_spend,
-        ROUND(COALESCE((SELECT STDDEV_POP(CAST(us.txn_count AS FLOAT64)) FROM user_spend us WHERE us.grp = co.grp), 0), 2) AS std_dev_txns
+        -- For confidence intervals (pre-computed via JOIN, no correlated subquery)
+        sd.std_dev_spend,
+        sd.std_dev_txns
       FROM clean_cohort co
       LEFT JOIN auth_trx a ON co.user_id = a.user_id
-      GROUP BY co.grp
+      LEFT JOIN grp_stddev sd ON co.grp = sd.grp
+      GROUP BY co.grp, sd.std_dev_spend, sd.std_dev_txns
       ORDER BY co.grp`,
       { startDate: effectiveStart, endDate },
       env,
