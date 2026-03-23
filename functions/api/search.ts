@@ -99,7 +99,7 @@ async function resolveToUserId(field: string, value: string, env: Env): Promise<
 async function searchUserById(userId: string, env: Env) {
   const mainSql = `
     WITH loc AS (
-      SELECT user_id, external_id AS loc_acct, status, credit_limit
+      SELECT user_id, external_id AS loc_acct, status
       FROM ${TABLES.cms_line_of_credit} WHERE user_id = @userId LIMIT 1
     ),
     card_latest AS (
@@ -116,6 +116,7 @@ async function searchUserById(userId: string, env: Env) {
         FORMAT_DATE('%Y-%m-%d', dw4.f9_dw004_stmt_due_dt) AS next_due_date,
         dw4.f9_dw004_curr_min_rpmt / 100.0 AS current_min_due,
         dw4.f9_dw004_curr_dpd AS current_dpd,
+        dw4.f9_dw004_loc_lmt AS credit_limit,
         dw4.fx_dw004_loc_stat AS account_status,
         dw4.fx_dw004_coll_stat_cde AS collections_status,
         dw4.fx_dw004_restrct_stat AS restriction_status,
@@ -155,7 +156,7 @@ async function searchUserById(userId: string, env: Env) {
       SELECT FORMAT_DATE('%Y-%m-%d', DATE(MIN(timestamp), 'Asia/Jakarta')) AS cma_accepted_date, MIN(context_app_version) AS cma_app_version
       FROM ${TABLES.milestone_complete} WHERE user_id = @userId AND application_status = 'Cardholder agreement accepted'
     )
-    SELECT @userId AS user_id, loc.loc_acct, loc.credit_limit, cl.prin_crn, cl.urn AS current_urn,
+    SELECT @userId AS user_id, loc.loc_acct, acct.credit_limit, cl.prin_crn, cl.urn AS current_urn,
       cl.urn_date AS current_urn_date, cl.card_type, cl.product_type AS card_pgm, cl.card_brand,
       FORMAT_DATETIME('%Y-%m-%d', cl.activation_ts) AS card_activation_date,
       acct.cycle_date, acct.next_due_date, acct.current_min_due, acct.current_dpd,
