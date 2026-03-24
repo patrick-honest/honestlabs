@@ -19,6 +19,15 @@ const nextConfig: NextConfig = {
           "@prisma/adapter-better-sqlite3",
           "better-sqlite3",
         ],
+        // Proxy /api/* to local API server in dev mode
+        async rewrites() {
+          return [
+            {
+              source: "/api/:path*",
+              destination: "http://localhost:3099/api/:path*",
+            },
+          ];
+        },
       }),
   turbopack: {},
 };

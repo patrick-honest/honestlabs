@@ -109,6 +109,21 @@ async function getTokenFromRefreshToken(env: Env): Promise<string> {
   return data.access_token;
 }
 
+/**
+ * Get ADC token from gcloud CLI (local development only).
+ * Runs: gcloud auth application-default print-access-token
+ */
+async function getTokenFromADC(): Promise<string> {
+  // Dynamic import to avoid bundling issues in Cloudflare Workers
+  const { execSync } = await import("child_process");
+  const token = execSync("gcloud auth application-default print-access-token", {
+    encoding: "utf-8",
+    timeout: 10000,
+  }).trim();
+  if (!token) throw new Error("ADC: gcloud returned empty token");
+  return token;
+}
+
 export async function getAccessToken(env: Env): Promise<string> {
   // Check cached token (valid for at least 5 more minutes)
   if (cachedToken && cachedToken.expiresAt > Date.now() + 5 * 60 * 1000) {
@@ -131,9 +146,17 @@ export async function getAccessToken(env: Env): Promise<string> {
     // Don't cache since we can't refresh
     return token;
   } else {
-    throw new Error(
-      "No GCP credentials found. Set GCP_REFRESH_TOKEN + GCP_CLIENT_ID + GCP_CLIENT_SECRET, or GCP_SERVICE_ACCOUNT_EMAIL + GCP_PRIVATE_KEY.",
-    );
+    // Fallback: Application Default Credentials via gcloud CLI (local dev)
+    try {
+      console.log("[auth] Using gcloud ADC (local dev)");
+      token = await getTokenFromADC();
+    } catch {
+      throw new Error(
+        "No GCP credentials found. Set GCP_REFRESH_TOKEN + GCP_CLIENT_ID + GCP_CLIENT_SECRET, " +
+        "or GCP_SERVICE_ACCOUNT_EMAIL + GCP_PRIVATE_KEY, " +
+        "or ensure `gcloud auth application-default login` has been run for local dev.",
+      );
+    }
   }
 
   cachedToken = { token, expiresAt: Date.now() + 55 * 60 * 1000 };
