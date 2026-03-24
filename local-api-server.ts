@@ -31,6 +31,7 @@ const handlers: Record<string, () => Promise<{ onRequest: (ctx: { request: Reque
   "spend-analysis": () => import("./functions/api/spend-analysis"),
   "transaction-auth": () => import("./functions/api/transaction-auth"),
   "users-overview": () => import("./functions/api/users-overview"),
+  "vintage": () => import("./functions/api/vintage"),
 };
 
 const server = http.createServer(async (req, res) => {
