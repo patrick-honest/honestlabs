@@ -66,6 +66,7 @@ async function queryQrisExperiment(
     revenueTrajectory,
     incrementality,
     qrisMerchantCriteria,
+    repaymentBehavior,
   ] = await Promise.all([
     // -----------------------------------------------------------------------
     // (a) cohortComparison — Test vs Control headline metrics
@@ -687,6 +688,63 @@ async function queryQrisExperiment(
       { startDate: effectiveStart, endDate },
       env,
     ),
+
+    // -----------------------------------------------------------------------
+    // (i) Repayment Behavior Comparison — Test vs Control billing metrics
+    // Snapshots at statement due date for accounts with a min due > 0.
+    // Also checks 7 days post-due for late payment recovery.
+    // -----------------------------------------------------------------------
+    runQuery(
+      `WITH ${cohortCTEs(experimentStart)},
+      -- Snapshot at due date
+      at_due AS (
+        SELECT
+          co.grp, dw4.p9_dw004_loc_acct,
+          dw4.f9_dw004_stmt_due_dt AS due_date,
+          CAST(dw4.f9_dw004_cmr AS FLOAT64)/100 AS statement_min_due,
+          CAST(dw4.f9_dw004_curr_min_rpmt AS FLOAT64)/100 AS remaining_min_due,
+          GREATEST(CAST(dw4.f9_dw004_open_bal AS FLOAT64)/100, 0) AS opening_balance,
+          GREATEST(CAST(dw4.f9_dw004_os_bill_amt AS FLOAT64)/100, 0) AS outstanding_billed,
+          GREATEST(CAST(dw4.f9_dw004_clo_bal AS FLOAT64)/100, 0) AS closing_balance,
+          CAST(dw4.f9_dw004_loc_lmt AS FLOAT64) AS credit_limit,
+          dw4.f9_dw004_curr_dpd AS dpd
+        FROM clean_cohort co
+        JOIN ${TABLES.cms_line_of_credit} loc ON co.user_id = loc.user_id
+        JOIN ${TABLES.financial_account_updates} dw4 ON loc.external_id = dw4.p9_dw004_loc_acct
+        WHERE dw4.f9_dw004_bus_dt = dw4.f9_dw004_stmt_due_dt
+          AND dw4.f9_dw004_stmt_due_dt BETWEEN @startDate AND @endDate
+          AND dw4.fx_dw004_loc_stat IN ('G', 'N')
+          AND CAST(dw4.f9_dw004_cmr AS FLOAT64) > 0
+      ),
+      -- 7 days after due date
+      after_7d AS (
+        SELECT
+          dw4.p9_dw004_loc_acct, ad.due_date,
+          CAST(dw4.f9_dw004_curr_min_rpmt AS FLOAT64)/100 AS remaining_min_due_7d
+        FROM at_due ad
+        JOIN ${TABLES.financial_account_updates} dw4
+          ON ad.p9_dw004_loc_acct = dw4.p9_dw004_loc_acct
+          AND dw4.f9_dw004_bus_dt = DATE_ADD(ad.due_date, INTERVAL 7 DAY)
+          AND dw4.f9_dw004_stmt_due_dt = ad.due_date
+        WHERE DATE_ADD(ad.due_date, INTERVAL 7 DAY) < CURRENT_DATE()
+      )
+      SELECT
+        ad.grp,
+        COUNT(*) AS billing_events,
+        COUNT(DISTINCT ad.p9_dw004_loc_acct) AS accounts,
+        ROUND(COUNTIF(ad.remaining_min_due <= 0 AND ad.dpd = 0) * 100.0 / COUNT(*), 1) AS pct_min_due_on_time,
+        ROUND(COUNTIF(ad.outstanding_billed <= 0 AND ad.dpd = 0) * 100.0 / COUNT(*), 1) AS pct_paid_in_full_on_time,
+        ROUND(COUNTIF(ad.remaining_min_due > 0 AND a7.remaining_min_due_7d <= 0) * 100.0 / COUNT(*), 1) AS pct_late_paid_within_7d,
+        ROUND(AVG(SAFE_DIVIDE(ad.opening_balance - ad.outstanding_billed, ad.opening_balance)) * 100, 1) AS avg_pct_balance_paid,
+        ROUND(COUNTIF(ad.outstanding_billed > 0) * 100.0 / COUNT(*), 1) AS revolve_rate,
+        ROUND(AVG(SAFE_DIVIDE(ad.closing_balance, ad.credit_limit)) * 100, 1) AS avg_utilization
+      FROM at_due ad
+      LEFT JOIN after_7d a7 ON ad.p9_dw004_loc_acct = a7.p9_dw004_loc_acct AND ad.due_date = a7.due_date
+      GROUP BY ad.grp
+      ORDER BY ad.grp`,
+      { startDate: effectiveStart, endDate },
+      env,
+    ),
   ]);
 
   return {
@@ -700,6 +758,7 @@ async function queryQrisExperiment(
     revenueTrajectory,
     incrementality,
     qrisMerchantCriteria: qrisMerchantCriteria,
+    repaymentBehavior,
   };
 }
 

@@ -305,6 +305,18 @@ const MDR_RATES: Record<string, { rate: number; issuerShare: number; label: stri
   UBE: { rate: 0.007, issuerShare: 0.37, label: "Usaha Besar (UBE)", color: "#ef4444" },
 };
 
+interface RepaymentBehaviorRow {
+  grp: string;
+  billing_events: number;
+  accounts: number;
+  pct_min_due_on_time: number;
+  pct_paid_in_full_on_time: number;
+  pct_late_paid_within_7d: number;
+  avg_pct_balance_paid: number;
+  revolve_rate: number;
+  avg_utilization: number;
+}
+
 interface MerchantClassRow {
   grp: string;
   merchant_type: string;
@@ -389,6 +401,7 @@ interface ApiData {
   topMerchantsByTxn?: { merchant: string; txn_count: number; total_spend_idr: number; total_spend_usd: number }[];
   topMerchantsBySpend?: { merchant: string; txn_count: number; total_spend_idr: number; total_spend_usd: number }[];
   qrisMerchantCriteria?: QrisMerchantCriteriaRow[];
+  repaymentBehavior?: RepaymentBehaviorRow[];
 }
 
 export default function QrisExperimentPage() {
@@ -1393,6 +1406,65 @@ export default function QrisExperimentPage() {
             </p>
           </div>
         )}
+
+        {/* ============================================================ */}
+        {/* REPAYMENT BEHAVIOR COMPARISON                                   */}
+        {/* ============================================================ */}
+        {apiData?.repaymentBehavior && apiData.repaymentBehavior.length > 0 && (() => {
+          const test = apiData.repaymentBehavior.find((r: RepaymentBehaviorRow) => r.grp === "Test");
+          const ctrl = apiData.repaymentBehavior.find((r: RepaymentBehaviorRow) => r.grp === "Control");
+          if (!test || !ctrl) return null;
+
+          const metrics = [
+            { label: "Min Due Paid On Time", key: "pct_min_due_on_time", desc: "% of billing events where min due was paid by due date", suffix: "%" },
+            { label: "Paid In Full On Time", key: "pct_paid_in_full_on_time", desc: "% paid full balance by due date (qualifies for admin fee refund)", suffix: "%" },
+            { label: "Late Paid Within 7 Days", key: "pct_late_paid_within_7d", desc: "% that missed due date but paid min within 7 days", suffix: "%" },
+            { label: "Avg Balance Paid", key: "avg_pct_balance_paid", desc: "Average % of statement balance paid by due date", suffix: "%" },
+            { label: "Revolve Rate", key: "revolve_rate", desc: "% with outstanding billed amount at due date", suffix: "%" },
+            { label: "Avg Utilization", key: "avg_utilization", desc: "Average closing balance ÷ credit limit", suffix: "%" },
+          ] as const;
+
+          return (
+            <div className={cn("rounded-xl border p-5", isDark ? "border-[var(--border)] bg-[var(--surface)]" : "border-[var(--border)] bg-[var(--surface)]")}>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">
+                Repayment Behavior Comparison
+                <span className={cn("ml-2 text-[9px]", isDark ? "text-[#FFD166]" : "text-amber-500")} title="Live BigQuery data">&#9733;</span>
+              </h3>
+              <p className="text-[10px] text-[var(--text-muted)] mb-4">
+                Billing behavior at statement due date — {test.billing_events.toLocaleString()} Test vs {ctrl.billing_events.toLocaleString()} Control billing events
+              </p>
+
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {metrics.map((m) => {
+                  const testVal = test[m.key as keyof RepaymentBehaviorRow] as number;
+                  const ctrlVal = ctrl[m.key as keyof RepaymentBehaviorRow] as number;
+                  const diff = testVal - ctrlVal;
+                  const isPositive = m.key === "revolve_rate" || m.key === "avg_utilization" ? diff < 0 : diff > 0;
+
+                  return (
+                    <div key={m.key} className="rounded-lg bg-[var(--surface-elevated)] border border-[var(--border)] p-3">
+                      <p className="text-[10px] font-medium text-[var(--text-muted)] mb-2">{m.label}</p>
+                      <div className="flex items-baseline gap-3 mb-1">
+                        <div>
+                          <span className="text-[9px] text-[var(--text-muted)]">Test</span>
+                          <p className="text-lg font-bold text-[var(--text-primary)]">{testVal.toFixed(1)}{m.suffix}</p>
+                        </div>
+                        <div>
+                          <span className="text-[9px] text-[var(--text-muted)]">Control</span>
+                          <p className="text-lg font-bold text-[var(--text-secondary)]">{ctrlVal.toFixed(1)}{m.suffix}</p>
+                        </div>
+                      </div>
+                      <div className={cn("text-[10px] font-medium", isPositive ? "text-emerald-400" : "text-red-400")}>
+                        {diff > 0 ? "+" : ""}{diff.toFixed(1)}pp {isPositive ? "better" : "worse"}
+                      </div>
+                      <p className="text-[9px] text-[var(--text-muted)] mt-1">{m.desc}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ============================================================ */}
         {/* TOP QRIS-ONLY MERCHANTS                                        */}
