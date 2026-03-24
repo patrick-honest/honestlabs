@@ -3,6 +3,12 @@
  * Replaces the SQLite/better-sqlite3 cache from the server-side app.
  */
 
+// Type stub for Cloudflare KV (avoids @cloudflare/workers-types dependency)
+declare type KVNamespace = {
+  get(key: string, options?: { type?: string }): Promise<string | null>;
+  put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
+};
+
 interface CacheEntry<T> {
   data: T;
   storedAt: number;

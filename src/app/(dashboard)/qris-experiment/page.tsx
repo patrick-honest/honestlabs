@@ -17,6 +17,7 @@ import { ChartCard } from "@/components/dashboard/chart-card";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { getPeriodRange } from "@/lib/period-data";
 import { useDateParams } from "@/hooks/use-period";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -288,6 +289,22 @@ interface CohortRow {
   avg_spend_per_user?: number;
 }
 
+interface QrisMerchantCriteriaRow {
+  merchant_criteria: string;
+  merchant_count: number;
+  total_txns: number;
+  total_spend_idr: number;
+  avg_txn_size_idr: number;
+}
+
+// MDR rates per merchant criteria (Bank Indonesia regulation PBI No. 24/8/PBI/2022)
+const MDR_RATES: Record<string, { rate: number; issuerShare: number; label: string; color: string }> = {
+  UMI: { rate: 0.003, issuerShare: 0.37, label: "Usaha Mikro (UMI)", color: "#10b981" },
+  UKE: { rate: 0.005, issuerShare: 0.37, label: "Usaha Kecil (UKE)", color: "#3b82f6" },
+  UKI: { rate: 0.007, issuerShare: 0.37, label: "Usaha Kecil Menengah (UKI)", color: "#f59e0b" },
+  UBE: { rate: 0.007, issuerShare: 0.37, label: "Usaha Besar (UBE)", color: "#ef4444" },
+};
+
 interface MerchantClassRow {
   grp: string;
   merchant_type: string;
@@ -371,6 +388,7 @@ interface ApiData {
   cohortFinancials?: any[];
   topMerchantsByTxn?: { merchant: string; txn_count: number; total_spend_idr: number; total_spend_usd: number }[];
   topMerchantsBySpend?: { merchant: string; txn_count: number; total_spend_idr: number; total_spend_usd: number }[];
+  qrisMerchantCriteria?: QrisMerchantCriteriaRow[];
 }
 
 export default function QrisExperimentPage() {
@@ -1281,6 +1299,98 @@ export default function QrisExperimentPage() {
                 </p>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ============================================================ */}
+        {/* QRIS MERCHANT CRITERIA CLASSIFICATION (MDR BREAKDOWN)          */}
+        {/* ============================================================ */}
+        {apiData?.qrisMerchantCriteria && apiData.qrisMerchantCriteria.length > 0 && (
+          <div className={cn("rounded-xl border p-5", isDark ? "border-[var(--border)] bg-[var(--surface)]" : "border-[var(--border)] bg-[var(--surface)]")}>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">
+              QRIS Merchant Criteria Classification
+              <span className={cn("ml-2 text-[9px]", isDark ? "text-[#FFD166]" : "text-amber-500")} title="Live BigQuery data">&#9733;</span>
+            </h3>
+            <p className="text-[10px] text-[var(--text-muted)] mb-4">
+              Transaction count by BI-regulated merchant criteria code. MDR rates set by Bank Indonesia (PBI No. 24/8/PBI/2022).
+            </p>
+
+            {/* Bar chart */}
+            <div className="h-[260px] mb-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={apiData.qrisMerchantCriteria.map((r: QrisMerchantCriteriaRow) => ({
+                  name: r.merchant_criteria,
+                  txns: r.total_txns,
+                  merchants: r.merchant_count,
+                  spend: r.total_spend_idr,
+                  fill: MDR_RATES[r.merchant_criteria]?.color ?? "#6b7280",
+                }))} margin={{ top: 5, right: 20, bottom: 5, left: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"} />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: isDark ? "#aaa" : "#666" }} />
+                  <YAxis tick={{ fontSize: 10, fill: isDark ? "#aaa" : "#666" }} tickFormatter={(v: number) => v >= 1000 ? `${(v/1000).toFixed(0)}K` : String(v)} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: isDark ? "#1e1e2e" : "#fff", border: `1px solid ${isDark ? "#333" : "#ddd"}`, borderRadius: 8, fontSize: 11 }}
+                    formatter={(value: unknown, name: unknown) => {
+                      const v = Number(value);
+                      if (name === "txns") return [v.toLocaleString(), "Transactions"];
+                      return [v.toLocaleString(), String(name)];
+                    }}
+                    labelFormatter={(label: unknown) => {
+                      const l = String(label);
+                      const info = MDR_RATES[l];
+                      return info ? `${info.label} — MDR: ${(info.rate * 100).toFixed(1)}%` : l;
+                    }}
+                  />
+                  <Bar dataKey="txns" name="txns" radius={[6, 6, 0, 0]}>
+                    {apiData.qrisMerchantCriteria.map((r: QrisMerchantCriteriaRow, i: number) => (
+                      <Cell key={i} fill={MDR_RATES[r.merchant_criteria]?.color ?? "#6b7280"} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Legend with MDR rates */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+              {apiData.qrisMerchantCriteria.map((r: QrisMerchantCriteriaRow) => {
+                const info = MDR_RATES[r.merchant_criteria];
+                return (
+                  <div key={r.merchant_criteria} className="rounded-lg bg-[var(--surface-elevated)] border border-[var(--border)] p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="w-3 h-3 rounded-sm inline-block" style={{ backgroundColor: info?.color ?? "#6b7280" }} />
+                      <span className="text-xs font-semibold text-[var(--text-primary)]">{r.merchant_criteria}</span>
+                      <span className="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ backgroundColor: `${info?.color ?? "#6b7280"}20`, color: info?.color ?? "#6b7280" }}>
+                        MDR {((info?.rate ?? 0) * 100).toFixed(1)}%
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-[var(--text-muted)] mb-2">{info?.label ?? r.merchant_criteria}</p>
+                    <div className="space-y-1 text-[10px]">
+                      <div className="flex justify-between">
+                        <span className="text-[var(--text-muted)]">Transactions</span>
+                        <span className="font-medium text-[var(--text-primary)]">{r.total_txns.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[var(--text-muted)]">Merchants</span>
+                        <span className="font-medium text-[var(--text-primary)]">{r.merchant_count.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[var(--text-muted)]">Spend</span>
+                        <span className="font-medium text-[var(--text-primary)]">{fmtCur(r.total_spend_idr)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[var(--text-muted)]">Issuer Share</span>
+                        <span className="font-medium text-[var(--text-primary)]">{fmtCur(r.total_spend_idr * (info?.rate ?? 0) * (info?.issuerShare ?? 0))}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <p className="text-[9px] text-[var(--text-muted)] italic">
+              Classification based on merchant size heuristics (transaction volume, unique cards). Actual criteria codes assigned by acquirers.
+              MDR: UMI 0.3%, UKE 0.5%, UKI/UBE 0.7%. Issuer share: 37% of MDR (PBI No. 24/8/PBI/2022, PT ALTO network).
+            </p>
           </div>
         )}
 

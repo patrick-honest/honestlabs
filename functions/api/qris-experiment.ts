@@ -65,6 +65,7 @@ async function queryQrisExperiment(
     profitability,
     revenueTrajectory,
     incrementality,
+    qrisMerchantCriteria,
   ] = await Promise.all([
     // -----------------------------------------------------------------------
     // (a) cohortComparison — Test vs Control headline metrics
@@ -617,6 +618,75 @@ async function queryQrisExperiment(
       undefined,
       env,
     ),
+
+    // -----------------------------------------------------------------------
+    // (h) QRIS Merchant Criteria Classification (MDR rate breakdown)
+    // Classifies QRIS merchants by BI-regulated merchant criteria codes
+    // (UMI/UKE/UKI/UBE) based on merchant characteristics.
+    // -----------------------------------------------------------------------
+    runQuery(
+      `WITH ${cohortCTEs(experimentStart)},
+      qris_merchants AS (
+        SELECT
+          t.fx_dw007_merc_name AS merchant,
+          COUNT(*) AS txn_count,
+          SUM(CAST(t.f9_dw007_amt_req AS FLOAT64) / 100.0) AS total_spend_idr,
+          AVG(CAST(t.f9_dw007_amt_req AS FLOAT64) / 100.0) AS avg_txn_idr,
+          COUNT(DISTINCT t.f9_dw007_prin_crn) AS unique_cards
+        FROM clean_cohort co
+        JOIN cards k ON co.loc_acct = k.f9_dw005_loc_acct
+        JOIN ${TABLES.authorized_transaction} t ON k.f9_dw005_crn = t.f9_dw007_prin_crn
+        WHERE t.fx_dw007_rte_dest = 'L'
+          AND t.f9_dw007_dt BETWEEN @startDate AND @endDate
+          AND (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '' OR t.fx_dw007_stat = ' ')
+          AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+          AND t.f9_dw007_ori_amt > 0
+          AND co.grp = 'Test'
+        GROUP BY t.fx_dw007_merc_name
+      ),
+      classified AS (
+        SELECT merchant, txn_count, total_spend_idr, avg_txn_idr, unique_cards,
+          CASE
+            -- Large e-commerce / tech platforms = UBE (Usaha Besar)
+            WHEN UPPER(merchant) LIKE '%TOKOPEDIA%' OR UPPER(merchant) LIKE '%SHOPEE%'
+              OR UPPER(merchant) LIKE '%LAZADA%' OR UPPER(merchant) LIKE '%GRAB%'
+              OR UPPER(merchant) LIKE '%GOJEK%' OR UPPER(merchant) LIKE '%BUKALAPAK%'
+              OR UPPER(merchant) LIKE '%BLIBLI%' OR UPPER(merchant) LIKE '%TIKTOK%'
+              OR UPPER(merchant) LIKE '%GOOGLE%' OR UPPER(merchant) LIKE '%NETFLIX%'
+              OR UPPER(merchant) LIKE '%SPOTIFY%' OR UPPER(merchant) LIKE '%APPLE%'
+              OR UPPER(merchant) LIKE '%AMAZON%' OR UPPER(merchant) LIKE '%TRAVELOKA%'
+              OR UPPER(merchant) LIKE '%TELKOMSEL%' OR UPPER(merchant) LIKE '%IOH%'
+              OR UPPER(merchant) LIKE '%XL%' OR UPPER(merchant) LIKE '%AXIS%'
+              OR UPPER(merchant) LIKE 'ACCESS BY KAI%' OR UPPER(merchant) LIKE '%INDOMARET%'
+              OR UPPER(merchant) LIKE '%ALFAMART%' OR UPPER(merchant) LIKE '%KFC%'
+              OR UPPER(merchant) LIKE '%MCDONALD%' OR UPPER(merchant) LIKE '%STARBUCKS%'
+              OR unique_cards > 100
+            THEN 'UBE'
+            -- Medium businesses = UKI (Usaha Kecil Menengah)
+            WHEN unique_cards BETWEEN 20 AND 100 OR total_spend_idr > 50000000
+            THEN 'UKI'
+            -- Small businesses = UKE (Usaha Kecil)
+            WHEN unique_cards BETWEEN 5 AND 19 OR total_spend_idr > 10000000
+            THEN 'UKE'
+            -- Micro businesses = UMI (Usaha Mikro)
+            ELSE 'UMI'
+          END AS merchant_criteria
+        FROM qris_merchants
+      )
+      SELECT
+        merchant_criteria,
+        COUNT(DISTINCT merchant) AS merchant_count,
+        SUM(txn_count) AS total_txns,
+        ROUND(SUM(total_spend_idr), 0) AS total_spend_idr,
+        ROUND(AVG(avg_txn_idr), 0) AS avg_txn_size_idr
+      FROM classified
+      GROUP BY merchant_criteria
+      ORDER BY CASE merchant_criteria
+        WHEN 'UMI' THEN 1 WHEN 'UKE' THEN 2 WHEN 'UKI' THEN 3 WHEN 'UBE' THEN 4
+      END`,
+      { startDate: effectiveStart, endDate },
+      env,
+    ),
   ]);
 
   return {
@@ -629,6 +699,7 @@ async function queryQrisExperiment(
     profitability,
     revenueTrajectory,
     incrementality,
+    qrisMerchantCriteria: qrisMerchantCriteria,
   };
 }
 
