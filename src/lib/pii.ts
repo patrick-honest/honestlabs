@@ -55,10 +55,10 @@ export function maskValue(fieldName: string, value: unknown): unknown {
     return str[0] + "***";
   }
 
-  // NIK/Gov ID: first 4 + **** + last 2
+  // NIK/Gov ID: mask all except last 3 characters
   if (key.includes("gov_id") || key.includes("new_id") || key.includes("document_number")) {
-    if (str.length <= 6) return "****";
-    return str.slice(0, 4) + "*".repeat(str.length - 6) + str.slice(-2);
+    if (str.length <= 3) return "***";
+    return "*".repeat(str.length - 3) + str.slice(-3);
   }
 
   // Everything else (address, DOB, gender, marital status): fully redacted
