@@ -4,6 +4,33 @@ import type { Env } from "../_shared/bigquery-auth";
 import type { ParsedFilters } from "../_shared/filters";
 import { cardTypeWhere, transactionTypeWhere, amountRangeWhere, cycleDateWhere } from "../_shared/filters";
 
+// ISO 8583 / Finexus response codes for decline reasons (fx_dw007_given_resp_cde)
+const RESPONSE_CODE_LABELS: Record<string, string> = {
+  "03": "Invalid Merchant",
+  "05": "Do Not Honor",
+  "12": "Invalid Transaction",
+  "14": "Invalid Card Number",
+  "41": "Lost Card – Pick Up",
+  "51": "Insufficient Funds / Over Credit Limit",
+  "54": "Expired Card",
+  "55": "Incorrect PIN",
+  "57": "Transaction Not Permitted to Cardholder",
+  "58": "Transaction Not Permitted to Terminal",
+  "59": "Suspected Fraud",
+  "61": "Exceeds Withdrawal Amount Limit",
+  "62": "Restricted Card",
+  "63": "Security Violation",
+  "72": "PIN Try Limit Exceeded",
+  "75": "Allowable PIN Tries Exceeded",
+  "78": "Blocked – First Use",
+  "82": "Negative CAM/dCVV/iCVV Results",
+  "83": "Unable to Verify PIN",
+  "96": "System Malfunction",
+  "N7": "CVV2/CVC2 Mismatch",
+  "5C": "Velocity / Risk Threshold Exceeded",
+};
+
+// Legacy status code descriptions (fx_dw007_stat)
 const DECLINE_CODE_DESCRIPTIONS: Record<string, string> = {
   D: "Declined by Issuer",
   C: "Captured / Reversed",
@@ -16,7 +43,7 @@ const DECLINE_CODE_DESCRIPTIONS: Record<string, string> = {
 async function querySpendAnalysis(startDate: string, endDate: string, env: Env, filters: ParsedFilters, rawStartDate?: string) {
   // startDate = extended (for chart context), rawStartDate = user's actual selection (for KPIs)
   const kpiStartDate = rawStartDate ?? startDate;
-  const [weeklyTrend, channelBreakdown, declineRows, periodSummaryRows, onboardingSummaryRows, onboardingTrendRows, firstTxnChannelRows] = await Promise.all([
+  const [weeklyTrend, channelBreakdown, declineRows, periodSummaryRows, onboardingSummaryRows, onboardingTrendRows, firstTxnChannelRows, declineReasonRows] = await Promise.all([
     // Weekly spend trend — cohort-based SAR + spend metrics
     runQuery(
       `WITH regular_users AS (
@@ -109,7 +136,7 @@ async function querySpendAnalysis(startDate: string, endDate: string, env: Env, 
       GROUP BY channel`,
       { kpiStart: kpiStartDate, endDate }, env,
     ),
-    // Decline breakdown
+    // Decline breakdown by status code (legacy)
     runQuery<{ code: string; cnt: number; amount_idr: number }>(
       `SELECT t.fx_dw007_stat AS code, COUNT(*) AS cnt, ROUND(SUM(t.f9_dw007_amt_req/100),0) AS amount_idr
       FROM ${TABLES.authorized_transaction} t
@@ -352,6 +379,25 @@ async function querySpendAnalysis(startDate: string, endDate: string, env: Env, 
       ORDER BY user_count DESC`,
       undefined, env,
     ),
+    // Query 8: Decline reason distribution by response code (fx_dw007_given_resp_cde)
+    // A transaction can have multiple decline reasons; each is counted separately
+    runQuery<{ resp_code: string; cnt: number; amount_idr: number }>(
+      `SELECT
+        t.fx_dw007_given_resp_cde AS resp_code,
+        COUNT(*) AS cnt,
+        ROUND(SUM(CAST(t.f9_dw007_amt_req AS FLOAT64) / 100), 0) AS amount_idr
+      FROM ${TABLES.authorized_transaction} t
+      WHERE t.f9_dw007_dt BETWEEN @kpiStart AND @endDate
+        AND t.fx_dw007_stat = 'D'
+        AND t.fx_dw007_txn_typ NOT IN ('PM', 'RF', 'BE')
+        AND t.fx_dw007_given_resp_cde IS NOT NULL
+        AND TRIM(t.fx_dw007_given_resp_cde) != ''
+        ${transactionTypeWhere(filters, 't')}
+        ${amountRangeWhere(filters, 't')}
+      GROUP BY resp_code
+      ORDER BY cnt DESC`,
+      { kpiStart: kpiStartDate, endDate }, env,
+    ),
   ]);
 
   return {
@@ -365,6 +411,12 @@ async function querySpendAnalysis(startDate: string, endDate: string, env: Env, 
     onboardingSummary: (onboardingSummaryRows as unknown[])[0] ?? null,
     onboardingTrend: onboardingTrendRows,
     firstTxnChannel: firstTxnChannelRows,
+    declineReasons: (declineReasonRows as Array<{ resp_code: string; cnt: number; amount_idr: number }>).map((r) => ({
+      resp_code: r.resp_code,
+      label: RESPONSE_CODE_LABELS[r.resp_code] ?? `Unknown (${r.resp_code})`,
+      cnt: r.cnt,
+      amount_idr: r.amount_idr,
+    })),
   };
 }
 

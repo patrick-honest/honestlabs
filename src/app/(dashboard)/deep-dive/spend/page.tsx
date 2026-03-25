@@ -130,6 +130,7 @@ export default function SpendPage() {
   const trendIsLive = !!spendAnalysis?.weeklySpendTrend?.length;
   const channelData = spendAnalysis?.channelBreakdown ?? null;
   const declineData = spendAnalysis?.declineBreakdown ?? null;
+  const declineReasons = spendAnalysis?.declineReasons ?? null;
   const qrisMerchantData = spendAnalysis?.qrisMerchantGrowth ?? null;
 
   // Weekly spend trend data from BigQuery
@@ -236,6 +237,18 @@ export default function SpendPage() {
     }));
     return raw;
   }, [declineData]);
+
+  // Transform decline reasons for horizontal bar chart
+  const declineReasonBarData = useMemo(() => {
+    if (!declineReasons || !Array.isArray(declineReasons)) return null;
+    return (declineReasons as Array<{ resp_code: string; label: string; cnt: number; amount_idr: number }>)
+      .slice(0, 15) // Top 15 reasons
+      .map((d) => ({
+        label: `${d.resp_code} — ${d.label}`,
+        count: d.cnt,
+        amount: d.amount_idr,
+      }));
+  }, [declineReasons]);
 
   // Transform QRIS merchant growth for line chart
   const qrisMerchantLineData = useMemo(() => {
@@ -782,6 +795,53 @@ export default function SpendPage() {
           reason="Spend trend data requires authorized_transaction (DW007) and financial_account_updates (DW004)"
         />
       )}
+
+      {/* Decline Reason Distribution (by response code) */}
+      {declineReasonBarData && declineReasonBarData.length > 0 ? (
+        <ChartCard
+          title="Decline Reason Distribution"
+          subtitle="Top decline reasons by ISO 8583 / Finexus response code. A transaction with multiple decline reasons is counted for each."
+          asOf={AS_OF}
+          dataRange={DATA_RANGE}
+          liveData={!!declineReasons}
+        >
+          <DashboardBarChart
+            data={declineReasonBarData}
+            bars={[{ key: "count", color: "#f97316", label: "Declined Transactions" }]}
+            xAxisKey="label"
+            height={400}
+          />
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-[var(--border)] text-left text-[var(--text-muted)]">
+                  <th className="py-1.5 pr-3">Code</th>
+                  <th className="py-1.5 pr-3">Reason</th>
+                  <th className="py-1.5 text-right">Count</th>
+                  <th className="py-1.5 text-right">Amount</th>
+                  <th className="py-1.5 text-right">Share</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(declineReasons as Array<{ resp_code: string; label: string; cnt: number; amount_idr: number }>).map((d) => {
+                  const total = (declineReasons as Array<{ cnt: number }>).reduce((s, r) => s + r.cnt, 0);
+                  return (
+                    <tr key={d.resp_code} className="border-b border-[var(--border)]/50 hover:bg-[var(--background-secondary)]">
+                      <td className="py-1.5 pr-3 font-mono font-semibold text-[var(--text-primary)]">{d.resp_code}</td>
+                      <td className="py-1.5 pr-3 text-[var(--text-secondary)]">{d.label}</td>
+                      <td className="py-1.5 text-right text-[var(--text-primary)]">{formatNumber(d.cnt)}</td>
+                      <td className="py-1.5 text-right text-[var(--text-primary)]">{formatAmountCompact(d.amount_idr, currency)}</td>
+                      <td className="py-1.5 text-right text-[var(--text-muted)]">{(d.cnt / total * 100).toFixed(1)}%</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
+      ) : null}
 
       {/* QRIS Merchant Ecosystem */}
       <div className="space-y-4">
