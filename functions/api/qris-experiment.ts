@@ -754,13 +754,13 @@ async function queryQrisExperiment(
     // -----------------------------------------------------------------------
     runQuery(
       `WITH ${cohortCTEs(experimentStart)},
-      -- Identify merchants where ALL transactions are QRIS across entire experiment period
+      -- Identify merchants where ALL transactions across ALL TIME are QRIS only
+      -- No date filter: checks from the very first transaction in DW007
       qris_only_merchants AS (
         SELECT fx_dw007_merc_name AS merchant
         FROM ${TABLES.authorized_transaction}
         WHERE (fx_dw007_stat IS NULL OR TRIM(fx_dw007_stat) = '' OR fx_dw007_stat = ' ')
           AND fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
-          AND f9_dw007_dt >= '${experimentStart}'
         GROUP BY merchant
         HAVING
           MAX(CASE WHEN fx_dw007_txn_typ = 'RA' AND fx_dw007_rte_dest = 'L' THEN 1 ELSE 0 END) = 1
