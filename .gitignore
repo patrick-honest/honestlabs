@@ -55,3 +55,6 @@ reference/
 .wrangler/
 logs/
 .dev.vars
+
+# generated PDF reports
+pdf_reports/

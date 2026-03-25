@@ -11,7 +11,9 @@
     "build:pages": "rm -rf src/app/api && NEXT_PUBLIC_STATIC_EXPORT=true next build",
     "start": "next start",
     "lint": "eslint",
-    "dev:local": "npx wrangler pages dev out --port 3000"
+    "dev:local": "npx wrangler pages dev out --port 3000",
+    "generate:pdfs": "tsx scripts/generate-pdfs.ts",
+    "validate:pdfs": "tsx scripts/validate-pdfs.ts"
   },
   "dependencies": {
     "@google-cloud/bigquery": "^8.1.1",
@@ -19,6 +21,8 @@
     "@prisma/client": "^7.5.0",
     "@swc/helpers": "^0.5.19",
     "better-sqlite3": "^12.8.0",
+    "chart.js": "^4.5.1",
+    "chartjs-node-canvas": "^5.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
