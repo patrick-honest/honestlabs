@@ -681,7 +681,23 @@ async function queryQrisExperiment(
         COUNT(DISTINCT merchant) AS merchant_count,
         SUM(txn_count) AS total_txns,
         ROUND(SUM(total_spend_idr), 0) AS total_spend_idr,
-        ROUND(AVG(avg_txn_idr), 0) AS avg_txn_size_idr
+        ROUND(AVG(avg_txn_idr), 0) AS avg_txn_size_idr,
+        -- MDR rates per BI/OJK regulation (PBI No. 24/8/PBI/2022)
+        CASE merchant_criteria
+          WHEN 'UMI' THEN 0.30 WHEN 'UKE' THEN 0.40 WHEN 'UKI' THEN 0.55 WHEN 'UBE' THEN 0.55
+        END AS mdr_rate_pct,
+        -- Full MDR revenue (acquirer + issuer + switcher)
+        ROUND(SUM(total_spend_idr) * CASE merchant_criteria
+          WHEN 'UMI' THEN 0.003 WHEN 'UKE' THEN 0.004 WHEN 'UKI' THEN 0.0055 WHEN 'UBE' THEN 0.0055
+        END, 0) AS total_mdr_idr,
+        -- Issuer share (37% of MDR per PBI regulation, PT ALTO split)
+        ROUND(SUM(total_spend_idr) * CASE merchant_criteria
+          WHEN 'UMI' THEN 0.003 WHEN 'UKE' THEN 0.004 WHEN 'UKI' THEN 0.0055 WHEN 'UBE' THEN 0.0055
+        END * 0.37, 0) AS honest_revenue_idr,
+        -- Effective rate for Honest (MDR x 37%)
+        ROUND(CASE merchant_criteria
+          WHEN 'UMI' THEN 0.30 WHEN 'UKE' THEN 0.40 WHEN 'UKI' THEN 0.55 WHEN 'UBE' THEN 0.55
+        END * 0.37, 4) AS effective_rate_pct
       FROM classified
       GROUP BY merchant_criteria
       ORDER BY CASE merchant_criteria

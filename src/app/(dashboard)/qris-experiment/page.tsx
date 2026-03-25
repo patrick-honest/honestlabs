@@ -311,14 +311,19 @@ interface QrisMerchantCriteriaRow {
   total_txns: number;
   total_spend_idr: number;
   avg_txn_size_idr: number;
+  mdr_rate_pct: number;
+  total_mdr_idr: number;
+  honest_revenue_idr: number;
+  effective_rate_pct: number;
 }
 
 // MDR rates per merchant criteria (Bank Indonesia regulation PBI No. 24/8/PBI/2022)
+const ISSUER_SHARE = 0.37; // 37% of MDR goes to issuer (PT ALTO switcher split)
 const MDR_RATES: Record<string, { rate: number; issuerShare: number; label: string; color: string }> = {
-  UMI: { rate: 0.003, issuerShare: 0.37, label: "Usaha Mikro (UMI)", color: "#10b981" },
-  UKE: { rate: 0.005, issuerShare: 0.37, label: "Usaha Kecil (UKE)", color: "#3b82f6" },
-  UKI: { rate: 0.007, issuerShare: 0.37, label: "Usaha Kecil Menengah (UKI)", color: "#f59e0b" },
-  UBE: { rate: 0.007, issuerShare: 0.37, label: "Usaha Besar (UBE)", color: "#ef4444" },
+  UMI: { rate: 0.003, issuerShare: ISSUER_SHARE, label: "Usaha Mikro (UMI)", color: "#10b981" },
+  UKE: { rate: 0.004, issuerShare: ISSUER_SHARE, label: "Usaha Kecil (UKE)", color: "#3b82f6" },
+  UKI: { rate: 0.0055, issuerShare: ISSUER_SHARE, label: "Usaha Kecil Menengah (UKI)", color: "#f59e0b" },
+  UBE: { rate: 0.0055, issuerShare: ISSUER_SHARE, label: "Usaha Besar (UBE)", color: "#ef4444" },
 };
 
 interface RepaymentBehaviorRow {
@@ -1350,7 +1355,7 @@ export default function QrisExperimentPage() {
                       <span className="w-3 h-3 rounded-sm inline-block" style={{ backgroundColor: info?.color ?? "#6b7280" }} />
                       <span className="text-xs font-semibold text-[var(--text-primary)]">{r.merchant_criteria}</span>
                       <span className="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ backgroundColor: `${info?.color ?? "#6b7280"}20`, color: info?.color ?? "#6b7280" }}>
-                        MDR {((info?.rate ?? 0) * 100).toFixed(1)}%
+                        MDR {r.mdr_rate_pct?.toFixed(2) ?? ((info?.rate ?? 0) * 100).toFixed(1)}%
                       </span>
                     </div>
                     <p className="text-[10px] text-[var(--text-muted)] mb-2">{info?.label ?? r.merchant_criteria}</p>
@@ -1364,12 +1369,20 @@ export default function QrisExperimentPage() {
                         <span className="font-medium text-[var(--text-primary)]">{r.merchant_count.toLocaleString()}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-[var(--text-muted)]">Spend</span>
+                        <span className="text-[var(--text-muted)]">Total Spend</span>
                         <span className="font-medium text-[var(--text-primary)]">{fmtCur(r.total_spend_idr)}</span>
                       </div>
+                      <div className="flex justify-between border-t border-[var(--border)] pt-1 mt-1">
+                        <span className="text-[var(--text-muted)]">Full MDR</span>
+                        <span className="font-medium text-[var(--text-primary)]">{fmtCur(r.total_mdr_idr ?? r.total_spend_idr * (info?.rate ?? 0))}</span>
+                      </div>
                       <div className="flex justify-between">
-                        <span className="text-[var(--text-muted)]">Issuer Share</span>
-                        <span className="font-medium text-[var(--text-primary)]">{fmtCur(r.total_spend_idr * (info?.rate ?? 0) * (info?.issuerShare ?? 0))}</span>
+                        <span className="text-[var(--text-muted)]">Honest Revenue (37%)</span>
+                        <span className="font-semibold" style={{ color: info?.color ?? "#10b981" }}>{fmtCur(r.honest_revenue_idr ?? r.total_spend_idr * (info?.rate ?? 0) * ISSUER_SHARE)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[var(--text-muted)]">Effective Rate</span>
+                        <span className="font-mono text-[var(--text-primary)]">{(r.effective_rate_pct ?? (info?.rate ?? 0) * ISSUER_SHARE * 100).toFixed(4)}%</span>
                       </div>
                     </div>
                   </div>
@@ -1379,7 +1392,8 @@ export default function QrisExperimentPage() {
 
             <p className="text-[9px] text-[var(--text-muted)] italic">
               Classification based on merchant size heuristics (transaction volume, unique cards). Actual criteria codes assigned by acquirers.
-              MDR: UMI 0.3%, UKE 0.5%, UKI/UBE 0.7%. Issuer share: 37% of MDR (PBI No. 24/8/PBI/2022, PT ALTO network).
+              MDR rates: UMI 0.30%, UKE 0.40%, UKI 0.55%, UBE 0.55%. Honest earns 37% of MDR as issuer (PBI No. 24/8/PBI/2022, PT ALTO network).
+              Effective rates: UMI 0.111%, UKE 0.148%, UKI/UBE 0.2035%.
             </p>
           </div>
         )}
