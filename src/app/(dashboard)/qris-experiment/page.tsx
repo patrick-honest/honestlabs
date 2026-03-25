@@ -355,11 +355,21 @@ interface MerchantClassRow {
 interface ProfitabilityRow {
   grp: string;
   cohort_size: number;
+  transactors: number;
+  spend_active_rate: number;
+  total_spend: number;
+  revolving_accounts: number;
+  revolve_rate_pct: number;
+  utilization_pct: number;
   admin_fee_revenue: number;
   interest_revenue: number;
   late_penalty_fee_revenue: number;
   card_interchange_revenue: number;
   qris_mdr_revenue: number;
+  admin_fee_per_user: number;
+  interest_per_user: number;
+  interchange_per_user: number;
+  qris_mdr_per_user: number;
   total_revenue: number;
   arpu: number;
 }
@@ -1730,14 +1740,31 @@ export default function QrisExperimentPage() {
             return d > 0 ? `+${d.toFixed(1)}%` : `${d.toFixed(1)}%`;
           };
 
-          const profRows = [
-            { label: "Admin Fee Revenue", t: tst.admin_fee_revenue, c: ctrl.admin_fee_revenue },
-            { label: "Interest Revenue", t: tst.interest_revenue, c: ctrl.interest_revenue },
-            { label: "Late/Penalty Fee Revenue", t: tst.late_penalty_fee_revenue, c: ctrl.late_penalty_fee_revenue },
-            { label: "Card Interchange @ 1.6%", t: tst.card_interchange_revenue, c: ctrl.card_interchange_revenue },
-            { label: "QRIS MDR @ 0.2035%", t: tst.qris_mdr_revenue, c: ctrl.qris_mdr_revenue },
-            { label: "Total Revenue", t: tst.total_revenue, c: ctrl.total_revenue },
-            { label: "ARPU (per Eligible User)", t: tst.arpu, c: ctrl.arpu },
+          // Normalize absolute counts to per-1000-users for fair comparison
+          // (Test=5000, Control may differ due to contamination removal)
+          const norm = (val: number, size: number) => Math.round(val / size * 1000);
+
+          const profRows: { label: string; t: number; c: number; isRate?: boolean; unit?: string; isSeparator?: boolean }[] = [
+            // --- Activation & Engagement (rates — no normalization needed) ---
+            { label: "Spend Active Rate", t: tst.spend_active_rate ?? 0, c: ctrl.spend_active_rate ?? 0, isRate: true, unit: "%" },
+            { label: "Transactors (per 1K users)", t: norm(tst.transactors ?? 0, tst.cohort_size), c: norm(ctrl.transactors ?? 0, ctrl.cohort_size) },
+            { label: "Revolve Rate", t: tst.revolve_rate_pct ?? 0, c: ctrl.revolve_rate_pct ?? 0, isRate: true, unit: "%" },
+            { label: "Utilization Rate", t: tst.utilization_pct ?? 0, c: ctrl.utilization_pct ?? 0, isRate: true, unit: "%" },
+            { label: "", t: 0, c: 0, isSeparator: true },
+            // --- Revenue per user (already normalized) ---
+            { label: "Admin Fee / User", t: tst.admin_fee_per_user ?? 0, c: ctrl.admin_fee_per_user ?? 0 },
+            { label: "Interest / User", t: tst.interest_per_user ?? 0, c: ctrl.interest_per_user ?? 0 },
+            { label: "Card Interchange / User", t: tst.interchange_per_user ?? 0, c: ctrl.interchange_per_user ?? 0 },
+            { label: "QRIS MDR / User", t: tst.qris_mdr_per_user ?? 0, c: ctrl.qris_mdr_per_user ?? 0 },
+            { label: "ARPU (total)", t: tst.arpu, c: ctrl.arpu },
+            { label: "", t: 0, c: 0, isSeparator: true },
+            // --- Absolute revenue (normalized to per-1K users) ---
+            { label: "Admin Fee Revenue (per 1K)", t: norm(tst.admin_fee_revenue, tst.cohort_size), c: norm(ctrl.admin_fee_revenue, ctrl.cohort_size) },
+            { label: "Interest Revenue (per 1K)", t: norm(tst.interest_revenue, tst.cohort_size), c: norm(ctrl.interest_revenue, ctrl.cohort_size) },
+            { label: "Late/Penalty Fee (per 1K)", t: norm(tst.late_penalty_fee_revenue, tst.cohort_size), c: norm(ctrl.late_penalty_fee_revenue, ctrl.cohort_size) },
+            { label: "Card Interchange (per 1K)", t: norm(tst.card_interchange_revenue, tst.cohort_size), c: norm(ctrl.card_interchange_revenue, ctrl.cohort_size) },
+            { label: "QRIS MDR (per 1K)", t: norm(tst.qris_mdr_revenue, tst.cohort_size), c: norm(ctrl.qris_mdr_revenue, ctrl.cohort_size) },
+            { label: "Total Revenue (per 1K)", t: norm(tst.total_revenue, tst.cohort_size), c: norm(ctrl.total_revenue, ctrl.cohort_size) },
           ];
 
           return (
@@ -1751,9 +1778,9 @@ export default function QrisExperimentPage() {
               <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] overflow-hidden">
                 <div className="p-4 border-b border-[var(--border)]">
                   <p className="text-xs text-[var(--text-muted)]">
-                    Revenue per cohort. Fees and interest from actual DW004 billed amounts.
-                    Card interchange at 1.6% (Kansas City Fed Aug 2025).
-                    QRIS issuer revenue at 0.2035% (0.55% MDR x 37% share via PT ALTO).
+                    Revenue analysis including activation uplift from QRIS. Absolute counts normalized per 1,000 users to account for cohort size differences.
+                    Rates shown as-is (no normalization needed). Fees and interest from DW004 billed amounts.
+                    Card interchange at 1.6%. QRIS issuer revenue at blended 0.134% (weighted MDR x 37% share via PT ALTO).
                   </p>
                 </div>
                 <table className="w-full text-sm">
@@ -1766,19 +1793,21 @@ export default function QrisExperimentPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {profRows.map(row => {
+                    {profRows.map((row, idx) => {
+                      if (row.isSeparator) return <tr key={`sep-${idx}`} className="h-2 bg-[var(--surface)]" />;
                       const d = dlt(row.t, row.c);
                       const isPos = d.startsWith('+');
                       const isNeg = d.startsWith('-');
                       const isTotal = row.label.startsWith('Total') || row.label.startsWith('ARPU');
+                      const fmtVal = (v: number) => row.isRate ? `${v.toFixed(1)}${row.unit ?? ''}` : fmtR(v);
                       return (
                         <tr key={row.label} className={cn(
                           "border-b border-[var(--border)] last:border-b-0",
                           isTotal && "bg-[var(--surface)] font-semibold",
                         )}>
                           <td className="px-4 py-3 font-medium text-[var(--text-primary)]">{row.label}</td>
-                          <td className="text-right px-4 py-3 font-mono text-xs text-[var(--text-secondary)]">{fmtR(row.c)}</td>
-                          <td className="text-right px-4 py-3 font-mono text-xs text-[var(--text-primary)]">{fmtR(row.t)}</td>
+                          <td className="text-right px-4 py-3 font-mono text-xs text-[var(--text-secondary)]">{fmtVal(row.c)}</td>
+                          <td className="text-right px-4 py-3 font-mono text-xs text-[var(--text-primary)]">{fmtVal(row.t)}</td>
                           <td className="text-right px-4 py-3">
                             <span className={cn(
                               "inline-flex items-center gap-1 text-xs font-semibold rounded-full px-2 py-0.5",

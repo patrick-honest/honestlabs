@@ -446,11 +446,19 @@ async function queryQrisExperiment(
       cohort_size AS (
         SELECT grp, COUNT(DISTINCT user_id) AS sz FROM credit_qris_exp GROUP BY grp
       ),
+      -- Financials from DW004 (latest snapshot): admin fees, interest, late penalties
       financials AS (
         SELECT a.grp,
           ROUND(SUM(CAST(d.f9_dw004_bil_fee_chrg_1 AS FLOAT64) / 100), 0) AS admin_fee_revenue,
           ROUND(SUM(CAST(d.f9_dw004_tot_int AS FLOAT64) / 100), 0) AS interest_revenue,
-          ROUND(SUM(CAST(d.f9_dw004_bil_fee_chrg_2 AS FLOAT64) / 100), 0) AS late_penalty_fee_revenue
+          ROUND(SUM(CAST(d.f9_dw004_bil_fee_chrg_2 AS FLOAT64) / 100), 0) AS late_penalty_fee_revenue,
+          -- Activation & revolve metrics to show QRIS uplift effect on revenue
+          COUNT(DISTINCT d.p9_dw004_loc_acct) AS accounts_with_statement,
+          COUNTIF(CAST(d.f9_dw004_os_bill_amt AS FLOAT64) > 0) AS revolving_accounts,
+          ROUND(SAFE_DIVIDE(COUNTIF(CAST(d.f9_dw004_os_bill_amt AS FLOAT64) > 0),
+            COUNT(DISTINCT d.p9_dw004_loc_acct)) * 100, 1) AS revolve_rate_pct,
+          ROUND(SAFE_DIVIDE(SUM(CAST(d.f9_dw004_clo_bal AS FLOAT64) / 100),
+            SUM(CAST(d.f9_dw004_loc_lmt AS FLOAT64)/ 100)) * 100, 1) AS utilization_pct
         FROM acct_map a
         JOIN ${TABLES.financial_account_updates} d ON d.p9_dw004_loc_acct = a.loc_acct
         WHERE d.f9_dw004_bus_dt = (
@@ -459,12 +467,15 @@ async function queryQrisExperiment(
         )
         GROUP BY a.grp
       ),
+      -- Transaction revenue: card interchange + QRIS MDR (issuer share)
       txn_rev AS (
         SELECT c.grp,
+          COUNT(DISTINCT m.user_id) AS transactors,
           ROUND(SUM(CASE WHEN t.fx_dw007_rte_dest != 'L' OR t.fx_dw007_rte_dest IS NULL
             THEN CAST(t.f9_dw007_amt_req AS FLOAT64) / 100 * ${CARD_INTERCHANGE_RATE} ELSE 0 END), 0) AS card_interchange_revenue,
           ROUND(SUM(CASE WHEN t.fx_dw007_rte_dest = 'L'
-            THEN CAST(t.f9_dw007_amt_req AS FLOAT64) / 100 * ${QRIS_ISSUER_RATE} ELSE 0 END), 0) AS qris_mdr_revenue
+            THEN CAST(t.f9_dw007_amt_req AS FLOAT64) / 100 * ${QRIS_ISSUER_RATE} ELSE 0 END), 0) AS qris_mdr_revenue,
+          ROUND(SUM(CAST(t.f9_dw007_amt_req AS FLOAT64) / 100), 0) AS total_spend
         FROM ${TABLES.authorized_transaction} t
         JOIN ${TABLES.principal_card_updates} p ON p.f9_dw005_crn = t.f9_dw007_prin_crn
         JOIN ${TABLES.cms_line_of_credit} m ON m.external_id = p.f9_dw005_loc_acct
@@ -477,11 +488,26 @@ async function queryQrisExperiment(
       SELECT
         f.grp,
         cs.sz AS cohort_size,
+        -- Activation metrics
+        tr.transactors,
+        ROUND(tr.transactors * 100.0 / cs.sz, 1) AS spend_active_rate,
+        tr.total_spend,
+        -- Revolve / utilization (drives admin fee + interest revenue)
+        f.revolving_accounts,
+        f.revolve_rate_pct,
+        f.utilization_pct,
+        -- Revenue breakdown
         f.admin_fee_revenue,
         f.interest_revenue,
         f.late_penalty_fee_revenue,
         tr.card_interchange_revenue,
         tr.qris_mdr_revenue,
+        -- Per-user revenue metrics
+        ROUND(f.admin_fee_revenue / cs.sz, 0) AS admin_fee_per_user,
+        ROUND(f.interest_revenue / cs.sz, 0) AS interest_per_user,
+        ROUND(tr.card_interchange_revenue / cs.sz, 0) AS interchange_per_user,
+        ROUND(tr.qris_mdr_revenue / cs.sz, 0) AS qris_mdr_per_user,
+        -- Totals
         ROUND(f.admin_fee_revenue + f.interest_revenue + f.late_penalty_fee_revenue
           + tr.card_interchange_revenue + tr.qris_mdr_revenue, 0) AS total_revenue,
         ROUND((f.admin_fee_revenue + f.interest_revenue + f.late_penalty_fee_revenue
