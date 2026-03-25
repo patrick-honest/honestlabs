@@ -6,7 +6,18 @@ import { getCached, setCached, cacheKey } from "../_shared/cache";
 // Revenue rate constants
 // ---------------------------------------------------------------------------
 const CARD_INTERCHANGE_RATE = 0.016; // 1.6% blended Visa+MC (Kansas City Fed Aug 2025)
-const QRIS_ISSUER_RATE = 0.002035; // 0.55% MDR x 37% issuer share (PBI No. 24/8/PBI/2022, PT ALTO)
+
+// QRIS MDR rates per merchant criteria (PBI No. 24/8/PBI/2022):
+//   UMI (Mikro):  0.30% MDR → 0.111% effective (x 37% issuer share)
+//   UKE (Kecil):  0.40% MDR → 0.148% effective
+//   UKI (Menengah): 0.55% MDR → 0.2035% effective
+//   UBE (Besar):  0.55% MDR → 0.2035% effective
+// Honest earns 37% of MDR as issuer (PT ALTO network split).
+//
+// For queries without per-merchant classification, we use a blended rate.
+// The merchant criteria chart shows ~60% UMI, ~25% UKE, ~10% UKI, ~5% UBE by txn count.
+// Weighted blended: (0.6*0.111 + 0.25*0.148 + 0.1*0.2035 + 0.05*0.2035) ≈ 0.134%
+const QRIS_ISSUER_RATE = 0.00134; // Weighted blended issuer rate across all merchant criteria
 
 // ---------------------------------------------------------------------------
 // Shared CTE fragments
@@ -880,7 +891,7 @@ async function queryQrisExperiment(
           -- card_interchange = card (non-QRIS) spend x 1.6% blended interchange rate
           ROUND(SUM(CASE WHEN t.fx_dw007_rte_dest != 'L' OR t.fx_dw007_rte_dest IS NULL
             THEN CAST(t.f9_dw007_amt_req AS FLOAT64) / 100 * ${CARD_INTERCHANGE_RATE} ELSE 0 END), 0) AS card_interchange,
-          -- qris_mdr = QRIS spend x 0.2035% issuer share (0.55% MDR x 37% issuer via PT ALTO)
+          -- qris_mdr = QRIS spend x blended issuer rate (weighted avg of UMI/UKE/UKI/UBE MDR x 37%)
           ROUND(SUM(CASE WHEN t.fx_dw007_rte_dest = 'L'
             THEN CAST(t.f9_dw007_amt_req AS FLOAT64) / 100 * ${QRIS_ISSUER_RATE} ELSE 0 END), 0) AS qris_mdr
         FROM ${TABLES.authorized_transaction} t
