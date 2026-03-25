@@ -326,7 +326,7 @@ const portfolioKpis: KpiDefinition[] = [
     unit: "percent",
     section: "portfolio",
     queryFn: "getPortfolioSnapshot",
-    description: "Average credit utilization across active accounts (balance / limit)",
+    description: "Average credit utilization across active accounts. Formula: SUM(f9_dw004_clo_bal / 100) / SUM(f9_dw004_loc_lmt) × 100. Note: clo_bal is in cents (÷100), loc_lmt is already in IDR (no conversion needed). SQL: ROUND(SAFE_DIVIDE(SUM(CAST(f9_dw004_clo_bal AS FLOAT64)/100), NULLIF(SUM(CAST(f9_dw004_loc_lmt AS FLOAT64)),0))*100, 2)",
     target: 60,
     warningThreshold: 70,
     dangerThreshold: 80,

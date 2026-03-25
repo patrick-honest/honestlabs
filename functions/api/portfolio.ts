@@ -10,8 +10,9 @@ async function queryPortfolio(startDate: string, endDate: string, env: Env, filt
       `SELECT FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(f9_dw004_bus_dt, ISOWEEK)) AS week_start,
         COUNT(DISTINCT p9_dw004_loc_acct) AS total_accounts, COUNTIF(fx_dw004_loc_stat IN ('G','N')) AS active_accounts,
         COUNTIF(fx_dw004_loc_stat='B') AS blocked_accounts, COUNTIF(fx_dw004_loc_stat='C') AS closed_accounts,
-        ROUND(AVG(CAST(f9_dw004_loc_lmt AS FLOAT64)),2) AS avg_credit_limit, ROUND(AVG(CAST(f9_dw004_clo_bal AS FLOAT64)),2) AS avg_balance,
-        ROUND(SAFE_DIVIDE(SUM(CAST(f9_dw004_clo_bal AS FLOAT64)), NULLIF(SUM(CAST(f9_dw004_loc_lmt AS FLOAT64)),0))*100,2) AS utilization_pct,
+        ROUND(AVG(CAST(f9_dw004_loc_lmt AS FLOAT64)),2) AS avg_credit_limit, ROUND(AVG(CAST(f9_dw004_clo_bal AS FLOAT64)/100),2) AS avg_balance,
+        -- loc_lmt is already in IDR (no cents), clo_bal is in cents (divide by 100)
+        ROUND(SAFE_DIVIDE(SUM(CAST(f9_dw004_clo_bal AS FLOAT64)/100), NULLIF(SUM(CAST(f9_dw004_loc_lmt AS FLOAT64)),0))*100,2) AS utilization_pct,
         COUNTIF(f9_dw004_curr_dpd>0) AS delinquent_accounts,
         ROUND(SAFE_DIVIDE(COUNTIF(f9_dw004_curr_dpd>0), COUNT(DISTINCT p9_dw004_loc_acct))*100,2) AS delinquency_rate
       FROM ${TABLES.financial_account_updates} dw4
