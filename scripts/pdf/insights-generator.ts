@@ -74,6 +74,10 @@ interface InsightTemplates {
   ramadanNote: () => string;
   qrisAdoption: (detail: string) => string;
   ojkContext: (detail: string) => string;
+  hypothesis: (metric: string, hypothesis: string) => string;
+  nextStep: (action: string) => string;
+  qrisSpendLift: (pct: string) => string;
+  rpuDelta: (pct: string) => string;
 }
 
 const TEMPLATES: Record<Lang, InsightTemplates> = {
@@ -87,6 +91,10 @@ const TEMPLATES: Record<Lang, InsightTemplates> = {
       "Ramadan/Eid seasonality may influence spending patterns, transaction volumes, and repayment timing this period.",
     qrisAdoption: (d) => `QRIS adoption continues expanding across Indonesian merchants — ${d}.`,
     ojkContext: (d) => `In line with OJK's financial inclusion mandate, ${d}.`,
+    hypothesis: (m, h) => `\u26A1 Hypothesis: ${m} shift is likely driven by ${h}.`,
+    nextStep: (a) => `\u2192 Next step: ${a}`,
+    qrisSpendLift: (pct) => `QRIS test cohort shows ${pct} incremental spend lift versus control.`,
+    rpuDelta: (pct) => `Revenue per user (RPU) delta between test and control is ${pct}.`,
   },
   id: {
     trendUp: (m, c) => `${m} meningkat ${c} dari minggu sebelumnya, menunjukkan momentum positif.`,
@@ -98,6 +106,10 @@ const TEMPLATES: Record<Lang, InsightTemplates> = {
       "Musim Ramadan/Idulfitri dapat memengaruhi pola pengeluaran, volume transaksi, dan waktu pembayaran periode ini.",
     qrisAdoption: (d) => `Adopsi QRIS terus berkembang di merchant Indonesia — ${d}.`,
     ojkContext: (d) => `Sejalan dengan mandat inklusi keuangan OJK, ${d}.`,
+    hypothesis: (m, h) => `\u26A1 Hipotesis: Perubahan ${m} kemungkinan disebabkan oleh ${h}.`,
+    nextStep: (a) => `\u2192 Langkah selanjutnya: ${a}`,
+    qrisSpendLift: (pct) => `Kohort uji QRIS menunjukkan peningkatan spend ${pct} dibanding kontrol.`,
+    rpuDelta: (pct) => `Selisih pendapatan per pengguna (RPU) antara uji dan kontrol adalah ${pct}.`,
   },
   ja: {
     trendUp: (m, c) => `${m}は前週比${c}増加し、好調な勢いを示しています。`,
@@ -109,6 +121,10 @@ const TEMPLATES: Record<Lang, InsightTemplates> = {
       "ラマダン/断食明け大祭のシーズンは、消費パターン、取引量、返済タイミングに影響する可能性があります。",
     qrisAdoption: (d) => `QRISの導入はインドネシア全土の加盟店で拡大を続けています — ${d}。`,
     ojkContext: (d) => `OJKの金融包摂方針に沿い、${d}。`,
+    hypothesis: (m, h) => `\u26A1 仮説: ${m}の変動は${h}に起因する可能性があります。`,
+    nextStep: (a) => `\u2192 次のステップ: ${a}`,
+    qrisSpendLift: (pct) => `QRISテストコホートはコントロールに対して${pct}の増分支出リフトを示しています。`,
+    rpuDelta: (pct) => `テストとコントロール間のユーザーあたり収益(RPU)差は${pct}です。`,
   },
 };
 
@@ -135,6 +151,19 @@ const GENERATORS: Record<string, InsightFn> = {
         } else {
           insights.push(t.trendDown(kpi.label, fmtPct(kpi.changePercent)));
         }
+        // Add hypothesis for significant changes
+        if (Math.abs(kpi.changePercent) > 5) {
+          const hypothesis = kpi.label.toLowerCase().includes("spend")
+            ? "seasonal consumer activity shifts or campaign effects"
+            : kpi.label.toLowerCase().includes("approval")
+              ? "changes in credit policy thresholds or applicant quality mix"
+              : "underlying portfolio composition changes";
+          insights.push(t.hypothesis(kpi.label, hypothesis));
+          const step = kpi.changePercent > 0
+            ? `Validate ${kpi.label} uplift sustainability by checking cohort-level trends.`
+            : `Investigate ${kpi.label} decline root cause in next standup and consider intervention.`;
+          insights.push(t.nextStep(step));
+        }
       }
     }
 
@@ -142,6 +171,7 @@ const GENERATORS: Record<string, InsightFn> = {
     const dpd = kpis.find((k) => k.label.includes("DPD") || k.label.includes("Delinquent"));
     if (dpd && dpd.value > 3) {
       insights.push(t.riskAlert(`DPD 30+ rate at ${dpd.value.toFixed(1)}% — above target threshold.`));
+      insights.push(t.nextStep("Escalate to collections team and review early-stage intervention triggers."));
     }
 
     return insights;
@@ -163,6 +193,10 @@ const GENERATORS: Record<string, InsightFn> = {
         } else {
           insights.push(t.trendDown("Spend Active Rate", fmtPct(sarChange)));
         }
+        if (Math.abs(sarChange) > 5) {
+          insights.push(t.hypothesis("Spend Active Rate", "activation campaign timing or onboarding funnel improvements"));
+          insights.push(t.nextStep("Cross-reference SAR movement with recent campaign launches and cohort activation dates."));
+        }
       }
 
       const spendChange = pctChange(latest.total_spend_idr ?? 0, previous.total_spend_idr ?? 0);
@@ -172,6 +206,10 @@ const GENERATORS: Record<string, InsightFn> = {
             ? t.trendUp("Total Spend", fmtPct(spendChange))
             : t.trendDown("Total Spend", fmtPct(spendChange)),
         );
+        if (Math.abs(spendChange) > 5) {
+          insights.push(t.hypothesis("Total Spend", "merchant promotional activity or credit limit adjustment effects"));
+          insights.push(t.nextStep("Segment spend lift by merchant category to isolate organic vs. campaign-driven growth."));
+        }
       }
     }
 
@@ -185,6 +223,7 @@ const GENERATORS: Record<string, InsightFn> = {
         insights.push(
           t.qrisAdoption(`QRIS now represents ${qrisShare.toFixed(1)}% of total spend`),
         );
+        insights.push(t.nextStep("Monitor interchange margin on QRIS vs. POS transactions to assess profitability impact."));
       }
     }
 
@@ -203,8 +242,11 @@ const GENERATORS: Record<string, InsightFn> = {
       const rate = latest.delinquency_rate_30plus ?? 0;
       if (rate > 5) {
         insights.push(t.riskAlert(`30+ DPD delinquency rate at ${rate.toFixed(1)}%, elevated above benchmark.`));
+        insights.push(t.hypothesis("Delinquency Rate", "recent cohort vintage underperformance or macro employment shifts"));
+        insights.push(t.nextStep("Trigger vintage-level drill-down and tighten early-warning collection outreach for DPD 1-15 bucket."));
       } else if (rate < 2) {
         insights.push(t.opportunity(`Delinquency rate at ${rate.toFixed(1)}% — portfolio quality is strong.`));
+        insights.push(t.nextStep("Consider selective credit limit increases for low-risk segments to drive spend growth."));
       }
     }
 
@@ -219,6 +261,9 @@ const GENERATORS: Record<string, InsightFn> = {
             ? t.trendUp("Delinquency Rate", fmtPct(change))
             : t.trendDown("Delinquency Rate", fmtPct(change)),
         );
+        if (change > 0) {
+          insights.push(t.nextStep("Run roll-rate analysis to distinguish flow vs. stock deterioration."));
+        }
       }
     }
 
@@ -239,6 +284,10 @@ const GENERATORS: Record<string, InsightFn> = {
               ? t.trendUp("Approval Rate", fmtPct(change))
               : t.trendDown("Approval Rate", fmtPct(change)),
           );
+          if (Math.abs(change) > 5) {
+            insights.push(t.hypothesis("Approval Rate", "credit policy parameter adjustment or applicant channel mix shift"));
+            insights.push(t.nextStep("Review score-band approval distribution and check for recent policy rule changes."));
+          }
         }
       }
       if (latest) {
@@ -252,6 +301,9 @@ const GENERATORS: Record<string, InsightFn> = {
       if (first.count && last.count) {
         const overallConversion = ((last.count / first.count) * 100).toFixed(1);
         insights.push(t.stableMetric("End-to-end Funnel Conversion", `${overallConversion}%`));
+        if (parseFloat(overallConversion) < 30) {
+          insights.push(t.nextStep("Investigate funnel drop-off stages — consider UX improvements at the highest-loss step."));
+        }
       }
     }
     return insights;
@@ -267,6 +319,11 @@ const GENERATORS: Record<string, InsightFn> = {
         insights.push(t.stableMetric("Active Accounts", fmtNum(latest.active_accounts ?? 0)));
         if (latest.utilization_pct != null) {
           insights.push(t.stableMetric("Portfolio Utilization", `${latest.utilization_pct.toFixed(1)}%`));
+          if (latest.utilization_pct > 70) {
+            insights.push(t.nextStep("High utilization may signal credit stress — monitor DPD transition rates for these accounts."));
+          } else if (latest.utilization_pct < 20) {
+            insights.push(t.nextStep("Low utilization suggests engagement opportunity — consider targeted spend campaigns."));
+          }
         }
       }
       if (latest && previous) {
@@ -277,9 +334,63 @@ const GENERATORS: Record<string, InsightFn> = {
               ? t.trendUp("Active Accounts", fmtPct(change))
               : t.trendDown("Active Accounts", fmtPct(change)),
           );
+          if (Math.abs(change) > 5) {
+            insights.push(t.hypothesis("Active Accounts", change > 0 ? "new cohort onboarding acceleration" : "increased dormancy or account closures"));
+          }
         }
       }
     }
+    return insights;
+  },
+  "qris-experiment": (data, _prev, t, currency) => {
+    const insights: string[] = [];
+
+    // Cohort comparison metrics
+    const cohort = data.cohortComparison as Record<string, unknown>[];
+    if (Array.isArray(cohort) && cohort.length >= 2) {
+      const test = cohort.find((r) => String(r.grp).toLowerCase().includes("test")) as Record<string, number> | undefined;
+      const control = cohort.find((r) => String(r.grp).toLowerCase().includes("control")) as Record<string, number> | undefined;
+
+      if (test && control) {
+        // Spend lift
+        const testSpend = test.total_spend_idr ?? test.avg_spend_idr ?? 0;
+        const controlSpend = control.total_spend_idr ?? control.avg_spend_idr ?? 0;
+        if (controlSpend > 0) {
+          const spendLift = ((testSpend - controlSpend) / controlSpend * 100);
+          insights.push(t.qrisSpendLift(fmtPct(spendLift)));
+        }
+
+        // RPU differential
+        const testRpu = test.rpu_idr ?? test.revenue_per_user_idr ?? 0;
+        const controlRpu = control.rpu_idr ?? control.revenue_per_user_idr ?? 0;
+        if (controlRpu > 0) {
+          const rpuDelta = ((testRpu - controlRpu) / controlRpu * 100);
+          insights.push(t.rpuDelta(fmtPct(rpuDelta)));
+        }
+
+        // QRIS adoption rate
+        const testSize = test.cohort_size ?? test.users ?? 0;
+        const qrisUsers = test.qris_active_users ?? test.qris_users ?? 0;
+        if (testSize > 0 && qrisUsers > 0) {
+          const adoptionRate = (qrisUsers / testSize * 100).toFixed(1);
+          insights.push(t.qrisAdoption(`${adoptionRate}% of test cohort adopted QRIS`));
+        }
+
+        // Interchange cannibalization hypothesis
+        const testInterchange = test.interchange_revenue_idr ?? 0;
+        const controlInterchange = control.interchange_revenue_idr ?? 0;
+        if (controlInterchange > 0 && testInterchange < controlInterchange * 0.95) {
+          insights.push(t.hypothesis("Interchange Revenue", "QRIS lower interchange rate cannibalizing POS-based card swipe revenue"));
+          insights.push(t.nextStep("Quantify net revenue impact: QRIS incremental spend revenue minus interchange margin erosion."));
+        } else {
+          insights.push(t.opportunity("QRIS incremental spend is additive without significant interchange cannibalization."));
+        }
+
+        // Graduation criteria suggestion
+        insights.push(t.nextStep("Graduation criteria: confirm >5% incremental spend lift and positive net revenue at p<0.05 significance before full rollout."));
+      }
+    }
+
     return insights;
   },
 };
@@ -315,11 +426,16 @@ function genericInsights(
               ? t.trendUp(metricLabel, `${change.toFixed(1)}pp`)
               : t.trendDown(metricLabel, `${Math.abs(change).toFixed(1)}pp`),
           );
+          // Add prescriptive follow-up for significant shifts
+          if (Math.abs(change) > 5) {
+            insights.push(t.hypothesis(metricLabel, "operational or market-driven factor change"));
+            insights.push(t.nextStep(`Drill into ${metricLabel} by segment to isolate driver and determine if action is needed.`));
+          }
         }
       }
-      if (insights.length >= 3) break;
+      if (insights.length >= 4) break;
     }
-    if (insights.length >= 3) break;
+    if (insights.length >= 4) break;
   }
 
   return insights;

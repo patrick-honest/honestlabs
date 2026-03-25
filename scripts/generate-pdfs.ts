@@ -28,6 +28,82 @@ import {
 import { generateInsights } from "./pdf/insights-generator";
 
 // ---------------------------------------------------------------------------
+// QRIS experiment special handling
+// ---------------------------------------------------------------------------
+
+/** Build KPIs from QRIS experiment test-vs-control data */
+function buildQrisKpis(
+  apiData: Record<string, unknown>,
+  messages: Record<string, unknown>,
+  currency: "IDR" | "USD",
+): KpiItem[] {
+  const cohort = apiData.cohortComparison as Record<string, unknown>[] | undefined;
+  if (!Array.isArray(cohort)) return [];
+
+  const test = cohort.find((r) => String(r.grp).toLowerCase().includes("test")) as Record<string, number> | undefined;
+  const control = cohort.find((r) => String(r.grp).toLowerCase().includes("control")) as Record<string, number> | undefined;
+  if (!test) return [];
+
+  const kpis: KpiItem[] = [];
+
+  // Test cohort size
+  kpis.push({
+    label: resolveI18n(messages, "pdf.metrics.testCohortSize"),
+    value: test.cohort_size ?? test.users ?? 0,
+    unit: "count",
+    change: null,
+  });
+
+  // Control cohort size
+  if (control) {
+    kpis.push({
+      label: resolveI18n(messages, "pdf.metrics.controlCohortSize"),
+      value: control.cohort_size ?? control.users ?? 0,
+      unit: "count",
+      change: null,
+    });
+  }
+
+  // SAR
+  if (test.spend_active_rate != null) {
+    const testSar = test.spend_active_rate;
+    const controlSar = control?.spend_active_rate ?? 0;
+    kpis.push({
+      label: "SAR (Test)",
+      value: testSar,
+      unit: "percent",
+      change: controlSar > 0 ? ((testSar - controlSar) / controlSar * 100) : null,
+    });
+  }
+
+  // Total Spend
+  const testSpend = test.total_spend_idr ?? 0;
+  const controlSpend = control?.total_spend_idr ?? 0;
+  if (testSpend > 0) {
+    kpis.push({
+      label: "Total Spend (Test)",
+      value: testSpend,
+      unit: "currency",
+      change: controlSpend > 0 ? ((testSpend - controlSpend) / controlSpend * 100) : null,
+    });
+  }
+
+  // Total Transactions
+  const testTxns = test.total_transactions ?? 0;
+  const controlTxns = control?.total_transactions ?? 0;
+  if (testTxns > 0) {
+    kpis.push({
+      label: "Transactions (Test)",
+      value: testTxns,
+      unit: "count",
+      change: controlTxns > 0 ? ((testTxns - controlTxns) / controlTxns * 100) : null,
+    });
+  }
+
+  return kpis;
+}
+
+// ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
 const LANGUAGES = ["en", "id", "ja"] as const;
@@ -190,16 +266,21 @@ async function main() {
           const messages = messagesMap.get(lang)!;
           const reportTitle = resolveI18n(messages, report.titleKey);
 
-          // Build KPIs
-          const kpis: KpiItem[] = report.metrics.map((m) => {
-            const rawValue = Number(getByPath(apiData.current, m.dataPath) ?? 0);
-            return {
-              label: resolveI18n(messages, m.labelKey),
-              value: rawValue,
-              unit: m.unit,
-              change: null, // computed from prev period KPIs if available
-            };
-          });
+          // Build KPIs — special handling for QRIS experiment
+          let kpis: KpiItem[];
+          if (report.id === "qris-experiment") {
+            kpis = buildQrisKpis(apiData.current, messages, currency);
+          } else {
+            kpis = report.metrics.map((m) => {
+              const rawValue = Number(getByPath(apiData.current, m.dataPath) ?? 0);
+              return {
+                label: resolveI18n(messages, m.labelKey),
+                value: rawValue,
+                unit: m.unit,
+                change: null, // computed from prev period KPIs if available
+              };
+            });
+          }
 
           // For dashboard KPIs, extract change from the KPI objects themselves
           if (report.id === "dashboard" && Array.isArray(apiData.current.kpis)) {
@@ -228,8 +309,13 @@ async function main() {
           const tables: TableData[] = [];
 
           for (const chartDef of report.charts) {
-            const data = getDataArray(apiData.current, chartDef.dataKey);
+            let data = getDataArray(apiData.current, chartDef.dataKey);
             if (data.length === 0) continue;
+
+            // Limit top QRIS merchants to 25 rows
+            if (chartDef.id === "qris-top-merchants") {
+              data = data.slice(0, 25);
+            }
 
             if (chartDef.type === "table") {
               const tableTitle = resolveI18n(messages, chartDef.titleKey);

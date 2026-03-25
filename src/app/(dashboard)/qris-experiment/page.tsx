@@ -1,23 +1,25 @@
 "use client";
 
-import { useEffect, useMemo, useCallback } from "react";
+import { useEffect, useMemo, useCallback, useState } from "react";
 import useSWR from "swr";
 import { Header } from "@/components/layout/header";
 import { useTranslations } from "next-intl";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
-import { QrCode, CheckCircle2, TrendingUp, Users, CreditCard, ArrowUpRight, Star, Store, DollarSign, AlertTriangle } from "lucide-react";
+import { QrCode, CheckCircle2, TrendingUp, Users, CreditCard, ArrowUpRight, Star, Store, DollarSign, AlertTriangle, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
 import { usePeriod } from "@/hooks/use-period";
 import { useCurrency } from "@/hooks/use-currency";
+import { useLanguage } from "@/hooks/use-language";
 import { formatAmountCompact } from "@/lib/currency";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { getPeriodRange } from "@/lib/period-data";
 import { useDateParams } from "@/hooks/use-period";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from "recharts";
+import { PdfDownloadModal } from "@/components/dashboard/pdf-download-modal";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -225,9 +227,14 @@ function ComparisonRow({
         </div>
         <div className={cn(
           "flex items-center gap-1 min-w-[70px] justify-end text-xs font-semibold rounded-full px-2 py-0.5",
-          isPositive ? "text-emerald-600 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-950/30" : "text-red-600 bg-red-50 dark:text-red-400 dark:bg-red-950/30",
+          Math.abs(diff) < 0.05
+            ? "text-gray-600 bg-gray-100 dark:text-gray-400 dark:bg-gray-800"
+            : isPositive ? "text-emerald-600 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-950/30" : "text-red-600 bg-red-50 dark:text-red-400 dark:bg-red-950/30",
         )}>
-          <ArrowUpRight className={cn("h-3 w-3", !isPositive && "rotate-90")} />
+          {Math.abs(diff) < 0.05
+            ? <span>&mdash;</span>
+            : <ArrowUpRight className={cn("h-3 w-3", !isPositive && "rotate-90")} />
+          }
           {diff > 0 ? "+" : ""}{diff.toFixed(1)}%
         </div>
       </div>
@@ -261,6 +268,15 @@ function KpiCard({
       <p className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">{label}</p>
       <p className="text-xl font-bold text-[var(--text-primary)] mt-1">{value}</p>
       {subtext && <p className="text-[11px] text-[var(--text-muted)] mt-1">{subtext}</p>}
+    </div>
+  );
+}
+
+function SectionDivider({ icon: Icon, title }: { icon: React.ComponentType<{ className?: string }>; title: string }) {
+  return (
+    <div className="flex items-center gap-3 mt-10 mb-6">
+      <Icon className="h-5 w-5 text-[var(--text-muted)]" />
+      <h2 className="text-lg font-semibold text-[var(--text-primary)]">{title}</h2>
     </div>
   );
 }
@@ -380,6 +396,32 @@ interface RevenueTrajectoryRow {
   qris_revenue_idr: number;
 }
 
+interface TopQrisMerchantRow {
+  normalized_name: string;
+  total_spend_idr: number;
+  total_txns: number;
+  unique_users: number;
+}
+
+interface LtvMethodRow {
+  method: string;
+  formula: string;
+  test: { arpu: number; lifetime_months: number; churn_rate: number; ltv: number; data_source: string };
+  control: { arpu: number; lifetime_months: number; churn_rate: number; ltv: number; data_source: string };
+  delta_pct: number;
+  caption: string;
+}
+
+interface RevenueBreakdownRow {
+  grp: string;
+  cohort_size: number;
+  admin_fee: number;
+  interest_on_revolve: number;
+  card_interchange: number;
+  qris_mdr: number;
+  other_fees: number;
+}
+
 interface ApiData {
   cohortComparison: CohortRow[];
   merchantClassification?: MerchantClassRow[];
@@ -391,6 +433,9 @@ interface ApiData {
   profitability?: ProfitabilityRow[];
   revenueTrajectory?: RevenueTrajectoryRow[];
   incrementality?: { grp: string; user_type: string; users: number; total_spend: number; qris_spend: number; card_spend: number; txns: number }[];
+  topQrisMerchants?: TopQrisMerchantRow[];
+  revenueBreakdown?: RevenueBreakdownRow[];
+  ltvAnalysis?: LtvMethodRow[];
   // Legacy fields (backward compat with old dev-mode API)
   merchantBreakdown?: { qris_only_merchants: number; mixed_merchants: number; non_qris_only_merchants: number };
   merchantGrowth?: { month: string; cumulative_merchants: number; new_merchants: number }[];
@@ -405,13 +450,16 @@ interface ApiData {
 }
 
 export default function QrisExperimentPage() {
-  const { periodLabel } = usePeriod();
+  const { period, periodLabel } = usePeriod();
   const { dateParams, startDate, endDate } = useDateParams();
   const { isDark } = useTheme();
   const tNav = useTranslations("nav");
   const t = useTranslations("qrisExperiment");
   const { currency } = useCurrency();
+  const { locale } = useLanguage();
   const fmtCur = useCallback((v: number) => formatAmountCompact(v, currency), [currency]);
+
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
 
   const apiUrl = startDate && endDate
     ? `/api/qris-experiment?${dateParams}`
@@ -655,10 +703,18 @@ export default function QrisExperimentPage() {
                 <div className="flex items-center justify-center h-10 w-10 rounded-xl bg-white/20 backdrop-blur-sm">
                   <QrCode className="h-5 w-5 text-white" />
                 </div>
-                <div>
+                <div className="flex-1">
                   <h2 className="text-2xl font-bold text-white">{t("title")}</h2>
                   <p className="text-sm text-white/70">{t("subtitle")} &middot; {t("abTest")}</p>
                 </div>
+                <button
+                  onClick={() => setPdfModalOpen(true)}
+                  className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white/90 bg-white/15 hover:bg-white/25 backdrop-blur-sm transition-colors no-print"
+                  title="Download PDF Report"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  PDF
+                </button>
               </div>
 
               <p className="text-sm text-white/80 max-w-2xl leading-relaxed mt-2">
@@ -817,8 +873,11 @@ export default function QrisExperimentPage() {
         )}
 
         {/* ============================================================ */}
-        {/* HEADLINE: Avg Spend per Eligible User with CI                  */}
+        {/* SECTION 2: User Engagement & Spend Behavior                    */}
         {/* ============================================================ */}
+        {hasData && <SectionDivider icon={Users} title="User Engagement & Spend Behavior" />}
+
+        {/* HEADLINE: Avg Spend per Eligible User with CI                  */}
         {hasData && spendCI && (
           <div className={cn(
             "rounded-xl border p-5",
@@ -857,9 +916,91 @@ export default function QrisExperimentPage() {
           </div>
         )}
 
+        {/* Incrementality Analysis — dormant user reactivation */}
+        {apiData?.incrementality && apiData.incrementality.length > 0 && (() => {
+          const inc = apiData.incrementality;
+          const incTestRows = inc.filter(r => r.grp === 'Test');
+          const incCtrlRows = inc.filter(r => r.grp === 'Control');
+          const dormantQris = incTestRows.find(r => r.user_type === 'dormant_qris_reactivated');
+          const activeFirstQris = incTestRows.find(r => r.user_type === 'active_first_qris');
+
+          // Truly incremental: dormant users reactivated by QRIS (all spend)
+          // + active-first-QRIS users' subsequent card spend (QRIS brought them back)
+          const trulyIncremental = (dormantQris?.total_spend ?? 0) + (activeFirstQris?.card_spend ?? 0);
+
+          const userTypes = [
+            { key: 'dormant_qris_reactivated', label: 'Dormant \u2192 Reactivated by QRIS', tag: '100% INCREMENTAL', tagColor: 'emerald' },
+            { key: 'active_first_qris', label: 'Active \u2192 First Txn was QRIS', tag: 'CARD SPEND INCREMENTAL', tagColor: 'blue' },
+            { key: 'active_first_card', label: 'Active \u2192 First Txn was Card', tag: 'CANNIBALIZATION RISK', tagColor: 'amber' },
+            { key: 'dormant_card_reactivated', label: 'Dormant \u2192 Reactivated by Card', tag: null, tagColor: '' },
+          ];
+
+          return (
+            <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] overflow-hidden">
+              <div className="p-4 border-b border-[var(--border)]">
+                <p className="text-sm font-semibold text-[var(--text-primary)] mb-1">Spend Incrementality by User Journey</p>
+                <p className="text-xs text-[var(--text-muted)]">
+                  Dormant = no transactions in 60 days pre-experiment. If a dormant user&apos;s first transaction is QRIS, all their spend is incremental.
+                  If an active user&apos;s first experiment transaction is QRIS, their subsequent card spend is also incremental (QRIS re-engaged them).
+                </p>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--border)]">
+                    <th className="text-left px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">User Type</th>
+                    <th className="text-right px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">Test Users</th>
+                    <th className="text-right px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">Test Total Spend</th>
+                    <th className="text-right px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">QRIS Spend</th>
+                    <th className="text-right px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">Card Spend</th>
+                    <th className="text-right px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">Ctrl Users</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {userTypes.map(ut => {
+                    const tRow = incTestRows.find(r => r.user_type === ut.key);
+                    const cRow = incCtrlRows.find(r => r.user_type === ut.key);
+                    if (!tRow && !cRow) return null;
+                    return (
+                      <tr key={ut.key} className="border-b border-[var(--border)] last:border-b-0">
+                        <td className="px-4 py-2.5">
+                          <span className="font-medium text-[var(--text-primary)] text-xs">{ut.label}</span>
+                          {ut.tag && (
+                            <span className={cn("ml-2 text-[9px] font-semibold",
+                              ut.tagColor === 'emerald' ? "text-emerald-600 dark:text-emerald-400" :
+                              ut.tagColor === 'blue' ? "text-blue-600 dark:text-blue-400" :
+                              "text-amber-600 dark:text-amber-400"
+                            )}>{ut.tag}</span>
+                          )}
+                        </td>
+                        <td className="text-right px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{tRow?.users?.toLocaleString() ?? '-'}</td>
+                        <td className="text-right px-4 py-2.5 font-mono text-xs font-semibold text-[var(--text-primary)]">{tRow ? fmtCur(tRow.total_spend) : '-'}</td>
+                        <td className="text-right px-4 py-2.5 font-mono text-xs text-violet-600 dark:text-violet-400">{tRow ? fmtCur(tRow.qris_spend) : '-'}</td>
+                        <td className="text-right px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{tRow ? fmtCur(tRow.card_spend) : '-'}</td>
+                        <td className="text-right px-4 py-2.5 font-mono text-xs text-[var(--text-muted)]">{cRow?.users?.toLocaleString() ?? '-'}</td>
+                      </tr>
+                    );
+                  })}
+                  <tr className="bg-[var(--surface)] font-semibold border-t-2 border-[var(--border)]">
+                    <td className="px-4 py-2.5 text-[var(--text-primary)]">Truly Incremental Spend</td>
+                    <td className="text-right px-4 py-2.5 font-mono text-xs text-emerald-600 dark:text-emerald-400" colSpan={5}>
+                      {fmtCur(trulyIncremental)}
+                      <span className="ml-2 text-[10px] text-[var(--text-muted)] font-normal">
+                        = dormant QRIS all spend + active-first-QRIS card spend
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          );
+        })()}
+
         {/* ============================================================ */}
+        {/* SECTION 3: Merchant Ecosystem                                  */}
+        {/* ============================================================ */}
+        <SectionDivider icon={Store} title="Merchant Ecosystem" />
+
         {/* MERCHANT CLASSIFICATION & REACH — unified section               */}
-        {/* ============================================================ */}
         {(() => {
           const bd = apiData?.qrisOnlyMerchantCount ?? apiData?.merchantBreakdown;
           const mc = merchantClass;
@@ -1005,88 +1146,6 @@ export default function QrisExperimentPage() {
                 </div>
               )}
 
-              {/* Incrementality Analysis — dormant user reactivation */}
-              {apiData?.incrementality && apiData.incrementality.length > 0 && (() => {
-                const inc = apiData.incrementality;
-                const testRows = inc.filter(r => r.grp === 'Test');
-                const ctrlRows = inc.filter(r => r.grp === 'Control');
-                const dormantQris = testRows.find(r => r.user_type === 'dormant_qris_reactivated');
-                const activeFirstQris = testRows.find(r => r.user_type === 'active_first_qris');
-                const activeFirstCard = testRows.find(r => r.user_type === 'active_first_card');
-                const ctrlActive = ctrlRows.find(r => r.user_type === 'active_first_card');
-                const ctrlDormant = ctrlRows.find(r => r.user_type === 'dormant_card_reactivated');
-
-                // Truly incremental: dormant users reactivated by QRIS (all spend)
-                // + active-first-QRIS users' subsequent card spend (QRIS brought them back)
-                const trulyIncremental = (dormantQris?.total_spend ?? 0) + (activeFirstQris?.card_spend ?? 0);
-
-                const userTypes = [
-                  { key: 'dormant_qris_reactivated', label: 'Dormant → Reactivated by QRIS', tag: '100% INCREMENTAL', tagColor: 'emerald' },
-                  { key: 'active_first_qris', label: 'Active → First Txn was QRIS', tag: 'CARD SPEND INCREMENTAL', tagColor: 'blue' },
-                  { key: 'active_first_card', label: 'Active → First Txn was Card', tag: 'CANNIBALIZATION RISK', tagColor: 'amber' },
-                  { key: 'dormant_card_reactivated', label: 'Dormant → Reactivated by Card', tag: null, tagColor: '' },
-                ];
-
-                return (
-                  <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] overflow-hidden">
-                    <div className="p-4 border-b border-[var(--border)]">
-                      <p className="text-sm font-semibold text-[var(--text-primary)] mb-1">Spend Incrementality by User Journey</p>
-                      <p className="text-xs text-[var(--text-muted)]">
-                        Dormant = no transactions in 60 days pre-experiment. If a dormant user&apos;s first transaction is QRIS, all their spend is incremental.
-                        If an active user&apos;s first experiment transaction is QRIS, their subsequent card spend is also incremental (QRIS re-engaged them).
-                      </p>
-                    </div>
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-[var(--border)]">
-                          <th className="text-left px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">User Type</th>
-                          <th className="text-right px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">Test Users</th>
-                          <th className="text-right px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">Test Total Spend</th>
-                          <th className="text-right px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">QRIS Spend</th>
-                          <th className="text-right px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">Card Spend</th>
-                          <th className="text-right px-4 py-2 text-xs font-semibold text-[var(--text-muted)] uppercase">Ctrl Users</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {userTypes.map(ut => {
-                          const tRow = testRows.find(r => r.user_type === ut.key);
-                          const cRow = ctrlRows.find(r => r.user_type === ut.key);
-                          if (!tRow && !cRow) return null;
-                          return (
-                            <tr key={ut.key} className="border-b border-[var(--border)] last:border-b-0">
-                              <td className="px-4 py-2.5">
-                                <span className="font-medium text-[var(--text-primary)] text-xs">{ut.label}</span>
-                                {ut.tag && (
-                                  <span className={cn("ml-2 text-[9px] font-semibold",
-                                    ut.tagColor === 'emerald' ? "text-emerald-600 dark:text-emerald-400" :
-                                    ut.tagColor === 'blue' ? "text-blue-600 dark:text-blue-400" :
-                                    "text-amber-600 dark:text-amber-400"
-                                  )}>{ut.tag}</span>
-                                )}
-                              </td>
-                              <td className="text-right px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{tRow?.users?.toLocaleString() ?? '-'}</td>
-                              <td className="text-right px-4 py-2.5 font-mono text-xs font-semibold text-[var(--text-primary)]">{tRow ? fmtCur(tRow.total_spend) : '-'}</td>
-                              <td className="text-right px-4 py-2.5 font-mono text-xs text-violet-600 dark:text-violet-400">{tRow ? fmtCur(tRow.qris_spend) : '-'}</td>
-                              <td className="text-right px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{tRow ? fmtCur(tRow.card_spend) : '-'}</td>
-                              <td className="text-right px-4 py-2.5 font-mono text-xs text-[var(--text-muted)]">{cRow?.users?.toLocaleString() ?? '-'}</td>
-                            </tr>
-                          );
-                        })}
-                        <tr className="bg-[var(--surface)] font-semibold border-t-2 border-[var(--border)]">
-                          <td className="px-4 py-2.5 text-[var(--text-primary)]">Truly Incremental Spend</td>
-                          <td className="text-right px-4 py-2.5 font-mono text-xs text-emerald-600 dark:text-emerald-400" colSpan={5}>
-                            {fmtCur(trulyIncremental)}
-                            <span className="ml-2 text-[10px] text-[var(--text-muted)] font-normal">
-                              = dormant QRIS all spend + active-first-QRIS card spend
-                            </span>
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                );
-              })()}
-
               {/* Cumulative QRIS-only merchant growth chart */}
               {qrisOnlyMerchantGrowthData.length > 0 && (
                 <ChartCard
@@ -1109,135 +1168,6 @@ export default function QrisExperimentPage() {
                   />
                 </ChartCard>
               )}
-            </div>
-          );
-        })()}
-
-        {/* ============================================================ */}
-        {/* INTERCHANGE REVENUE ANALYSIS                                  */}
-        {/* ============================================================ */}
-        {interchangeTest && interchangeControl && (() => {
-          const NORM = 1000; // normalize per 1,000 users
-
-          const normVal = (val: number, cohortSize: number) =>
-            cohortSize > 0 ? (val / cohortSize) * NORM : 0;
-
-          const tCard = normVal(interchangeTest.card_spend_idr, interchangeTest.cohort_size);
-          const cCard = normVal(interchangeControl.card_spend_idr, interchangeControl.cohort_size);
-          const tQris = normVal(interchangeTest.qris_spend_idr, interchangeTest.cohort_size);
-          const cQris = normVal(interchangeControl.qris_spend_idr, interchangeControl.cohort_size);
-          const tTotal = normVal(interchangeTest.total_spend_idr, interchangeTest.cohort_size);
-          const cTotal = normVal(interchangeControl.total_spend_idr, interchangeControl.cohort_size);
-          const tCardIx = normVal(interchangeTest.card_interchange_idr, interchangeTest.cohort_size);
-          const cCardIx = normVal(interchangeControl.card_interchange_idr, interchangeControl.cohort_size);
-          const tQrisRev = normVal(interchangeTest.qris_issuer_revenue_idr, interchangeTest.cohort_size);
-          const cQrisRev = normVal(interchangeControl.qris_issuer_revenue_idr, interchangeControl.cohort_size);
-          const tTotalRev = normVal(interchangeTest.total_revenue_idr, interchangeTest.cohort_size);
-          const cTotalRev = normVal(interchangeControl.total_revenue_idr, interchangeControl.cohort_size);
-          const tRevUser = interchangeTest.revenue_per_user_idr;
-          const cRevUser = interchangeControl.revenue_per_user_idr;
-
-          const fmtIdr = (v: number) => fmtCur(v);
-          const delta = (t: number, c: number) => c !== 0 ? ((t - c) / Math.abs(c)) * 100 : (t > 0 ? 100 : 0);
-          const deltaFmt = (t: number, c: number) => {
-            const d = delta(t, c);
-            return d > 0 ? `+${d.toFixed(1)}%` : `${d.toFixed(1)}%`;
-          };
-
-          type RowDef = { label: string; test: number; control: number; isNew?: boolean; higherIsBetter?: boolean };
-          const rows: RowDef[] = [
-            { label: "Card Spend", test: tCard, control: cCard, higherIsBetter: true },
-            { label: "QRIS Spend", test: tQris, control: cQris, isNew: true },
-            { label: "Total Spend", test: tTotal, control: cTotal, higherIsBetter: true },
-            { label: "Card Interchange @ 1.6%", test: tCardIx, control: cCardIx, higherIsBetter: true },
-            { label: "QRIS Revenue @ 0.2035%", test: tQrisRev, control: cQrisRev, isNew: true },
-            { label: "Total Revenue", test: tTotalRev, control: cTotalRev, higherIsBetter: true },
-            { label: "Revenue per User", test: tRevUser, control: cRevUser, higherIsBetter: true },
-          ];
-
-          return (
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <DollarSign className={cn("h-5 w-5", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")} />
-                <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t("interchangeRevenue")}</h2>
-                <LiveBadge />
-              </div>
-
-              <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] overflow-hidden">
-                <div className="p-4 border-b border-[var(--border)]">
-                  <p className="text-xs text-[var(--text-muted)]">
-                    Normalized per 1,000 cohort members. Card interchange at 1.6% (blended Visa+MC, Kansas City Fed Aug 2025).
-                    QRIS issuer revenue at 0.2035% (0.55% MDR x 37% issuer share via PT ALTO, PBI No. 24/8/PBI/2022).
-                  </p>
-                </div>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-[var(--border)]">
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Metric</th>
-                      <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Control</th>
-                      <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Test</th>
-                      <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Delta</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((row) => {
-                      const d = delta(row.test, row.control);
-                      const isPositive = row.isNew ? true : (row.higherIsBetter ? d > 0 : d < 0);
-                      return (
-                        <tr key={row.label} className="border-b border-[var(--border)] last:border-b-0">
-                          <td className="px-4 py-3 font-medium text-[var(--text-primary)]">
-                            <span className="flex items-center gap-1.5">
-                              {row.label}
-                              <LiveBadge />
-                            </span>
-                          </td>
-                          <td className="text-right px-4 py-3 text-[var(--text-secondary)] font-mono text-xs">
-                            {fmtIdr(row.control)}
-                          </td>
-                          <td className="text-right px-4 py-3 font-semibold text-[var(--text-primary)] font-mono text-xs">
-                            {fmtIdr(row.test)}
-                          </td>
-                          <td className="text-right px-4 py-3">
-                            <span className={cn(
-                              "inline-flex items-center gap-1 text-xs font-semibold rounded-full px-2 py-0.5",
-                              row.isNew
-                                ? "text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-950/30"
-                                : isPositive
-                                  ? "text-emerald-600 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-950/30"
-                                  : "text-red-600 bg-red-50 dark:text-red-400 dark:bg-red-950/30",
-                            )}>
-                              {row.isNew ? "new" : (
-                                <>
-                                  <ArrowUpRight className={cn("h-3 w-3", !isPositive && "rotate-90")} />
-                                  {deltaFmt(row.test, row.control)}
-                                </>
-                              )}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Callout box */}
-              <div className={cn(
-                "rounded-xl border-l-4 p-4",
-                isDark
-                  ? "border-l-amber-500 bg-amber-950/20 border border-amber-900/30"
-                  : "border-l-amber-500 bg-amber-50 border border-amber-200",
-              )}>
-                <p className="text-sm font-semibold text-[var(--text-primary)] mb-1">Rate Differential Insight</p>
-                <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-                  Card interchange is ~8x higher per IDR than QRIS issuer revenue (1.6% vs 0.2035%).
-                  However, the total spend lift from QRIS users partially offsets the rate difference.
-                  {tTotalRev > cTotalRev
-                    ? ` Net effect: Test group generates ${deltaFmt(tTotalRev, cTotalRev)} more total revenue per 1,000 users despite the lower QRIS rate.`
-                    : ` Net effect: Test group generates ${deltaFmt(tTotalRev, cTotalRev)} total revenue per 1,000 users — the lower QRIS rate outweighs the spend lift.`
-                  }
-                </p>
-              </div>
             </div>
           );
         })()}
@@ -1310,6 +1240,53 @@ export default function QrisExperimentPage() {
                 <p className="text-2xl font-bold text-[var(--text-primary)]">
                   {fmtCur(qrisOnlySpendCumulative[qrisOnlySpendCumulative.length - 1]?.qris_spend_idr ?? 0)}
                 </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================ */}
+        {/* TOP 25 QRIS-ONLY MERCHANTS                                     */}
+        {/* ============================================================ */}
+        {apiData?.topQrisMerchants && apiData.topQrisMerchants.length > 0 && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Store className={cn("h-5 w-5", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")} />
+              <h2 className="text-lg font-semibold text-[var(--text-primary)]">Top 25 QRIS-Only Merchants</h2>
+              <LiveBadge />
+            </div>
+
+            <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] overflow-hidden">
+              <div className="p-4 border-b border-[var(--border)]">
+                <p className="text-xs text-[var(--text-muted)]">
+                  Merchants where ALL transactions are QRIS (no card transactions) across the entire experiment period.
+                  Names are normalized to group brand variants (e.g. SPBU/Pertamina/Shell grouped as gas stations, Alfamart/Indomaret locations merged).
+                  Ranked by total spend.
+                </p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[var(--border)]">
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide w-12">Rank</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Merchant Name</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Total Spend</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Transactions</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Unique Users</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {apiData.topQrisMerchants.map((m: TopQrisMerchantRow, idx: number) => (
+                      <tr key={m.normalized_name} className="border-b border-[var(--border)] last:border-b-0">
+                        <td className="px-4 py-2.5 text-xs text-[var(--text-muted)] font-mono">{idx + 1}</td>
+                        <td className="px-4 py-2.5 font-medium text-[var(--text-primary)] text-xs">{m.normalized_name}</td>
+                        <td className="text-right px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{fmtCur(m.total_spend_idr)}</td>
+                        <td className="text-right px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{m.total_txns.toLocaleString()}</td>
+                        <td className="text-right px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{m.unique_users.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
@@ -1408,8 +1385,11 @@ export default function QrisExperimentPage() {
         )}
 
         {/* ============================================================ */}
-        {/* REPAYMENT BEHAVIOR COMPARISON                                   */}
+        {/* SECTION 4: Risk & Repayment Behavior                           */}
         {/* ============================================================ */}
+        <SectionDivider icon={AlertTriangle} title="Risk & Repayment Behavior" />
+
+        {/* REPAYMENT BEHAVIOR COMPARISON                                   */}
         {apiData?.repaymentBehavior && apiData.repaymentBehavior.length > 0 && (() => {
           const test = apiData.repaymentBehavior.find((r: RepaymentBehaviorRow) => r.grp === "Test");
           const ctrl = apiData.repaymentBehavior.find((r: RepaymentBehaviorRow) => r.grp === "Control");
@@ -1593,6 +1573,138 @@ export default function QrisExperimentPage() {
         })()}
 
         {/* ============================================================ */}
+        {/* SECTION 5: Revenue & Profitability Impact                      */}
+        {/* ============================================================ */}
+        <SectionDivider icon={DollarSign} title="Revenue & Profitability Impact" />
+
+        {/* INTERCHANGE REVENUE ANALYSIS                                  */}
+        {interchangeTest && interchangeControl && (() => {
+          const NORM = 1000; // normalize per 1,000 users
+
+          const normVal = (val: number, cohortSize: number) =>
+            cohortSize > 0 ? (val / cohortSize) * NORM : 0;
+
+          const tCard = normVal(interchangeTest.card_spend_idr, interchangeTest.cohort_size);
+          const cCard = normVal(interchangeControl.card_spend_idr, interchangeControl.cohort_size);
+          const tQris = normVal(interchangeTest.qris_spend_idr, interchangeTest.cohort_size);
+          const cQris = normVal(interchangeControl.qris_spend_idr, interchangeControl.cohort_size);
+          const tTotal = normVal(interchangeTest.total_spend_idr, interchangeTest.cohort_size);
+          const cTotal = normVal(interchangeControl.total_spend_idr, interchangeControl.cohort_size);
+          const tCardIx = normVal(interchangeTest.card_interchange_idr, interchangeTest.cohort_size);
+          const cCardIx = normVal(interchangeControl.card_interchange_idr, interchangeControl.cohort_size);
+          const tQrisRev = normVal(interchangeTest.qris_issuer_revenue_idr, interchangeTest.cohort_size);
+          const cQrisRev = normVal(interchangeControl.qris_issuer_revenue_idr, interchangeControl.cohort_size);
+          const tTotalRev = normVal(interchangeTest.total_revenue_idr, interchangeTest.cohort_size);
+          const cTotalRev = normVal(interchangeControl.total_revenue_idr, interchangeControl.cohort_size);
+          const tRevUser = interchangeTest.revenue_per_user_idr;
+          const cRevUser = interchangeControl.revenue_per_user_idr;
+
+          const fmtIdr = (v: number) => fmtCur(v);
+          const delta = (t: number, c: number) => c !== 0 ? ((t - c) / Math.abs(c)) * 100 : (t > 0 ? 100 : 0);
+          const deltaFmt = (t: number, c: number) => {
+            const d = delta(t, c);
+            return d > 0 ? `+${d.toFixed(1)}%` : `${d.toFixed(1)}%`;
+          };
+
+          type RowDef = { label: string; test: number; control: number; isNew?: boolean; higherIsBetter?: boolean };
+          const rows: RowDef[] = [
+            { label: "Card Spend", test: tCard, control: cCard, higherIsBetter: true },
+            { label: "QRIS Spend", test: tQris, control: cQris, isNew: true },
+            { label: "Total Spend", test: tTotal, control: cTotal, higherIsBetter: true },
+            { label: "Card Interchange @ 1.6%", test: tCardIx, control: cCardIx, higherIsBetter: true },
+            { label: "QRIS Revenue @ 0.2035%", test: tQrisRev, control: cQrisRev, isNew: true },
+            { label: "Total Revenue", test: tTotalRev, control: cTotalRev, higherIsBetter: true },
+            { label: "Revenue per User", test: tRevUser, control: cRevUser, higherIsBetter: true },
+          ];
+
+          return (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <DollarSign className={cn("h-5 w-5", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")} />
+                <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t("interchangeRevenue")}</h2>
+                <LiveBadge />
+              </div>
+
+              <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] overflow-hidden">
+                <div className="p-4 border-b border-[var(--border)]">
+                  <p className="text-xs text-[var(--text-muted)]">
+                    Normalized per 1,000 cohort members. Card interchange at 1.6% (blended Visa+MC, Kansas City Fed Aug 2025).
+                    QRIS issuer revenue at 0.2035% (0.55% MDR x 37% issuer share via PT ALTO, PBI No. 24/8/PBI/2022).
+                  </p>
+                </div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[var(--border)]">
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Metric</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Control</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Test</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Delta</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => {
+                      const d = delta(row.test, row.control);
+                      const isPositive = row.isNew ? true : (row.higherIsBetter ? d > 0 : d < 0);
+                      return (
+                        <tr key={row.label} className="border-b border-[var(--border)] last:border-b-0">
+                          <td className="px-4 py-3 font-medium text-[var(--text-primary)]">
+                            <span className="flex items-center gap-1.5">
+                              {row.label}
+                              <LiveBadge />
+                            </span>
+                          </td>
+                          <td className="text-right px-4 py-3 text-[var(--text-secondary)] font-mono text-xs">
+                            {fmtIdr(row.control)}
+                          </td>
+                          <td className="text-right px-4 py-3 font-semibold text-[var(--text-primary)] font-mono text-xs">
+                            {fmtIdr(row.test)}
+                          </td>
+                          <td className="text-right px-4 py-3">
+                            <span className={cn(
+                              "inline-flex items-center gap-1 text-xs font-semibold rounded-full px-2 py-0.5",
+                              row.isNew
+                                ? "text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-950/30"
+                                : isPositive
+                                  ? "text-emerald-600 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-950/30"
+                                  : "text-red-600 bg-red-50 dark:text-red-400 dark:bg-red-950/30",
+                            )}>
+                              {row.isNew ? "new" : (
+                                <>
+                                  <ArrowUpRight className={cn("h-3 w-3", !isPositive && "rotate-90")} />
+                                  {deltaFmt(row.test, row.control)}
+                                </>
+                              )}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Callout box */}
+              <div className={cn(
+                "rounded-xl border-l-4 p-4",
+                isDark
+                  ? "border-l-amber-500 bg-amber-950/20 border border-amber-900/30"
+                  : "border-l-amber-500 bg-amber-50 border border-amber-200",
+              )}>
+                <p className="text-sm font-semibold text-[var(--text-primary)] mb-1">Rate Differential Insight</p>
+                <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                  Card interchange is ~8x higher per IDR than QRIS issuer revenue (1.6% vs 0.2035%).
+                  However, the total spend lift from QRIS users partially offsets the rate difference.
+                  {tTotalRev > cTotalRev
+                    ? ` Net effect: Test group generates ${deltaFmt(tTotalRev, cTotalRev)} more total revenue per 1,000 users despite the lower QRIS rate.`
+                    : ` Net effect: Test group generates ${deltaFmt(tTotalRev, cTotalRev)} total revenue per 1,000 users — the lower QRIS rate outweighs the spend lift.`
+                  }
+                </p>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ============================================================ */}
         {/* PROFITABILITY ANALYSIS                                         */}
         {/* ============================================================ */}
         {profData && (() => {
@@ -1657,12 +1769,16 @@ export default function QrisExperimentPage() {
                             <span className={cn(
                               "inline-flex items-center gap-1 text-xs font-semibold rounded-full px-2 py-0.5",
                               d === 'new' ? "text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-950/30"
+                                : d === '-' || d === '+0.0%' || d === '-0.0%' || d === '0.0%' ? "text-gray-600 bg-gray-100 dark:text-gray-400 dark:bg-gray-800"
                                 : isPos ? "text-emerald-600 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-950/30"
                                 : isNeg ? "text-red-600 bg-red-50 dark:text-red-400 dark:bg-red-950/30"
-                                : "text-[var(--text-muted)]",
+                                : "text-gray-600 bg-gray-100 dark:text-gray-400 dark:bg-gray-800",
                             )}>
-                              {d !== 'new' && d !== '-' && <ArrowUpRight className={cn("h-3 w-3", isNeg && "rotate-90")} />}
-                              {d}
+                              {d === 'new' || d === '-' || d === '+0.0%' || d === '-0.0%' || d === '0.0%'
+                                ? null
+                                : <ArrowUpRight className={cn("h-3 w-3", isNeg && "rotate-90")} />
+                              }
+                              {d === '+0.0%' || d === '-0.0%' || d === '0.0%' ? <><span>&mdash;</span> 0.0%</> : d}
                             </span>
                           </td>
                         </tr>
@@ -1671,6 +1787,74 @@ export default function QrisExperimentPage() {
                   </tbody>
                 </table>
               </div>
+
+              {/* Revenue Breakdown Stacked Bar Chart */}
+              {apiData?.revenueBreakdown && apiData.revenueBreakdown.length > 0 && (() => {
+                const REVENUE_COLORS = {
+                  admin_fee: "#3b82f6",
+                  interest_on_revolve: "#10b981",
+                  card_interchange: "#f59e0b",
+                  qris_mdr: "#8b5cf6",
+                  other_fees: "#ef4444",
+                };
+                const REVENUE_LABELS: Record<string, string> = {
+                  admin_fee: "Admin Fee",
+                  interest_on_revolve: "Interest on Revolve",
+                  card_interchange: "Card Interchange",
+                  qris_mdr: "QRIS MDR",
+                  other_fees: "Other Fees",
+                };
+                const chartData = apiData.revenueBreakdown.map((r: RevenueBreakdownRow) => ({
+                  grp: r.grp,
+                  admin_fee: Math.round(r.admin_fee),
+                  interest_on_revolve: Math.round(r.interest_on_revolve),
+                  card_interchange: Math.round(r.card_interchange),
+                  qris_mdr: Math.round(r.qris_mdr),
+                  other_fees: Math.round(r.other_fees),
+                }));
+
+                return (
+                  <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] overflow-hidden">
+                    <div className="p-4 border-b border-[var(--border)]">
+                      <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1 flex items-center gap-2">
+                        Revenue Breakdown per User (Normalized)
+                        <LiveBadge />
+                      </h3>
+                      <p className="text-xs text-[var(--text-muted)]">
+                        Per-user revenue by component, normalized by cohort size. Values in IDR.
+                      </p>
+                    </div>
+                    <div className="p-4">
+                      <div className="h-[320px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={chartData} margin={{ top: 10, right: 30, bottom: 5, left: 30 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke={isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"} />
+                            <XAxis dataKey="grp" tick={{ fontSize: 12, fill: isDark ? "#aaa" : "#666" }} />
+                            <YAxis tick={{ fontSize: 10, fill: isDark ? "#aaa" : "#666" }} tickFormatter={(v: number) => v >= 1000 ? `${(v/1000).toFixed(0)}K` : String(v)} />
+                            <Tooltip
+                              contentStyle={{ backgroundColor: isDark ? "#1e1e2e" : "#fff", border: `1px solid ${isDark ? "#333" : "#ddd"}`, borderRadius: 8, fontSize: 11 }}
+                              formatter={(value: unknown, name: unknown) => {
+                                const v = Number(value);
+                                const label = REVENUE_LABELS[String(name)] ?? String(name);
+                                return [fmtCur(v), label];
+                              }}
+                            />
+                            <Legend formatter={(value: string) => REVENUE_LABELS[value] ?? value} wrapperStyle={{ fontSize: 11 }} />
+                            <Bar dataKey="admin_fee" stackId="revenue" fill={REVENUE_COLORS.admin_fee} radius={[0, 0, 0, 0]} />
+                            <Bar dataKey="interest_on_revolve" stackId="revenue" fill={REVENUE_COLORS.interest_on_revolve} radius={[0, 0, 0, 0]} />
+                            <Bar dataKey="card_interchange" stackId="revenue" fill={REVENUE_COLORS.card_interchange} radius={[0, 0, 0, 0]} />
+                            <Bar dataKey="qris_mdr" stackId="revenue" fill={REVENUE_COLORS.qris_mdr} radius={[0, 0, 0, 0]} />
+                            <Bar dataKey="other_fees" stackId="revenue" fill={REVENUE_COLORS.other_fees} radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <p className="text-[9px] text-[var(--text-muted)] italic mt-3">
+                        &ldquo;Other Fees&rdquo; includes late payment and penalty fees from DW004 field f9_dw004_bil_fee_chrg_2.
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Projected ARPU if QRIS graduates to full portfolio */}
               <div className={cn(
@@ -1846,6 +2030,90 @@ export default function QrisExperimentPage() {
           );
         })()}
 
+        {/* ============================================================ */}
+        {/* SECTION 6: Strategic Assessment                                */}
+        {/* ============================================================ */}
+        <SectionDivider icon={Star} title="Strategic Assessment" />
+
+        {/* LTV Analysis Table */}
+        {apiData?.ltvAnalysis && apiData.ltvAnalysis.length > 0 && (
+          <div className="space-y-4">
+            <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] overflow-hidden">
+              <div className="p-4 border-b border-[var(--border)]">
+                <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">
+                  Customer Lifetime Value (LTV) Analysis
+                </h3>
+                <p className="text-xs text-[var(--text-muted)]">
+                  Estimated LTV comparison using industry-standard methodologies
+                </p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[var(--border)]">
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Method</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Formula</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Test LTV</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Control LTV</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Delta %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {apiData.ltvAnalysis.map((row: LtvMethodRow) => {
+                      const isPositive = row.delta_pct >= 0;
+                      return (
+                        <tr key={row.method} className="border-b border-[var(--border)] last:border-b-0">
+                          <td className="px-4 py-3 font-medium text-[var(--text-primary)] text-xs">{row.method}</td>
+                          <td className="px-4 py-3 text-[var(--text-secondary)] text-xs font-mono">{row.formula}</td>
+                          <td className="text-right px-4 py-3 font-mono text-xs font-semibold text-[var(--text-primary)]">{fmtCur(row.test.ltv)}</td>
+                          <td className="text-right px-4 py-3 font-mono text-xs text-[var(--text-secondary)]">{fmtCur(row.control.ltv)}</td>
+                          <td className="text-right px-4 py-3">
+                            <span className={cn(
+                              "inline-flex items-center gap-1 text-xs font-semibold rounded-full px-2 py-0.5",
+                              isPositive
+                                ? "text-emerald-600 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-950/30"
+                                : "text-red-600 bg-red-50 dark:text-red-400 dark:bg-red-950/30",
+                            )}>
+                              <ArrowUpRight className={cn("h-3 w-3", !isPositive && "rotate-90")} />
+                              {isPositive ? "+" : ""}{row.delta_pct.toFixed(1)}%
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* LTV Method Captions & Assumptions */}
+            <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] p-4 space-y-3">
+              {apiData.ltvAnalysis.map((row: LtvMethodRow) => (
+                <div key={row.method}>
+                  <p className="text-xs font-semibold text-[var(--text-primary)] mb-1">{row.method}</p>
+                  <p className="text-xs text-[var(--text-muted)] leading-relaxed">{row.caption}</p>
+                  <div className="mt-1 space-y-0.5">
+                    <p className="text-[10px] text-[var(--text-muted)]">
+                      <em className="text-amber-600 dark:text-amber-400">&#9889; Assumption:</em>{" "}
+                      <em>Churn rate of {(row.test.churn_rate * 100).toFixed(0)}%/month is an industry benchmark, not derived from actual Honest data.</em>
+                    </p>
+                    <p className="text-[10px] text-[var(--text-muted)]">
+                      <em className="text-amber-600 dark:text-amber-400">&#9889; Assumption:</em>{" "}
+                      <em>Expected lifetime of {row.test.lifetime_months} months is a credit card industry standard.</em>
+                    </p>
+                    {row.method === "Margin-based LTV" && (
+                      <p className="text-[10px] text-[var(--text-muted)]">
+                        <em className="text-amber-600 dark:text-amber-400">&#9889; Assumption:</em>{" "}
+                        <em>Credit loss provision at 4% annually is an estimate — replace with actual NPL/provision data for accuracy.</em>
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <ActionItems section="QRIS Experiment" items={actionItems} />
 
         {/* Footer: Definitions & Methodology */}
@@ -1898,6 +2166,17 @@ export default function QrisExperimentPage() {
           </p>
         </div>
       </div>
+
+      {/* PDF Download Modal */}
+      <PdfDownloadModal
+        isOpen={pdfModalOpen}
+        onClose={() => setPdfModalOpen(false)}
+        reportId="qris-experiment"
+        reportTitle={t("title")}
+        defaultStartDate={startDate || new Date().toISOString().slice(0, 10)}
+        defaultEndDate={endDate || new Date().toISOString().slice(0, 10)}
+        defaultPeriod={period}
+      />
     </div>
   );
 }

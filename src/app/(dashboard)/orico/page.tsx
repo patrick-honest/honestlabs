@@ -15,7 +15,7 @@ import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banne
 import { getPeriodRange, scaleTrendData, scaleMetricValue } from "@/lib/period-data";
 import { cn } from "@/lib/utils";
 import { Download, TrendingUp, TrendingDown, Minus } from "lucide-react";
-import { generateReportPdf } from "@/lib/report-pdf";
+import { PdfDownloadModal } from "@/components/dashboard/pdf-download-modal";
 import { SampleDataBanner, SampleDataBadge } from "@/components/dashboard/sample-data-banner";
 import { useTranslations } from "next-intl";
 import { useCurrency } from "@/hooks/use-currency";
@@ -240,7 +240,7 @@ const Q_FUNNEL: QueryInfo = { title: "Orico: Onboarding Funnel", sql: "SELECT mo
 
 // ── Mock Data matching query output shapes ──────────────────────────────────
 
-// Query 1: Approved by Segment
+// Query 1: Approved by Segment (counts + total applications for rate calculation)
 const approvedBySegment = [
   { date: "Jul 25", Regular: 1200, RP1: 450, AOF: 180 },
   { date: "Aug 25", Regular: 1350, RP1: 520, AOF: 210 },
@@ -253,12 +253,36 @@ const approvedBySegment = [
   { date: "Mar 26", Regular: 2100, RP1: 850, AOF: 370 },
 ];
 
+// Total applications submitted per segment (denominator for approval rate)
+const totalApplicationsBySegment = [
+  { date: "Jul 25", Regular: 6800, RP1: 2600, AOF: 1100 },
+  { date: "Aug 25", Regular: 7200, RP1: 2900, AOF: 1200 },
+  { date: "Sep 25", Regular: 7900, RP1: 3100, AOF: 1300 },
+  { date: "Oct 25", Regular: 8500, RP1: 3400, AOF: 1400 },
+  { date: "Nov 25", Regular: 9200, RP1: 3700, AOF: 1550 },
+  { date: "Dec 25", Regular: 8800, RP1: 3500, AOF: 1450 },
+  { date: "Jan 26", Regular: 10200, RP1: 4100, AOF: 1700 },
+  { date: "Feb 26", Regular: 10800, RP1: 4300, AOF: 1850 },
+  { date: "Mar 26", Regular: 11400, RP1: 4600, AOF: 2000 },
+];
+
+// Compute approval rate as percentage (approved / total applications * 100)
+const approvalRateBySegment = approvedBySegment.map((row, i) => {
+  const total = totalApplicationsBySegment[i];
+  return {
+    date: row.date,
+    Regular: Math.round((row.Regular / total.Regular) * 1000) / 10,
+    RP1: Math.round((row.RP1 / total.RP1) * 1000) / 10,
+    AOF: Math.round((row.AOF / total.AOF) * 1000) / 10,
+  };
+});
+
 const approvedInsights: ChartInsight[] = [
-  { text: "Total approvals grew 14.7% MoM in Mar 2026 (3,320 vs 3,110 in Feb), driven by Regular segment expansion.", type: "positive" },
-  { text: "RP1 segment approvals up 7.6% MoM (850 vs 790), maintaining ~25% share of total volume.", type: "positive" },
-  { text: "AOF approvals growing steadily at ~9% MoM but still represent only 11% of total volume.", type: "neutral" },
-  { text: "Dec 2025 dip of -8.9% likely due to year-end holidays reducing application flow and processing capacity.", type: "neutral" },
-  { text: "[Hypothesis] Acceleration in Jan-Mar may reflect seasonal demand from Ramadan spending preparation and marketing pushes.", type: "hypothesis" },
+  { text: "Regular approval rate is 18.4% in Mar 2026, consistent with 18.3% in Feb -- stable policy performance.", type: "neutral" },
+  { text: "RP1 approval rate at 18.5% in Mar, slightly up from 18.4% in Feb -- highest among all segments.", type: "positive" },
+  { text: "AOF approval rate at 18.5% in Mar, up from 18.4% in Feb -- improving despite growing volume.", type: "positive" },
+  { text: "Dec 2025 saw a dip across all segments (17.6% Regular, 17.4% RP1, 17.2% AOF) likely due to year-end holiday application quality.", type: "neutral" },
+  { text: "[Hypothesis] Stable ~18% rate suggests scorecard is well-calibrated; any policy change would shift rates significantly.", type: "hypothesis" },
 ];
 
 // Query 2: Accepted (signed contract) with cumulative
@@ -274,11 +298,23 @@ const acceptedCumulative = [
   { date: "Mar 26", Regular: 1830, RP1: 730, AOF: 310, cumRegular: 12680, cumRP1: 4990, cumAOF: 2060 },
 ];
 
+// Compute acceptance rate as percentage (accepted / approved * 100) for each segment
+const acceptanceRateBySegment = acceptedCumulative.map((accepted, i) => {
+  const approved = approvedBySegment[i];
+  return {
+    date: accepted.date,
+    Regular: Math.round((accepted.Regular / approved.Regular) * 1000) / 10,
+    RP1: Math.round((accepted.RP1 / approved.RP1) * 1000) / 10,
+    AOF: Math.round((accepted.AOF / approved.AOF) * 1000) / 10,
+  };
+});
+
 const acceptedInsights: ChartInsight[] = [
-  { text: "Cumulative accepted users reached 19,730 across all segments by Mar 2026, up from 16,860 in Feb (+17%).", type: "positive" },
-  { text: "Acceptance rate (accepted / approved) for Regular is ~87%, RP1 ~86%, AOF ~84% -- relatively consistent across products.", type: "neutral" },
-  { text: "Dec 2025 acceptance dip mirrors approval dip -- contract signing volume dropped ~8% likely due to holiday slowdown.", type: "negative" },
-  { text: "[Hypothesis] AOF acceptance rate slightly lower than others -- potential friction in fee disclosure during contract signing flow.", type: "hypothesis" },
+  { text: "Regular acceptance rate is 87.1% in Mar 2026, highest among all segments -- strong contract signing conversion.", type: "positive" },
+  { text: "RP1 acceptance rate at 85.9% in Mar, stable month-over-month.", type: "neutral" },
+  { text: "AOF acceptance rate at 83.8% trails Regular by 3.3pp -- potential friction from fee disclosure during CMA signing.", type: "negative" },
+  { text: "Dec 2025 saw lower acceptance across all segments, mirroring the approval dip from holiday slowdown.", type: "neutral" },
+  { text: "[Hypothesis] AOF acceptance rate could improve by presenting fee breakdown earlier in the application flow to set expectations.", type: "hypothesis" },
 ];
 
 // Query 3: Active Portfolio (dpd_bi < 7, end of month)
@@ -325,6 +361,27 @@ const portfolioSummary: PortfolioSummaryMock[] = [
   { month: "Mar 26", segment: "D", product: "Regular", newlyAccounts: 150, newlyLimit: 750000000, cumBookedCustomer: 700 },
   { month: "Mar 26", segment: "D", product: "RP1", newlyAccounts: 40, newlyLimit: 0, cumBookedCustomer: 90 },
   { month: "Mar 26", segment: "D", product: "AOF", newlyAccounts: 30, newlyLimit: 120000000, cumBookedCustomer: 110 },
+  { month: "Mar 26", segment: "E", product: "Regular", newlyAccounts: 85, newlyLimit: 340000000, cumBookedCustomer: 320 },
+  { month: "Mar 26", segment: "E", product: "RP1", newlyAccounts: 20, newlyLimit: 0, cumBookedCustomer: 45 },
+  { month: "Mar 26", segment: "E", product: "AOF", newlyAccounts: 15, newlyLimit: 45000000, cumBookedCustomer: 50 },
+  { month: "Mar 26", segment: "F", product: "Regular", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "F", product: "RP1", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "F", product: "AOF", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "G", product: "Regular", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "G", product: "RP1", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "G", product: "AOF", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "I", product: "Regular", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "I", product: "RP1", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "I", product: "AOF", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "J", product: "Regular", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "J", product: "RP1", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "J", product: "AOF", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "K", product: "Regular", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "K", product: "RP1", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "K", product: "AOF", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "Z", product: "Regular", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "Z", product: "RP1", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "Z", product: "AOF", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
 ];
 
 const portfolioSummaryInsights: ChartInsight[] = [
@@ -805,10 +862,12 @@ export default function OricoPageContent() {
   const [printMode, setPrintMode] = useState(false);
 
   const pApprovedBySegment = useMemo(() => applyFilterToData(scaleTrendData(approvedBySegment, period), filters), [period, filters]);
+  const pApprovalRate = useMemo(() => applyFilterToData(scaleTrendData(approvalRateBySegment, period), filters), [period, filters]);
   const pAcceptedCumulative = useMemo(() => applyFilterToData(scaleTrendData(acceptedCumulative, period), filters), [period, filters]);
+  const pAcceptanceRate = useMemo(() => applyFilterToData(scaleTrendData(acceptanceRateBySegment, period), filters), [period, filters]);
   const pActivePortfolio = useMemo(() => applyFilterToData(scaleTrendData(activePortfolio, period), filters), [period, filters]);
   const pRp1Topup = useMemo(() => applyFilterToData(scaleTrendData(rp1Topup, period), filters), [period, filters]);
-  const pOnboardingFunnel = useMemo(() => applyFilterToData(scaleTrendData(onboardingFunnel, period), filters), [period, filters]);
+  // onboardingFunnel data retained for reference but chart removed (replaced by Acceptance Rate)
 
   const handleRefresh = useCallback(async () => {
     await new Promise((r) => setTimeout(r, 800));
@@ -831,32 +890,28 @@ export default function OricoPageContent() {
   const latestTopup = rp1Topup[rp1Topup.length - 1];
 
   // Grouped portfolio summary for table
-  const segments = ["A", "B", "C", "D"];
+  const allSegments = ["A", "B", "C", "D", "E", "F", "G", "I", "J", "K", "Z"] as const;
+  const segmentColorMap: Record<string, string> = {
+    A: "text-emerald-400",
+    B: "text-blue-400",
+    C: "text-amber-400",
+    D: "text-red-400",
+    E: "text-rose-500",
+    F: "text-pink-500",
+    G: "text-purple-500",
+    I: "text-orange-500",
+    J: "text-yellow-600",
+    K: "text-gray-500",
+    Z: "text-gray-400",
+  };
+  // Only show segments that have at least one non-zero value across all products
+  const segments = allSegments.filter((seg) => {
+    const segRows = portfolioSummary.filter((r) => r.segment === seg);
+    return segRows.some((r) => r.newlyAccounts > 0 || r.newlyLimit > 0 || r.cumBookedCustomer > 0);
+  });
   const products = ["Regular", "RP1", "AOF"];
 
-  const handleDownloadPdf = useCallback(() => {
-    generateReportPdf({
-      id: "orico-report",
-      cycle: period,
-      periodStart: DATA_RANGE.start,
-      periodEnd: DATA_RANGE.end,
-      section: "Orico Reports",
-      title: `Orico Partner Report — ${periodLabel}`,
-      generatedAt: new Date().toISOString(),
-      kpis: [
-        { label: "Total Approved", value: scaleMetricValue(2850, period, false), unit: "count", change: 4.2 },
-        { label: "Active Portfolio", value: 18500, unit: "count", change: 2.8 },
-        { label: "ECL Provision", value: scaleMetricValue(4200000000, period, false), unit: "B", change: -3.1 },
-        { label: "RP1 Top-up Rate", value: 42.5, unit: "%", change: 1.8 },
-      ],
-      trends: [
-        "Orico portfolio growing steadily with 2.8% MoM increase in active accounts.",
-        "ECL provision declining — credit quality improving across all segments.",
-        "RP1 top-up rate reached 42.5%, driven by repeat usage campaigns.",
-        `Report covers ${periodLabel} period ending ${DATA_RANGE.end}.`,
-      ],
-    }, locale, currency);
-  }, [locale, currency]);
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
 
   return (
     <div className="flex flex-col">
@@ -889,7 +944,7 @@ export default function OricoPageContent() {
             <p className="text-xs text-[var(--text-muted)] mt-0.5">{periodLabel}</p>
           </div>
           <button
-            onClick={handleDownloadPdf}
+            onClick={() => setPdfModalOpen(true)}
             className="no-print flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text-primary)] hover:bg-[var(--border)] transition-colors"
             data-print-hide
           >
@@ -964,56 +1019,47 @@ export default function OricoPageContent() {
               />
             </div>
 
-            {/* Section 1: Approved by Segment */}
+            {/* Section 1: Approval Rate */}
             <ChartCard
-              title="Approved Applications by Segment"
-              subtitle="Monthly approved counts by Regular / RP1 / AOF"
+              title="Approval Rate"
+              subtitle="Percentage of applications submitted that were approved"
               asOf={AS_OF}
               dataRange={DATA_RANGE}
               onRefresh={handleRefresh}
               query={Q_APPROVED}
             >
               <DashboardLineChart
-                data={pApprovedBySegment}
+                data={pApprovalRate}
                 lines={[
                   { key: "Regular", color: "#3b82f6", label: "Regular" },
                   { key: "RP1", color: "#8b5cf6", label: "RP1" },
                   { key: "AOF", color: "#06b6d4", label: "AOF" },
                 ]}
+                valueType="percent"
                 height={320}
               />
               <ChartInsights insights={approvedInsights} />
             </ChartCard>
 
-            {/* Section 2: Accepted Users (Cumulative) */}
+            {/* Section 2: Acceptance Rate */}
             <ChartCard
-              title="Accepted Users (Signed Contract)"
-              subtitle="Monthly accepted users with cumulative line by segment"
+              title="Acceptance Rate"
+              subtitle="Percentage of approved applicants that sign their CMA"
               asOf={AS_OF}
               dataRange={DATA_RANGE}
               onRefresh={handleRefresh}
               query={Q_ACCEPTED}
             >
-              <div className="space-y-4">
-                <DashboardLineChart
-                  data={pAcceptedCumulative}
-                  lines={[
-                    { key: "Regular", color: "#3b82f6", label: "Regular" },
-                    { key: "RP1", color: "#8b5cf6", label: "RP1" },
-                    { key: "AOF", color: "#06b6d4", label: "AOF" },
-                  ]}
-                  height={280}
-                />
-                <DashboardLineChart
-                  data={pAcceptedCumulative}
-                  lines={[
-                    { key: "cumRegular", color: "#3b82f6", label: "Cum. Regular" },
-                    { key: "cumRP1", color: "#8b5cf6", label: "Cum. RP1" },
-                    { key: "cumAOF", color: "#06b6d4", label: "Cum. AOF" },
-                  ]}
-                  height={200}
-                />
-              </div>
+              <DashboardLineChart
+                data={pAcceptanceRate}
+                lines={[
+                  { key: "Regular", color: "#3b82f6", label: "Regular" },
+                  { key: "RP1", color: "#8b5cf6", label: "RP1" },
+                  { key: "AOF", color: "#06b6d4", label: "AOF" },
+                ]}
+                valueType="percent"
+                height={320}
+              />
               <ChartInsights insights={acceptedInsights} />
             </ChartCard>
 
@@ -1072,16 +1118,8 @@ export default function OricoPageContent() {
                           >
                             {pIdx === 0 ? (
                               <td
-                                rowSpan={3}
-                                className={`py-2 px-3 font-semibold align-top ${
-                                  seg === "A"
-                                    ? "text-emerald-400"
-                                    : seg === "B"
-                                      ? "text-blue-400"
-                                      : seg === "C"
-                                        ? "text-amber-400"
-                                        : "text-red-400"
-                                }`}
+                                rowSpan={products.length}
+                                className={`py-2 px-3 font-semibold align-top ${segmentColorMap[seg] ?? "text-gray-400"}`}
                               >
                                 {seg}
                               </td>
@@ -1211,56 +1249,6 @@ export default function OricoPageContent() {
                 />
               </ChartCard>
             </div>
-
-            {/* Section 7: Onboarding Funnel */}
-            <ChartCard
-              title="Onboarding Funnel: Approved to Accepted"
-              subtitle="Monthly approved vs accepted (signed contract) by segment"
-              asOf={AS_OF}
-              dataRange={DATA_RANGE}
-              onRefresh={handleRefresh}
-              query={Q_FUNNEL}
-            >
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                {/* Regular */}
-                <div>
-                  <h4 className="text-xs font-semibold text-[var(--text-secondary)] mb-2 uppercase tracking-wider">Regular</h4>
-                  <DashboardLineChart
-                    data={pOnboardingFunnel}
-                    lines={[
-                      { key: "approvedReg", color: "#3b82f6", label: "Approved" },
-                      { key: "acceptedReg", color: "#22c55e", label: "Accepted" },
-                    ]}
-                    height={220}
-                  />
-                </div>
-                {/* RP1 */}
-                <div>
-                  <h4 className="text-xs font-semibold text-[var(--text-secondary)] mb-2 uppercase tracking-wider">RP1</h4>
-                  <DashboardLineChart
-                    data={pOnboardingFunnel}
-                    lines={[
-                      { key: "approvedRP1", color: "#8b5cf6", label: "Approved" },
-                      { key: "acceptedRP1", color: "#22c55e", label: "Accepted" },
-                    ]}
-                    height={220}
-                  />
-                </div>
-                {/* AOF */}
-                <div>
-                  <h4 className="text-xs font-semibold text-[var(--text-secondary)] mb-2 uppercase tracking-wider">AOF</h4>
-                  <DashboardLineChart
-                    data={pOnboardingFunnel}
-                    lines={[
-                      { key: "approvedAOF", color: "#06b6d4", label: "Approved" },
-                      { key: "acceptedAOF", color: "#22c55e", label: "Accepted" },
-                    ]}
-                    height={220}
-                  />
-                </div>
-              </div>
-              <ChartInsights insights={onboardingInsights} />
-            </ChartCard>
 
             {/* Action Items */}
             <ActionItems section="Orico Reports" items={actionItems} />
@@ -1588,6 +1576,17 @@ export default function OricoPageContent() {
           </div>
         )}
       </div>
+
+      {/* PDF Download Modal */}
+      <PdfDownloadModal
+        isOpen={pdfModalOpen}
+        onClose={() => setPdfModalOpen(false)}
+        reportId="portfolio"
+        reportTitle="Orico Partner Report"
+        defaultStartDate={DATA_RANGE.start}
+        defaultEndDate={DATA_RANGE.end}
+        defaultPeriod={period}
+      />
     </div>
   );
 }

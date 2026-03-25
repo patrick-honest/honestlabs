@@ -1,15 +1,13 @@
 "use client";
 
-import { useCallback } from "react";
+import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { usePeriod } from "@/hooks/use-period";
 import { Header } from "@/components/layout/header";
-import { generateReportPdf } from "@/lib/report-pdf";
+import { PdfDownloadModal } from "@/components/dashboard/pdf-download-modal";
 import { Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
-import { useCurrency } from "@/hooks/use-currency";
-import { useLanguage } from "@/hooks/use-language";
 import { useTranslations } from "next-intl";
 
 // Maps pathname to the nav translation key for each deep-dive page
@@ -32,6 +30,26 @@ const PAGE_NAV_KEYS: Record<string, string> = {
   "/deep-dive/billing-cycle": "billingCycle",
 };
 
+// Maps pathname segments to PDF report IDs
+const PAGE_REPORT_IDS: Record<string, string> = {
+  "acquisition": "acquisition",
+  "activation": "activation",
+  "referral": "referral",
+  "spend": "spend-analysis",
+  "transaction-auth": "transaction-auth",
+  "points-program": "points-program",
+  "credit-line": "credit-line",
+  "portfolio": "portfolio",
+  "risk": "risk",
+  "collections": "collections",
+  "repayments": "repayments",
+  "app-health": "app-health",
+  "customer-service": "customer-service",
+  "users": "users-overview",
+  "cards": "cards-overview",
+  "billing-cycle": "billing-cycle",
+};
+
 export default function DeepDiveLayout({
   children,
 }: {
@@ -40,11 +58,11 @@ export default function DeepDiveLayout({
   const pathname = usePathname();
   const { isDark } = useTheme();
   const { period, periodLabel, dateRange, timeRange } = usePeriod();
-  const { currency } = useCurrency();
-  const { locale } = useLanguage();
   const tNav = useTranslations("nav");
   const tTime = useTranslations("time");
   const tCommon = useTranslations("common");
+
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
 
   // Strip basePath prefix and trailing slash so the key always matches
   const normalizedPath = pathname.replace(/\/$/, "").replace(/^\/honestlabs/, "");
@@ -52,30 +70,16 @@ export default function DeepDiveLayout({
   const sectionLabel = navKey ? tNav(navKey) : "";
   const title = sectionLabel ? `${sectionLabel} ${tNav("deepDive")}` : tNav("deepDive");
 
+  // Determine the report ID from the last path segment
+  const lastSegment = pathname.split("/").filter(Boolean).pop() ?? "";
+  const reportId = PAGE_REPORT_IDS[lastSegment] ?? `deep-dive-${lastSegment}`;
+
   // Time range label for display — now translated
   const timeRangeLabels: Record<string, string> = {
     last_full: period === "weekly" ? tTime("lastFullWeek") : period === "monthly" ? tTime("lastFullMonth") : period === "quarterly" ? tTime("lastFullQuarter") : periodLabel,
     xtd: period === "weekly" ? tTime("weekToDate") : period === "monthly" ? tTime("monthToDate") : period === "quarterly" ? tTime("quarterToDate") : tTime("yearToDate"),
     full: period === "weekly" ? tTime("weekly") : period === "monthly" ? tTime("monthly") : period === "quarterly" ? tTime("quarterly") : tTime("yearly"),
   };
-
-  const handleDownloadPdf = useCallback(() => {
-    generateReportPdf({
-      id: `deep-dive-${pathname.split("/").pop()}`,
-      cycle: period,
-      periodStart: dateRange.start.toISOString().slice(0, 10),
-      periodEnd: dateRange.end.toISOString().slice(0, 10),
-      section: title,
-      title: `${title} — ${timeRangeLabels[timeRange] ?? periodLabel}`,
-      generatedAt: new Date().toISOString(),
-      kpis: [],
-      trends: [
-        `This report covers the ${timeRangeLabels[timeRange] ?? periodLabel} period.`,
-        `Data range: ${dateRange.label}.`,
-        "For detailed metrics and charts, refer to the webapp dashboard.",
-      ],
-    }, locale, currency);
-  }, [title, pathname, period, periodLabel, dateRange, timeRange, timeRangeLabels, locale, currency]);
 
   return (
     <div className="flex flex-col h-full">
@@ -92,7 +96,7 @@ export default function DeepDiveLayout({
             </p>
           </div>
           <button
-            onClick={handleDownloadPdf}
+            onClick={() => setPdfModalOpen(true)}
             className={cn(
               "flex items-center gap-1.5 shrink-0 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
               isDark
@@ -108,6 +112,17 @@ export default function DeepDiveLayout({
 
         {children}
       </div>
+
+      {/* PDF Download Modal */}
+      <PdfDownloadModal
+        isOpen={pdfModalOpen}
+        onClose={() => setPdfModalOpen(false)}
+        reportId={reportId}
+        reportTitle={title}
+        defaultStartDate={dateRange.start.toISOString().slice(0, 10)}
+        defaultEndDate={dateRange.end.toISOString().slice(0, 10)}
+        defaultPeriod={period}
+      />
     </div>
   );
 }

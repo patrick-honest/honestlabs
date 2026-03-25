@@ -2,6 +2,8 @@
 // PDF Layout Engine — assembles a complete PDF report using jsPDF
 // ---------------------------------------------------------------------------
 
+import * as fs from "fs";
+import * as path from "path";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { registerFontWithJsPDF } from "./font-loader";
@@ -19,6 +21,20 @@ const IDR_USD_RATE = 16_000;
 
 const BRAND_PRIMARY: [number, number, number] = [91, 34, 255];
 
+// Logo dimensions: original 984x208 px, scale to ~40mm wide
+const LOGO_WIDTH_MM = 40;
+const LOGO_HEIGHT_MM = (208 / 984) * LOGO_WIDTH_MM; // ~8.5mm proportional
+
+let _logoBase64: string | null = null;
+function getLogoBase64(): string {
+  if (!_logoBase64) {
+    const logoPath = path.resolve(__dirname, "../../public/honest-logo.png");
+    const buf = fs.readFileSync(logoPath);
+    _logoBase64 = buf.toString("base64");
+  }
+  return _logoBase64;
+}
+
 // ---------------------------------------------------------------------------
 // Locale labels
 // ---------------------------------------------------------------------------
@@ -28,7 +44,7 @@ const LABELS: Record<string, Record<string, string>> = {
     generated: "Generated",
     page: "Page",
     of: "of",
-    footer: "Honest Bank · Data sourced from BigQuery · Product type: Regular",
+    footer: "Honest Bank · Business Reviews · Data sourced from BigQuery",
     metric: "Metric",
     value: "Value",
     change: "Change",
@@ -41,7 +57,7 @@ const LABELS: Record<string, Record<string, string>> = {
     generated: "Dibuat",
     page: "Halaman",
     of: "dari",
-    footer: "Honest Bank · Sumber data: BigQuery · Jenis produk: Regular",
+    footer: "Honest Bank · Business Reviews · Sumber data: BigQuery",
     metric: "Metrik",
     value: "Nilai",
     change: "Perubahan",
@@ -54,7 +70,7 @@ const LABELS: Record<string, Record<string, string>> = {
     generated: "作成日",
     page: "ページ",
     of: "/",
-    footer: "Honest Bank · データソース: BigQuery · 商品タイプ: Regular",
+    footer: "Honest Bank · Business Reviews · データソース: BigQuery",
     metric: "指標",
     value: "値",
     change: "変動",
@@ -158,18 +174,29 @@ export function buildPdf(opts: PdfBuildOptions): Buffer {
   // ========================================================================
   // Cover page
   // ========================================================================
-  // Brand name
+  // Brand logo
+  try {
+    const logoData = `data:image/png;base64,${getLogoBase64()}`;
+    doc.addImage(logoData, "PNG", MARGIN, y, LOGO_WIDTH_MM, LOGO_HEIGHT_MM);
+  } catch {
+    // Fallback to text if logo fails to load
+    setFont("bold");
+    doc.setFontSize(28);
+    doc.setTextColor(...BRAND_PRIMARY);
+    doc.text("honest", MARGIN, y + 4);
+  }
+  // "BUSINESS REVIEWS" subtitle below the logo
   setFont("bold");
-  doc.setFontSize(28);
+  doc.setFontSize(9);
   doc.setTextColor(...BRAND_PRIMARY);
-  doc.text("honest", MARGIN, y + 4);
+  doc.text("BUSINESS REVIEWS", MARGIN, y + LOGO_HEIGHT_MM + 4);
 
-  // Confidential badge
+  // Confidential badge (top-right corner, aligned with logo)
   doc.setFontSize(8);
   doc.setTextColor(180, 0, 0);
   setFont("bold");
-  doc.text(labels.confidential, PAGE_W - MARGIN, y, { align: "right" });
-  y += 20;
+  doc.text(labels.confidential, PAGE_W - MARGIN, y + 4, { align: "right" });
+  y += LOGO_HEIGHT_MM + 12;
 
   // Report title
   setFont("bold");
@@ -351,6 +378,7 @@ export function buildPdf(opts: PdfBuildOptions): Buffer {
       head: [table.headers],
       body: table.rows,
       margin: { left: MARGIN, right: MARGIN },
+      tableWidth: CONTENT_W,
       theme: "striped",
       headStyles: {
         fillColor: BRAND_PRIMARY,
@@ -358,11 +386,13 @@ export function buildPdf(opts: PdfBuildOptions): Buffer {
         fontSize: 7,
         fontStyle: "bold",
         font: isJapanese ? "NotoSansJP" : "helvetica",
+        overflow: "linebreak",
       },
       bodyStyles: {
         fontSize: 7,
         textColor: [40, 40, 40],
         font: isJapanese ? "NotoSansJP" : "helvetica",
+        overflow: "linebreak",
       },
       alternateRowStyles: { fillColor: [248, 248, 252] },
     });

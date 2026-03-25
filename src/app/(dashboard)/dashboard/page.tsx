@@ -10,7 +10,8 @@ import type { ChartIncrement } from "@/components/dashboard/chart-card";
 import { aggregateByIncrement } from "@/lib/aggregate-by-increment";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
-import { Newspaper, TrendingUp, TrendingDown, AlertTriangle, Sparkles, ArrowRight, Info, X } from "lucide-react";
+import { Newspaper, TrendingUp, TrendingDown, AlertTriangle, Sparkles, ArrowRight, Info, X, Download } from "lucide-react";
+import { PdfDownloadModal } from "@/components/dashboard/pdf-download-modal";
 import useSWR from "swr";
 import { usePeriod } from "@/hooks/use-period";
 import { useApiParams } from "@/hooks/use-api-params";
@@ -255,6 +256,7 @@ export default function DashboardPage() {
   const tDash = useTranslations("dashboard");
   const tCommon = useTranslations("common");
   const [showHealthInfo, setShowHealthInfo] = useState(false);
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
   const { period, periodLabel, dateRange } = usePeriod();
   const { isDark } = useTheme();
   const { filters } = useFilters();
@@ -327,7 +329,22 @@ export default function DashboardPage() {
       <Header title={tDash("title")} />
 
       <div className="flex-1 space-y-5 p-6">
-        <ActiveFiltersBanner />
+        {/* Title row with Download PDF */}
+        <div className="flex items-center justify-between -mb-2">
+          <ActiveFiltersBanner />
+          <button
+            onClick={() => setPdfModalOpen(true)}
+            className={cn(
+              "flex items-center gap-1.5 shrink-0 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+              isDark
+                ? "text-[#7C4DFF] hover:bg-[#5B22FF]/15 border border-[#5B22FF]/30"
+                : "text-[#D00083] hover:bg-[#D00083]/10 border border-[#D00083]/30"
+            )}
+          >
+            <Download className="h-3.5 w-3.5" />
+            {tCommon("savePdf")}
+          </button>
+        </div>
 
         {/* ════════════════════════════════════════════════════════════════ */}
         {/* 1. HEALTH SCORE BANNER                                         */}
@@ -598,6 +615,17 @@ export default function DashboardPage() {
           ))}
         </div>
       </div>
+
+      {/* PDF Download Modal */}
+      <PdfDownloadModal
+        isOpen={pdfModalOpen}
+        onClose={() => setPdfModalOpen(false)}
+        reportId="dashboard"
+        reportTitle={tDash("title")}
+        defaultStartDate={dateRange.start.toISOString().slice(0, 10)}
+        defaultEndDate={dateRange.end.toISOString().slice(0, 10)}
+        defaultPeriod={period}
+      />
     </div>
   );
 }

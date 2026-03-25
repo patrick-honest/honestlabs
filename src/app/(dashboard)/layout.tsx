@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/hooks/use-theme";
 import { FiltersProvider } from "@/hooks/use-filters";
 import { SearchStateProvider } from "@/hooks/use-search-state";
 import { LanguageProvider } from "@/hooks/use-language";
+import { ToastProvider } from "@/components/ui/toast";
 import { Sidebar } from "@/components/layout/sidebar";
 import { IS_STATIC_EXPORT, isStaticAuthenticated } from "@/lib/static-mode";
 import enMessages from "../../../messages/en.json";
@@ -58,10 +59,12 @@ export default function DashboardLayout({
           <PeriodProvider>
             <FiltersProvider>
               <SearchStateProvider>
-                <div className="flex h-screen overflow-hidden bg-[var(--background)] transition-colors">
-                  <Sidebar />
-                  <main className="relative z-10 flex-1 overflow-y-auto">{children}</main>
-                </div>
+                <ToastProvider>
+                  <div className="flex h-screen overflow-hidden bg-[var(--background)] transition-colors">
+                    <Sidebar />
+                    <main className="relative z-10 flex-1 overflow-y-auto">{children}</main>
+                  </div>
+                </ToastProvider>
               </SearchStateProvider>
             </FiltersProvider>
           </PeriodProvider>

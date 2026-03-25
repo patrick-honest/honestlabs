@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { Header } from "@/components/layout/header";
 import { useTranslations } from "next-intl";
 import { Search, Filter, ChevronDown, ChevronRight, TrendingUp, TrendingDown, Minus, Calendar, X, Download } from "lucide-react";
@@ -8,8 +8,20 @@ import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
 import { useCurrency } from "@/hooks/use-currency";
 import { useLanguage } from "@/hooks/use-language";
-import { generateCombinedReportPdf, type ReportKpi } from "@/lib/report-pdf";
+import { PdfDownloadModal } from "@/components/dashboard/pdf-download-modal";
 import type { Cycle } from "@/types/reports";
+
+// Map report sections to PDF manifest report IDs for pre-generated downloads
+const SECTION_TO_PDF_ID: Record<string, string> = {
+  "Executive Summary": "dashboard",
+  "Acquisition": "acquisition",
+  "Activation": "activation",
+  "Portfolio": "portfolio",
+  "Spend": "spend-analysis",
+  "Risk": "risk",
+  "Collections": "collections",
+  "QRIS Experiment": "qris-experiment",
+};
 
 // ---------------------------------------------------------------------------
 // Backfilled report data covering Oct 2025 – Mar 2026
@@ -319,6 +331,8 @@ function formatShortDate(iso: string) {
 
 function ReportRow({ report, isDark, locale, currency }: { report: ReportEntry; isDark: boolean; locale: string; currency: string }) {
   const [expanded, setExpanded] = useState(false);
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
+  const reportId = SECTION_TO_PDF_ID[report.section] ?? "dashboard";
 
   return (
     <>
@@ -370,30 +384,30 @@ function ReportRow({ report, isDark, locale, currency }: { report: ReportEntry; 
         </td>
         <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
           {report.status === "complete" && (
-            <button
-              onClick={() => generateCombinedReportPdf({
-                cycle: report.cycle,
-                periodStart: report.periodStart,
-                periodEnd: report.periodEnd,
-                generatedAt: report.generatedAt,
-                overallTitle: report.title,
-                locale,
-                currency,
-                sections: [
-                  { title: report.section, kpis: report.kpis as ReportKpi[], trends: report.trends },
-                ],
-              })}
-              className={cn(
-                "flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium transition-colors",
-                isDark
-                  ? "text-[#7C4DFF] hover:bg-[#5B22FF]/15"
-                  : "text-[#D00083] hover:bg-[#D00083]/10"
-              )}
-              title={`Download ${report.title} PDF`}
-            >
-              <Download className="h-3 w-3" />
-              PDF
-            </button>
+            <>
+              <button
+                onClick={() => setPdfModalOpen(true)}
+                className={cn(
+                  "flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium transition-colors",
+                  isDark
+                    ? "text-[#7C4DFF] hover:bg-[#5B22FF]/15"
+                    : "text-[#D00083] hover:bg-[#D00083]/10"
+                )}
+                title={`Download ${report.title} PDF`}
+              >
+                <Download className="h-3 w-3" />
+                PDF
+              </button>
+              <PdfDownloadModal
+                isOpen={pdfModalOpen}
+                onClose={() => setPdfModalOpen(false)}
+                reportId={reportId}
+                reportTitle={report.title}
+                defaultStartDate={report.periodStart}
+                defaultEndDate={report.periodEnd}
+                defaultPeriod={report.cycle}
+              />
+            </>
           )}
         </td>
       </tr>
