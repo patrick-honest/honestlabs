@@ -1,0 +1,449 @@
+import { runQuery, TABLES, toSqlDate } from "../_shared/bigquery-client";
+import { createHandler } from "../_shared/handler";
+import type { Env } from "../_shared/bigquery-auth";
+import type { ParsedFilters } from "../_shared/filters";
+import { cardTypeWhere, transactionTypeWhere, amountRangeWhere, cycleDateWhere } from "../_shared/filters";
+
+// ISO 8583 / Finexus response codes for decline reasons (fx_dw007_given_resp_cde)
+const RESPONSE_CODE_LABELS: Record<string, string> = {
+  "03": "Invalid Merchant",
+  "05": "Do Not Honor",
+  "12": "Invalid Transaction",
+  "14": "Invalid Card Number",
+  "41": "Lost Card – Pick Up",
+  "51": "Insufficient Funds / Over Credit Limit",
+  "54": "Expired Card",
+  "55": "Incorrect PIN",
+  "57": "Transaction Not Permitted to Cardholder",
+  "58": "Transaction Not Permitted to Terminal",
+  "59": "Suspected Fraud",
+  "61": "Exceeds Withdrawal Amount Limit",
+  "62": "Restricted Card",
+  "63": "Security Violation",
+  "72": "PIN Try Limit Exceeded",
+  "75": "Allowable PIN Tries Exceeded",
+  "78": "Blocked – First Use",
+  "82": "Negative CAM/dCVV/iCVV Results",
+  "83": "Unable to Verify PIN",
+  "96": "System Malfunction",
+  "N7": "CVV2/CVC2 Mismatch",
+  "5C": "Velocity / Risk Threshold Exceeded",
+};
+
+// Legacy status code descriptions (fx_dw007_stat)
+const DECLINE_CODE_DESCRIPTIONS: Record<string, string> = {
+  D: "Declined by Issuer",
+  C: "Captured / Reversed",
+  T: "Timeout",
+  X: "Expired / Invalid",
+  I: "Invalid Card",
+  N: "Insufficient Funds",
+};
+
+async function querySpendAnalysis(startDate: string, endDate: string, env: Env, filters: ParsedFilters, rawStartDate?: string) {
+  // startDate = extended (for chart context), rawStartDate = user's actual selection (for KPIs)
+  const kpiStartDate = rawStartDate ?? startDate;
+  const [weeklyTrend, channelBreakdown, declineRows, periodSummaryRows, onboardingSummaryRows, onboardingTrendRows, firstTxnChannelRows, declineReasonRows] = await Promise.all([
+    // Weekly spend trend — cohort-based SAR + spend metrics
+    runQuery(
+      `WITH regular_users AS (
+        SELECT DISTINCT dc.user_id, loc.external_id AS loc_acct
+        FROM ${TABLES.decision_completed} dc
+        INNER JOIN ${TABLES.cms_line_of_credit} loc ON dc.user_id = loc.user_id
+        WHERE UPPER(dc.decision) = 'APPROVED'
+          AND (dc.is_prepaid_card_applicable IS NULL OR dc.is_prepaid_card_applicable = FALSE)
+          AND (dc.is_account_opening_fee_applicable IS NULL OR dc.is_account_opening_fee_applicable = FALSE)
+      ),
+      eligible_check AS (
+        SELECT dw4.f9_dw004_bus_dt AS eligible_date, dw4.p9_dw004_prin_crn AS crn, ru.user_id, ru.loc_acct
+        FROM ${TABLES.financial_account_updates} dw4
+        INNER JOIN regular_users ru ON dw4.p9_dw004_loc_acct = ru.loc_acct
+        INNER JOIN ${TABLES.principal_card_updates} dw5
+          ON dw4.p9_dw004_loc_acct = dw5.f9_dw005_loc_acct
+          AND CAST(DATETIME(dw5.f9_dw005_upd_tms, 'Asia/Jakarta') AS DATE) <= dw4.f9_dw004_bus_dt
+        WHERE dw4.fx_dw004_loc_stat IN ('G', 'N') AND dw4.f9_dw004_curr_dpd >= 0
+          AND TRIM(CAST(dw5.f9_dw005_1st_unblk_all_mtd_tms AS STRING)) != ''
+          AND (dw5.fx_dw005_crd_stat IS NULL OR TRIM(CAST(dw5.fx_dw005_crd_stat AS STRING)) != '')
+          AND dw5.f9_dw005_hce_txn_ind LIKE '%0%' AND dw5.f9_dw005_net_txn_ind LIKE '%0%'
+          AND dw5.fx_dw005_contc_less_flg LIKE '%Y%' AND dw5.f9_dw005_contc_txn_ind LIKE '%0%'
+          ${cardTypeWhere(filters, 'dw5')} ${cycleDateWhere(filters, 'dw4')}
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY dw4.p9_dw004_loc_acct, dw4.f9_dw004_bus_dt ORDER BY dw5.f9_dw005_upd_tms DESC) = 1
+      ),
+      first_eligible AS (
+        SELECT user_id, crn, loc_acct, MIN(eligible_date) AS first_eligible_date
+        FROM eligible_check GROUP BY user_id, crn, loc_acct
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY MIN(eligible_date)) = 1
+      ),
+      weekly_cohort AS (
+        SELECT DATE_TRUNC(first_eligible_date, ISOWEEK) AS week_start, user_id, first_eligible_date, crn, loc_acct
+        FROM first_eligible
+        WHERE first_eligible_date BETWEEN @startDate AND @endDate
+          AND DATE_ADD(DATE_TRUNC(first_eligible_date, ISOWEEK), INTERVAL 13 DAY) <= CURRENT_DATE('Asia/Jakarta')
+      ),
+      sar_transactors AS (
+        SELECT DISTINCT wc.user_id, wc.week_start
+        FROM weekly_cohort wc
+        INNER JOIN ${TABLES.authorized_transaction} t ON wc.crn = t.f9_dw007_prin_crn
+          AND t.f9_dw007_dt BETWEEN wc.first_eligible_date AND DATE_ADD(wc.first_eligible_date, INTERVAL 7 DAY)
+        WHERE (t.fx_dw007_stat IS NULL OR t.fx_dw007_stat = '' OR t.fx_dw007_stat = ' ')
+          AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+      ),
+      card_acct_map AS (SELECT DISTINCT f9_dw005_crn AS crn, f9_dw005_loc_acct AS loc_acct FROM ${TABLES.principal_card_updates}),
+      weekly_spend AS (
+        SELECT DATE_TRUNC(t.f9_dw007_dt, ISOWEEK) AS week_start,
+          COUNT(DISTINCT cam.loc_acct) AS transactor_count_spend, COUNT(*) AS total_transactions,
+          ROUND(SUM(CAST(t.f9_dw007_amt_req AS FLOAT64)/100),2) AS total_spend_idr,
+          ROUND(SUM(CASE WHEN t.fx_dw007_txn_typ='TM' THEN CAST(t.f9_dw007_amt_req AS FLOAT64)/100 ELSE 0 END),2) AS online_spend_idr,
+          ROUND(SUM(CASE WHEN t.fx_dw007_txn_typ!='TM' AND NOT(t.fx_dw007_txn_typ='RA' AND t.fx_dw007_rte_dest='L') THEN CAST(t.f9_dw007_amt_req AS FLOAT64)/100 ELSE 0 END),2) AS offline_spend_idr,
+          ROUND(SUM(CASE WHEN t.fx_dw007_txn_typ='RA' AND t.fx_dw007_rte_dest='L' THEN CAST(t.f9_dw007_amt_req AS FLOAT64)/100 ELSE 0 END),2) AS qris_spend_idr
+        FROM ${TABLES.authorized_transaction} t JOIN card_acct_map cam ON t.f9_dw007_prin_crn = cam.crn
+        WHERE (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat)='') AND t.fx_dw007_txn_typ NOT IN ('PM','BE','RF') AND t.f9_dw007_dt BETWEEN @startDate AND @endDate
+          ${transactionTypeWhere(filters, 't')} ${amountRangeWhere(filters, 't')}
+        GROUP BY week_start
+      ),
+      sar_weekly AS (
+        SELECT wc.week_start + 7 AS week_start,
+          COUNT(DISTINCT wc.user_id) AS newly_eligible,
+          COUNT(DISTINCT st.user_id) AS activated_users,
+          ROUND(COUNT(DISTINCT st.user_id) * 100.0 / COUNT(DISTINCT wc.user_id), 2) AS spend_active_rate
+        FROM weekly_cohort wc LEFT JOIN sar_transactors st ON wc.user_id = st.user_id AND wc.week_start = st.week_start
+        GROUP BY wc.week_start
+      )
+      SELECT FORMAT_DATE('%Y-%m-%d', s.week_start) AS week_start,
+        COALESCE(sar.newly_eligible, 0) AS eligible_count,
+        COALESCE(sar.activated_users, 0) AS transactor_count,
+        COALESCE(s.total_transactions, 0) AS total_transactions,
+        COALESCE(s.transactor_count_spend, 0) AS total_transactors,
+        ROUND(COALESCE(s.total_spend_idr,0),2) AS total_spend_idr,
+        COALESCE(sar.spend_active_rate, 0) AS spend_active_rate,
+        ROUND(COALESCE(s.online_spend_idr,0),2) AS online_spend_idr,
+        ROUND(COALESCE(s.offline_spend_idr,0),2) AS offline_spend_idr,
+        ROUND(COALESCE(s.qris_spend_idr,0),2) AS qris_spend_idr,
+        ROUND(SAFE_DIVIDE(COALESCE(s.total_spend_idr,0), NULLIF(COALESCE(s.total_transactions,0),0)),2) AS avg_spend_per_txn_idr
+      FROM weekly_spend s
+      LEFT JOIN sar_weekly sar ON s.week_start = sar.week_start
+      ORDER BY s.week_start`,
+      { startDate, endDate }, env,
+    ),
+    // Channel breakdown
+    runQuery(
+      `SELECT CASE WHEN t.fx_dw007_txn_typ='RA' AND t.fx_dw007_rte_dest='L' THEN 'QRIS' WHEN t.fx_dw007_txn_typ='TM' THEN 'Online' ELSE 'Offline' END AS channel,
+        COUNT(*) AS txn_count, ROUND(SUM(t.f9_dw007_amt_req/100),0) AS spend_idr, COUNT(DISTINCT t.f9_dw007_prin_crn) AS unique_cards
+      FROM ${TABLES.authorized_transaction} t
+      WHERE t.f9_dw007_dt BETWEEN @kpiStart AND @endDate AND (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat)='' OR t.fx_dw007_stat=' ') AND t.fx_dw007_txn_typ NOT IN ('PM','BE','RF')
+        ${transactionTypeWhere(filters, 't')}
+        ${amountRangeWhere(filters, 't')}
+      GROUP BY channel`,
+      { kpiStart: kpiStartDate, endDate }, env,
+    ),
+    // Decline breakdown by status code (legacy)
+    runQuery<{ code: string; cnt: number; amount_idr: number }>(
+      `SELECT t.fx_dw007_stat AS code, COUNT(*) AS cnt, ROUND(SUM(t.f9_dw007_amt_req/100),0) AS amount_idr
+      FROM ${TABLES.authorized_transaction} t
+      WHERE t.f9_dw007_dt BETWEEN @kpiStart AND @endDate AND t.fx_dw007_stat IS NOT NULL AND TRIM(t.fx_dw007_stat)!='' AND t.fx_dw007_stat!=' '
+        ${transactionTypeWhere(filters, 't')}
+        ${amountRangeWhere(filters, 't')}
+      GROUP BY code ORDER BY cnt DESC`,
+      { kpiStart: kpiStartDate, endDate }, env,
+    ),
+    // Period summary — cohort-based SAR for the selected period (not extended)
+    runQuery(
+      `WITH regular_users AS (
+        SELECT DISTINCT dc.user_id, loc.external_id AS loc_acct
+        FROM ${TABLES.decision_completed} dc
+        INNER JOIN ${TABLES.cms_line_of_credit} loc ON dc.user_id = loc.user_id
+        WHERE UPPER(dc.decision) = 'APPROVED'
+          AND (dc.is_prepaid_card_applicable IS NULL OR dc.is_prepaid_card_applicable = FALSE)
+          AND (dc.is_account_opening_fee_applicable IS NULL OR dc.is_account_opening_fee_applicable = FALSE)
+      ),
+      eligible_check AS (
+        SELECT dw4.f9_dw004_bus_dt AS eligible_date, dw4.p9_dw004_prin_crn AS crn, ru.user_id
+        FROM ${TABLES.financial_account_updates} dw4
+        INNER JOIN regular_users ru ON dw4.p9_dw004_loc_acct = ru.loc_acct
+        INNER JOIN ${TABLES.principal_card_updates} dw5
+          ON dw4.p9_dw004_loc_acct = dw5.f9_dw005_loc_acct
+          AND CAST(DATETIME(dw5.f9_dw005_upd_tms, 'Asia/Jakarta') AS DATE) <= dw4.f9_dw004_bus_dt
+        WHERE dw4.fx_dw004_loc_stat IN ('G','N') AND dw4.f9_dw004_curr_dpd >= 0
+          AND TRIM(CAST(dw5.f9_dw005_1st_unblk_all_mtd_tms AS STRING)) != ''
+          AND (dw5.fx_dw005_crd_stat IS NULL OR TRIM(CAST(dw5.fx_dw005_crd_stat AS STRING)) != '')
+          AND dw5.f9_dw005_hce_txn_ind LIKE '%0%' AND dw5.f9_dw005_net_txn_ind LIKE '%0%'
+          AND dw5.fx_dw005_contc_less_flg LIKE '%Y%' AND dw5.f9_dw005_contc_txn_ind LIKE '%0%'
+          ${cardTypeWhere(filters, 'dw5')} ${cycleDateWhere(filters, 'dw4')}
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY dw4.p9_dw004_loc_acct, dw4.f9_dw004_bus_dt ORDER BY dw5.f9_dw005_upd_tms DESC) = 1
+      ),
+      first_eligible AS (
+        SELECT user_id, crn, MIN(eligible_date) AS first_eligible_date
+        FROM eligible_check GROUP BY user_id, crn
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY MIN(eligible_date)) = 1
+      ),
+      period_cohort AS (
+        SELECT user_id, first_eligible_date, crn
+        FROM first_eligible
+        WHERE first_eligible_date BETWEEN @kpiStart AND @endDate
+          AND DATE_ADD(first_eligible_date, INTERVAL 7 DAY) <= CURRENT_DATE('Asia/Jakarta')
+      ),
+      transactors AS (
+        SELECT DISTINCT pc.user_id
+        FROM period_cohort pc
+        INNER JOIN ${TABLES.authorized_transaction} t ON pc.crn = t.f9_dw007_prin_crn
+          AND t.f9_dw007_dt BETWEEN pc.first_eligible_date AND DATE_ADD(pc.first_eligible_date, INTERVAL 7 DAY)
+        WHERE (t.fx_dw007_stat IS NULL OR t.fx_dw007_stat = '' OR t.fx_dw007_stat = ' ')
+          AND t.fx_dw007_txn_typ NOT IN ('PM','BE','RF')
+          ${transactionTypeWhere(filters, 't')} ${amountRangeWhere(filters, 't')}
+      ),
+      card_acct_map AS (SELECT DISTINCT f9_dw005_crn AS crn, f9_dw005_loc_acct AS loc_acct FROM ${TABLES.principal_card_updates}),
+      spend AS (
+        SELECT COUNT(DISTINCT cam.loc_acct) AS transactor_cnt, COUNT(*) AS total_txns, ROUND(SUM(CAST(dw7.f9_dw007_amt_req AS FLOAT64)/100),2) AS total_spend
+        FROM ${TABLES.authorized_transaction} dw7 JOIN card_acct_map cam ON dw7.f9_dw007_prin_crn=cam.crn
+        WHERE (dw7.fx_dw007_stat IS NULL OR TRIM(dw7.fx_dw007_stat)='') AND dw7.fx_dw007_txn_typ NOT IN ('PM','BE','RF') AND dw7.f9_dw007_dt BETWEEN @kpiStart AND @endDate
+          ${transactionTypeWhere(filters, 'dw7')} ${amountRangeWhere(filters, 'dw7')}
+      )
+      SELECT
+        (SELECT COUNT(*) FROM period_cohort) AS eligible_count,
+        (SELECT COUNT(*) FROM transactors) AS transactor_count,
+        s.total_txns AS total_transactions,
+        s.total_spend AS total_spend_idr,
+        ROUND((SELECT COUNT(*) FROM transactors) * 100.0 / NULLIF((SELECT COUNT(*) FROM period_cohort), 0), 2) AS spend_active_rate,
+        ROUND(SAFE_DIVIDE(s.total_spend, NULLIF(s.total_txns,0)),2) AS avg_spend_per_txn_idr
+      FROM spend s`,
+      { kpiStart: kpiStartDate, endDate }, env,
+    ),
+    // Query 5: Onboarding Activation Summary
+    runQuery(
+      `WITH approved_users AS (
+        SELECT dc.user_id,
+          DATE(TIMESTAMP(dc.original_timestamp), 'Asia/Jakarta') AS approval_date,
+          dc.is_prepaid_card_applicable,
+          dc.is_account_opening_fee_applicable,
+          loc.external_id AS loc_acct
+        FROM ${TABLES.decision_completed} dc
+        INNER JOIN ${TABLES.cms_line_of_credit} loc ON dc.user_id = loc.user_id
+        WHERE UPPER(dc.decision) = 'APPROVED'
+          AND DATE(TIMESTAMP(dc.original_timestamp), 'Asia/Jakarta') BETWEEN @kpiStart AND @endDate
+      ),
+      rp1_users AS (
+        SELECT au.user_id, au.approval_date, au.loc_acct
+        FROM approved_users au
+        WHERE au.is_prepaid_card_applicable = TRUE
+      ),
+      rp1_funded AS (
+        SELECT r.user_id,
+          ARRAY_AGG(CAST(t.f9_dw007_amt_req AS FLOAT64)/100 ORDER BY t.f9_dw007_dt LIMIT 1)[OFFSET(0)] AS first_funded_amount
+        FROM rp1_users r
+        INNER JOIN ${TABLES.principal_card_updates} dw5 ON r.loc_acct = dw5.f9_dw005_loc_acct
+        INNER JOIN ${TABLES.authorized_transaction} t ON dw5.f9_dw005_crn = t.f9_dw007_prin_crn
+          AND t.f9_dw007_dt BETWEEN r.approval_date AND DATE_ADD(r.approval_date, INTERVAL 7 DAY)
+        WHERE (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '' OR t.fx_dw007_stat = ' ')
+          AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+        GROUP BY r.user_id
+      ),
+      regfee_users AS (
+        SELECT au.user_id, au.approval_date, au.loc_acct
+        FROM approved_users au
+        WHERE au.is_account_opening_fee_applicable = TRUE
+      ),
+      regfee_paid AS (
+        SELECT DISTINCT r.user_id
+        FROM regfee_users r
+        INNER JOIN ${TABLES.principal_card_updates} dw5 ON r.loc_acct = dw5.f9_dw005_loc_acct
+        INNER JOIN ${TABLES.authorized_transaction} t ON dw5.f9_dw005_crn = t.f9_dw007_prin_crn
+          AND t.f9_dw007_dt BETWEEN r.approval_date AND DATE_ADD(r.approval_date, INTERVAL 7 DAY)
+        WHERE (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '' OR t.fx_dw007_stat = ' ')
+          AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+      ),
+      unblocked_users AS (
+        SELECT au.user_id,
+          CAST(DATETIME(dw5.f9_dw005_1st_unblk_all_mtd_tms, 'Asia/Jakarta') AS DATE) AS unblock_date,
+          dw5.f9_dw005_crn AS crn
+        FROM approved_users au
+        INNER JOIN ${TABLES.principal_card_updates} dw5 ON au.loc_acct = dw5.f9_dw005_loc_acct
+        WHERE TRIM(CAST(dw5.f9_dw005_1st_unblk_all_mtd_tms AS STRING)) != ''
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY au.user_id ORDER BY dw5.f9_dw005_upd_tms DESC) = 1
+      ),
+      spend_activated AS (
+        SELECT DISTINCT ub.user_id
+        FROM unblocked_users ub
+        INNER JOIN ${TABLES.authorized_transaction} t ON ub.crn = t.f9_dw007_prin_crn
+          AND t.f9_dw007_dt BETWEEN ub.unblock_date AND DATE_ADD(ub.unblock_date, INTERVAL 7 DAY)
+        WHERE (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '' OR t.fx_dw007_stat = ' ')
+          AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+      )
+      SELECT
+        (SELECT COUNT(*) FROM rp1_users) AS rp1_total,
+        (SELECT COUNT(*) FROM rp1_funded) AS rp1_funded_count,
+        ROUND(SAFE_DIVIDE((SELECT COUNT(*) FROM rp1_funded), (SELECT COUNT(*) FROM rp1_users)) * 100, 2) AS rp1_funded_rate,
+        ROUND((SELECT AVG(first_funded_amount) FROM rp1_funded), 2) AS rp1_avg_first_amount,
+        (SELECT COUNT(*) FROM regfee_users) AS regfee_total,
+        (SELECT COUNT(*) FROM regfee_paid) AS regfee_paid_count,
+        ROUND(SAFE_DIVIDE((SELECT COUNT(*) FROM regfee_paid), (SELECT COUNT(*) FROM regfee_users)) * 100, 2) AS regfee_paid_rate,
+        (SELECT COUNT(*) FROM unblocked_users) AS unblocked_total,
+        (SELECT COUNT(*) FROM spend_activated) AS spend_activated_count,
+        ROUND(SAFE_DIVIDE((SELECT COUNT(*) FROM spend_activated), (SELECT COUNT(*) FROM unblocked_users)) * 100, 2) AS spend_activation_rate`,
+      { kpiStart: kpiStartDate, endDate }, env,
+    ),
+    // Query 6: Weekly Onboarding Trend
+    runQuery(
+      `WITH approved_users AS (
+        SELECT dc.user_id,
+          DATE(TIMESTAMP(dc.original_timestamp), 'Asia/Jakarta') AS approval_date,
+          DATE_TRUNC(DATE(TIMESTAMP(dc.original_timestamp), 'Asia/Jakarta'), ISOWEEK) AS week_start,
+          dc.is_prepaid_card_applicable,
+          dc.is_account_opening_fee_applicable,
+          loc.external_id AS loc_acct
+        FROM ${TABLES.decision_completed} dc
+        INNER JOIN ${TABLES.cms_line_of_credit} loc ON dc.user_id = loc.user_id
+        WHERE UPPER(dc.decision) = 'APPROVED'
+          AND DATE(TIMESTAMP(dc.original_timestamp), 'Asia/Jakarta') BETWEEN @startDate AND @endDate
+      ),
+      rp1_funded_per_week AS (
+        SELECT au.week_start, COUNT(DISTINCT au.user_id) AS rp1_total,
+          COUNT(DISTINCT CASE WHEN t.f9_dw007_prin_crn IS NOT NULL THEN au.user_id END) AS rp1_funded
+        FROM approved_users au
+        LEFT JOIN ${TABLES.principal_card_updates} dw5 ON au.loc_acct = dw5.f9_dw005_loc_acct
+        LEFT JOIN ${TABLES.authorized_transaction} t ON dw5.f9_dw005_crn = t.f9_dw007_prin_crn
+          AND t.f9_dw007_dt BETWEEN au.approval_date AND DATE_ADD(au.approval_date, INTERVAL 7 DAY)
+          AND (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '' OR t.fx_dw007_stat = ' ')
+          AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+        WHERE au.is_prepaid_card_applicable = TRUE
+        GROUP BY au.week_start
+      ),
+      regfee_per_week AS (
+        SELECT au.week_start, COUNT(DISTINCT au.user_id) AS regfee_total,
+          COUNT(DISTINCT CASE WHEN t.f9_dw007_prin_crn IS NOT NULL THEN au.user_id END) AS regfee_paid
+        FROM approved_users au
+        LEFT JOIN ${TABLES.principal_card_updates} dw5 ON au.loc_acct = dw5.f9_dw005_loc_acct
+        LEFT JOIN ${TABLES.authorized_transaction} t ON dw5.f9_dw005_crn = t.f9_dw007_prin_crn
+          AND t.f9_dw007_dt BETWEEN au.approval_date AND DATE_ADD(au.approval_date, INTERVAL 7 DAY)
+          AND (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '' OR t.fx_dw007_stat = ' ')
+          AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+        WHERE au.is_account_opening_fee_applicable = TRUE
+        GROUP BY au.week_start
+      ),
+      unblocked_per_week AS (
+        SELECT DATE_TRUNC(CAST(DATETIME(dw5.f9_dw005_1st_unblk_all_mtd_tms, 'Asia/Jakarta') AS DATE), ISOWEEK) AS week_start,
+          COUNT(DISTINCT au.user_id) AS unblocked_total,
+          COUNT(DISTINCT CASE WHEN t.f9_dw007_prin_crn IS NOT NULL THEN au.user_id END) AS spend_activated
+        FROM approved_users au
+        INNER JOIN ${TABLES.principal_card_updates} dw5 ON au.loc_acct = dw5.f9_dw005_loc_acct
+        LEFT JOIN ${TABLES.authorized_transaction} t ON dw5.f9_dw005_crn = t.f9_dw007_prin_crn
+          AND t.f9_dw007_dt BETWEEN CAST(DATETIME(dw5.f9_dw005_1st_unblk_all_mtd_tms, 'Asia/Jakarta') AS DATE)
+            AND DATE_ADD(CAST(DATETIME(dw5.f9_dw005_1st_unblk_all_mtd_tms, 'Asia/Jakarta') AS DATE), INTERVAL 7 DAY)
+          AND (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '' OR t.fx_dw007_stat = ' ')
+          AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+        WHERE TRIM(CAST(dw5.f9_dw005_1st_unblk_all_mtd_tms AS STRING)) != ''
+        GROUP BY week_start
+      ),
+      all_weeks AS (
+        SELECT DISTINCT week_start FROM rp1_funded_per_week
+        UNION DISTINCT SELECT DISTINCT week_start FROM regfee_per_week
+        UNION DISTINCT SELECT DISTINCT week_start FROM unblocked_per_week
+      )
+      SELECT FORMAT_DATE('%Y-%m-%d', w.week_start + 7) AS week_start,
+        ROUND(SAFE_DIVIDE(COALESCE(r.rp1_funded, 0), NULLIF(COALESCE(r.rp1_total, 0), 0)) * 100, 2) AS rp1_funded_rate,
+        ROUND(SAFE_DIVIDE(COALESCE(rf.regfee_paid, 0), NULLIF(COALESCE(rf.regfee_total, 0), 0)) * 100, 2) AS regfee_paid_rate,
+        ROUND(SAFE_DIVIDE(COALESCE(u.spend_activated, 0), NULLIF(COALESCE(u.unblocked_total, 0), 0)) * 100, 2) AS spend_activation_rate
+      FROM all_weeks w
+      LEFT JOIN rp1_funded_per_week r ON w.week_start = r.week_start
+      LEFT JOIN regfee_per_week rf ON w.week_start = rf.week_start
+      LEFT JOIN unblocked_per_week u ON w.week_start = u.week_start
+      ORDER BY w.week_start`,
+      { startDate, endDate }, env,
+    ),
+    // Query 7: First Transaction Channel — respects global date filter, weekly time series
+    runQuery(
+      `WITH card_map AS (
+        SELECT DISTINCT f9_dw005_crn AS crn, f9_dw005_loc_acct AS loc_acct
+        FROM ${TABLES.principal_card_updates}
+      ),
+      first_txn AS (
+        SELECT cm.loc_acct,
+          ARRAY_AGG(STRUCT(
+            t.f9_dw007_dt AS txn_date,
+            CASE
+              WHEN t.fx_dw007_txn_typ = 'TM' THEN 'Online'
+              WHEN t.fx_dw007_txn_typ = 'RA' AND t.fx_dw007_rte_dest = 'L' THEN 'QRIS'
+              ELSE 'Offline'
+            END AS channel,
+            CAST(t.f9_dw007_amt_req AS FLOAT64)/100 AS amount
+          ) ORDER BY t.f9_dw007_dt, t.p9_dw007_seq LIMIT 1)[OFFSET(0)] AS first
+        FROM ${TABLES.authorized_transaction} t
+        INNER JOIN card_map cm ON t.f9_dw007_prin_crn = cm.crn
+        WHERE (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '' OR t.fx_dw007_stat = ' ')
+          AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+          AND t.f9_dw007_dt >= @startDate AND t.f9_dw007_dt < @endDate
+        GROUP BY cm.loc_acct
+      ),
+      -- Period summary (for KPI cards)
+      summary AS (
+        SELECT first.channel AS channel,
+          COUNT(*) AS user_count,
+          ROUND(AVG(first.amount), 2) AS avg_first_amount
+        FROM first_txn
+        WHERE first.txn_date >= @kpiStart AND first.txn_date < @endDate
+        GROUP BY first.channel
+      ),
+      -- Weekly time series for line chart
+      weekly AS (
+        SELECT FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(first.txn_date, ISOWEEK)) AS week_start,
+          COUNTIF(first.channel = 'Online') AS online,
+          COUNTIF(first.channel = 'Offline') AS offline,
+          COUNTIF(first.channel = 'QRIS') AS qris,
+          COUNT(*) AS total
+        FROM first_txn
+        GROUP BY 1
+      )
+      SELECT 'summary' AS result_type, channel, user_count, avg_first_amount, NULL AS week_start, NULL AS online, NULL AS offline, NULL AS qris, NULL AS total
+      FROM summary
+      UNION ALL
+      SELECT 'weekly' AS result_type, NULL, NULL, NULL, week_start, online, offline, qris, total
+      FROM weekly
+      ORDER BY result_type, week_start`,
+      { startDate, endDate, kpiStart: kpiStartDate }, env,
+    ),
+    // Query 8: Decline reason distribution by response code (fx_dw007_given_resp_cde)
+    // A transaction can have multiple decline reasons; each is counted separately
+    runQuery<{ resp_code: string; cnt: number; amount_idr: number }>(
+      `SELECT
+        t.fx_dw007_given_resp_cde AS resp_code,
+        COUNT(*) AS cnt,
+        ROUND(SUM(CAST(t.f9_dw007_amt_req AS FLOAT64) / 100), 0) AS amount_idr
+      FROM ${TABLES.authorized_transaction} t
+      WHERE t.f9_dw007_dt BETWEEN @kpiStart AND @endDate
+        AND t.fx_dw007_stat = 'D'
+        AND t.fx_dw007_txn_typ NOT IN ('PM', 'RF', 'BE')
+        AND t.fx_dw007_given_resp_cde IS NOT NULL
+        AND TRIM(t.fx_dw007_given_resp_cde) != ''
+        ${transactionTypeWhere(filters, 't')}
+        ${amountRangeWhere(filters, 't')}
+      GROUP BY resp_code
+      ORDER BY cnt DESC`,
+      { kpiStart: kpiStartDate, endDate }, env,
+    ),
+  ]);
+
+  return {
+    weeklySpendTrend: weeklyTrend,
+    channelBreakdown: channelBreakdown,
+    declineBreakdown: declineRows.map((r: Record<string, unknown>) => ({
+      ...r,
+      description: DECLINE_CODE_DESCRIPTIONS[r.code as string] ?? `Unknown: ${r.code}`,
+    })),
+    periodSummary: (periodSummaryRows as unknown[])[0] ?? null,
+    onboardingSummary: (onboardingSummaryRows as unknown[])[0] ?? null,
+    onboardingTrend: onboardingTrendRows,
+    firstTxnChannel: (firstTxnChannelRows as Record<string, unknown>[]).filter(r => r.result_type === "summary").map(r => ({
+      channel: r.channel, user_count: r.user_count, avg_first_amount: r.avg_first_amount,
+    })),
+    firstTxnChannelTrend: (firstTxnChannelRows as Record<string, unknown>[]).filter(r => r.result_type === "weekly").map(r => ({
+      date: r.week_start, online: r.online, offline: r.offline, qris: r.qris, total: r.total,
+    })),
+    declineReasons: (declineReasonRows as Array<{ resp_code: string; cnt: number; amount_idr: number }>).map((r) => ({
+      resp_code: r.resp_code,
+      label: RESPONSE_CODE_LABELS[r.resp_code] ?? `Unknown (${r.resp_code})`,
+      cnt: r.cnt,
+      amount_idr: r.amount_idr,
+    })),
+  };
+}
+
+export const onRequest = createHandler({ section: "spend-analysis", queryFn: querySpendAnalysis });

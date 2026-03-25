@@ -9,6 +9,7 @@ import {
 } from "recharts";
 import { cn } from "@/lib/utils";
 import { formatNumber, formatPercent } from "@/lib/utils";
+import { useTranslations } from "next-intl";
 import { formatAmountCompact } from "@/lib/currency";
 import { useCurrency } from "@/hooks/use-currency";
 import { useTheme } from "@/hooks/use-theme";
@@ -27,6 +28,8 @@ interface MetricCardProps {
   higherIsBetter?: boolean;
   onRefresh?: () => Promise<void>;
   query?: QueryInfo;
+  /** Show star badge indicating data is from BigQuery (not mock) */
+  liveData?: boolean;
 }
 
 function formatValue(value: number, unit: MetricCardProps["unit"], currency: "IDR" | "USD"): string {
@@ -64,9 +67,11 @@ export function MetricCard({
   higherIsBetter = true,
   onRefresh,
   query,
+  liveData,
 }: MetricCardProps) {
   const { currency } = useCurrency();
   const { isDark } = useTheme();
+  const tMetrics = useTranslations("metrics");
   const [refreshing, setRefreshing] = useState(false);
 
   const { percent: changePercent, direction } = computeChange(value, prevValue);
@@ -115,8 +120,11 @@ export function MetricCard({
       {/* Header row */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wider text-[var(--text-secondary)]">
+          <p className="text-xs font-medium uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-1">
             {label}
+            {liveData && (
+              <span className={cn("text-[9px]", isDark ? "text-[#FFD166]" : "text-amber-500")} title="Live BigQuery data">&#9733;</span>
+            )}
           </p>
           <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">
             {dataRange.start} &ndash; {dataRange.end}
@@ -147,7 +155,7 @@ export function MetricCard({
               onClick={handleRefresh}
               disabled={refreshing}
               className="text-[var(--text-muted)] hover:text-[var(--accent-light)] transition-colors disabled:opacity-50"
-              aria-label={`Refresh ${label}`}
+              aria-label={`${tMetrics("refresh")} ${label}`}
             >
               <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
             </button>
@@ -164,7 +172,7 @@ export function MetricCard({
       {changePercent !== null && (
         <div className={cn("mt-1 flex items-center gap-1 text-xs font-medium", changeColor)}>
           <DirectionIcon className="h-3 w-3" />
-          <span>{Math.abs(Math.round(changePercent * 100) / 100)}% vs prev period</span>
+          <span>{Math.abs(Math.round(changePercent * 100) / 100)}{tMetrics("vsPrevPeriod")}</span>
         </div>
       )}
 
@@ -172,7 +180,7 @@ export function MetricCard({
       {targetPercent !== null && target != null && (
         <div className="mt-2">
           <div className="flex items-center justify-between text-[10px] text-[var(--text-muted)] mb-0.5">
-            <span>Target: {formatValue(target, unit, currency)}</span>
+            <span>{tMetrics("target")}: {formatValue(target, unit, currency)}</span>
             <span>{targetPercent.toFixed(0)}%</span>
           </div>
           <div className={cn(
@@ -196,7 +204,7 @@ export function MetricCard({
 
       {/* As of date */}
       <p className="mt-2 text-[10px] text-[var(--text-muted)] text-right">
-        As of: {asOf}
+        {tMetrics("asOf")}: {asOf}
       </p>
     </div>
   );

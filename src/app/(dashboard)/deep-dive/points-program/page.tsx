@@ -1,61 +1,25 @@
 "use client";
 
 import { useMemo, useCallback } from "react";
-import { MetricCard } from "@/components/dashboard/metric-card";
+import useSWR from "swr";
 import { ChartCard } from "@/components/dashboard/chart-card";
+import type { ChartIncrement } from "@/components/dashboard/chart-card";
+import { aggregateByIncrement } from "@/lib/aggregate-by-increment";
+import { MetricCard } from "@/components/dashboard/metric-card";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
-import { DashboardLineChart } from "@/components/charts/line-chart";
-import { DashboardBarChart } from "@/components/charts/bar-chart";
-import { DashboardAreaChart } from "@/components/charts/area-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
+import { DashboardBarChart } from "@/components/charts/bar-chart";
+import { DashboardLineChart } from "@/components/charts/line-chart";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
+import { ChartSkeleton, MetricCardsSkeleton } from "@/components/dashboard/chart-skeleton";
 import { usePeriod } from "@/hooks/use-period";
-import { useFilters } from "@/hooks/use-filters";
-import { getPeriodRange, scaleTrendData, scaleMetricValue, getPeriodInsightLabels } from "@/lib/period-data";
-import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
+import { useApiParams } from "@/hooks/use-api-params";
+import { getPeriodRange, getPeriodInsightLabels } from "@/lib/period-data";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
+import { PrintStyles } from "@/components/layout/print-styles";
 
-const AS_OF = "Mar 15, 2026";
-
-// Mock data — Points awarded vs redeemed trend (monthly)
-const pointsFlowTrend = [
-  { date: "Oct", awarded: 186000000, redeemed: 152000000 },
-  { date: "Nov", awarded: 201000000, redeemed: 168000000 },
-  { date: "Dec", awarded: 178000000, redeemed: 149000000 },
-  { date: "Jan", awarded: 215000000, redeemed: 182000000 },
-  { date: "Feb", awarded: 224000000, redeemed: 189000000 },
-  { date: "Mar", awarded: 210000000, redeemed: 173000000 },
-];
-
-// Mock data — Closing balance trend (monthly)
-const closingBalanceTrend = [
-  { date: "Oct", closing: 798000000 },
-  { date: "Nov", closing: 812000000 },
-  { date: "Dec", closing: 805000000 },
-  { date: "Jan", closing: 828000000 },
-  { date: "Feb", closing: 842000000 },
-  { date: "Mar", closing: 842000000 },
-];
-
-// Mock data — Points distribution by bucket
-const pointsDistribution = [
-  { bucket: "0", account_count: 259700, pct: 70.0 },
-  { bucket: "1-100", account_count: 29680, pct: 8.0 },
-  { bucket: "101-500", account_count: 33390, pct: 9.0 },
-  { bucket: "501-1K", account_count: 18550, pct: 5.0 },
-  { bucket: "1K-5K", account_count: 22260, pct: 6.0 },
-  { bucket: "5K+", account_count: 7420, pct: 2.0 },
-];
-
-// Mock data — Expiry trend (monthly)
-const expiryTrend = [
-  { date: "Oct", expired: 2100000 },
-  { date: "Nov", expired: 1800000 },
-  { date: "Dec", expired: 3200000 },
-  { date: "Jan", expired: 2400000 },
-  { date: "Feb", expired: 1900000 },
-  { date: "Mar", expired: 61000000 },
-];
+const AS_OF = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 const actionItems: ActionItem[] = [
   {
@@ -88,106 +52,110 @@ const actionItems: ActionItem[] = [
   },
 ];
 
+interface SummaryRow {
+  week_start: string;
+  total_accounts: number;
+  accounts_with_points: number;
+  total_closing_pts: number;
+  total_awarded: number;
+  total_redeemed: number;
+  total_expired: number;
+  redemption_rate: number;
+}
+
+interface FlowRow {
+  month: string;
+  earned: number;
+  redeemed: number;
+  expired: number;
+  net: number;
+}
+
+interface ClosingRow {
+  month: string;
+  total_points: number;
+  total_members: number;
+}
+
+interface RedemptionRow {
+  category: string;
+  points: number;
+  count: number;
+}
+
 export default function PointsProgramPage() {
-  const { period, periodLabel, timeRangeMultiplier } = usePeriod();
-  const { filters } = useFilters();
-
+  const { period } = usePeriod();
+  const { apiParams } = useApiParams();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
-
-  const periodFlowTrend = useMemo(
-    () => applyFilterToData(scaleTrendData(pointsFlowTrend, period), filters),
-    [period, filters],
-  );
-  const periodClosingTrend = useMemo(
-    () => applyFilterToData(scaleTrendData(closingBalanceTrend, period), filters),
-    [period, filters],
-  );
-  const periodDistribution = useMemo(
-    () => applyFilterToData(scaleTrendData(pointsDistribution, period, "bucket"), filters),
-    [period, filters],
-  );
-  const periodExpiryTrend = useMemo(
-    () => applyFilterToData(scaleTrendData(expiryTrend, period), filters),
-    [period, filters],
-  );
-
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
 
-  const flowTrendInsights = useMemo<ChartInsight[]>(
-    () => [
-      {
-        text: `Points awarded ranged from 178M to 224M per month over ${p.span}, peaking in February at 224M.`,
-        type: "neutral",
-      },
-      {
-        text: `Redemptions tracked closely at 80-85% of awarded volume, indicating strong customer engagement with the rewards program.`,
-        type: "positive",
-      },
-      {
-        text: `December saw the lowest award/redeem activity (178M/149M), consistent with seasonal spending patterns during the holiday period.`,
-        type: "neutral",
-      },
-      {
-        text: `If redemption rate drops below 75%, investigate whether catalog freshness or point-to-value ratio has degraded.`,
-        type: "hypothesis",
-      },
-    ],
-    [p],
+  const { data: apiData, isLoading } = useSWR(
+    `/api/points-program?${apiParams}`,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 300_000 },
   );
 
-  const closingBalanceInsights = useMemo<ChartInsight[]>(
-    () => [
-      {
-        text: `Total points outstanding grew from 798M (${p.firstLabel}) to 842M (${p.lastLabel}), a 5.51% increase representing growing liability.`,
-        type: "negative",
-      },
-      {
-        text: `The balance plateaued at 842M in the latest two periods, possibly due to the large March expiry event offsetting new awards.`,
-        type: "neutral",
-      },
-      {
-        text: `Consider setting a target ceiling (e.g., 900M) and triggering proactive redemption campaigns when liability approaches that threshold.`,
-        type: "hypothesis",
-      },
-    ],
-    [p],
-  );
+  const isLive = !!apiData?.summary?.length;
 
-  const distributionInsights = useMemo<ChartInsight[]>(
-    () => [
-      {
-        text: `70% of accounts hold zero points, representing a large dormant segment that could benefit from targeted earn incentives.`,
-        type: "negative",
-      },
-      {
-        text: `The 1K-5K and 5K+ buckets together hold only 8% of accounts but likely represent a disproportionate share of total liability.`,
-        type: "neutral",
-      },
-      {
-        text: `Nudge the 1-100 point segment (8% of accounts) toward their first redemption to build the rewards habit loop.`,
-        type: "hypothesis",
-      },
-    ],
-    [],
-  );
+  // Summary data
+  const summaryData = useMemo((): SummaryRow[] | null => {
+    if (!apiData?.summary?.length) return null;
+    return apiData.summary as SummaryRow[];
+  }, [apiData]);
 
-  const expiryInsights = useMemo<ChartInsight[]>(
-    () => [
-      {
-        text: `March saw a massive 61M point expiry, roughly 30x the typical monthly average of ~2M, driven by a batch expiry event.`,
-        type: "negative",
-      },
-      {
-        text: `Regular monthly expiry of 1.8-3.2M points is healthy and expected as part of the standard 12-month expiry policy.`,
-        type: "neutral",
-      },
-      {
-        text: `Introduce a "points expiring soon" push notification 30 days before expiry to drive pre-emptive redemption and reduce customer complaints.`,
-        type: "hypothesis",
-      },
-    ],
-    [],
-  );
+  // Flow trend
+  const flowTrend = useMemo((): FlowRow[] | null => {
+    if (!apiData?.flowTrend?.length) return null;
+    return apiData.flowTrend as FlowRow[];
+  }, [apiData]);
+
+  // Closing balance trend
+  const closingBalance = useMemo((): ClosingRow[] | null => {
+    if (!apiData?.closingBalance?.length) return null;
+    return apiData.closingBalance as ClosingRow[];
+  }, [apiData]);
+
+  // Redemption breakdown
+  const redemptionBreakdown = useMemo((): RedemptionRow[] | null => {
+    if (!apiData?.redemptionBreakdown?.length) return null;
+    return apiData.redemptionBreakdown as RedemptionRow[];
+  }, [apiData]);
+
+  // KPI summary
+  const kpiSummary = useMemo(() => {
+    if (!summaryData?.length) return null;
+    const latest = summaryData[summaryData.length - 1];
+    const totalAwarded = summaryData.reduce((s, r) => s + r.total_awarded, 0);
+    const totalRedeemed = summaryData.reduce((s, r) => s + r.total_redeemed, 0);
+    const totalExpired = summaryData.reduce((s, r) => s + r.total_expired, 0);
+    return {
+      totalAccounts: latest.total_accounts,
+      accountsWithPoints: latest.accounts_with_points,
+      closingBalance: latest.total_closing_pts,
+      redemptionRate: latest.redemption_rate,
+      totalAwarded,
+      totalRedeemed,
+      totalExpired,
+    };
+  }, [summaryData]);
+
+  const flowInsights = useMemo<ChartInsight[]>(() => [
+    { text: `Points earned consistently exceeds redemptions across ${p.span}, driving growing liability on the balance sheet.`, type: "negative" },
+    { text: "Redemption activity is healthy and growing, indicating customer engagement with the rewards program.", type: "positive" },
+    { text: "Expired points spikes suggest batch expiry events — proactive customer notification could convert these to redemptions.", type: "neutral" },
+    { text: "Net point accumulation trend should be cross-referenced with provisioning forecasts to ensure adequate reserves.", type: "hypothesis" },
+  ], [p]);
+
+  const closingInsights = useMemo<ChartInsight[]>(() => [
+    { text: "Total outstanding points liability shows steady growth month-over-month.", type: "negative" },
+    { text: "Active members with points are growing, suggesting the program drives ongoing engagement.", type: "positive" },
+    { text: "Consider introducing time-limited bonus redemption campaigns to manage growing liability.", type: "neutral" },
+  ], []);
+
+  const redemptionInsights = useMemo<ChartInsight[]>(() => [
+    { text: "Redemption category distribution reveals customer preferences for reward types.", type: "neutral" },
+    { text: "Top redemption categories should inform catalog curation and partner negotiation priorities.", type: "positive" },
+  ], []);
 
   const handleRefresh = useCallback(async () => {
     await new Promise((r) => setTimeout(r, 800));
@@ -195,124 +163,197 @@ export default function PointsProgramPage() {
 
   return (
     <div className="space-y-6">
+      <PrintStyles />
       <ActiveFiltersBanner />
 
       {/* KPI row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard
-          metricKey="pts_outstanding"
-          label="Total Points Outstanding"
-          value={applyFilterToMetric(scaleMetricValue(842000000, period, false, timeRangeMultiplier), filters, false)}
-          prevValue={applyFilterToMetric(scaleMetricValue(842000000, period, false, timeRangeMultiplier), filters, false)}
-          unit="count"
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          onRefresh={handleRefresh}
+      {kpiSummary ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <MetricCard
+            metricKey="pts-total-accounts"
+            label="Total Accounts"
+            value={kpiSummary.totalAccounts}
+            unit="count"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            liveData
+          />
+          <MetricCard
+            metricKey="pts-with-points"
+            label="Accounts with Points"
+            value={kpiSummary.accountsWithPoints}
+            unit="count"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            liveData
+          />
+          <MetricCard
+            metricKey="pts-closing-balance"
+            label="Closing Balance"
+            value={kpiSummary.closingBalance}
+            unit="count"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            liveData
+          />
+          <MetricCard
+            metricKey="pts-redemption-rate"
+            label="Redemption Rate"
+            value={kpiSummary.redemptionRate}
+            unit="percent"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            liveData
+          />
+        </div>
+      ) : isLoading ? (
+        <MetricCardsSkeleton />
+      ) : (
+        <SampleDataBanner
+          dataset="mart_finexus"
+          reason="Points KPIs require points_summary (DW010) table"
         />
-        <MetricCard
-          metricKey="pts_holders"
-          label="Active Point Holders"
-          value={applyFilterToMetric(scaleMetricValue(112000, period, false, timeRangeMultiplier), filters, false)}
-          prevValue={applyFilterToMetric(scaleMetricValue(108000, period, false, timeRangeMultiplier), filters, false)}
-          unit="count"
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          onRefresh={handleRefresh}
-        />
-        <MetricCard
-          metricKey="pts_redemption_rate"
-          label="Redemption Rate"
-          value={applyFilterToMetric(scaleMetricValue(82.38, period, true), filters, true)}
-          prevValue={applyFilterToMetric(scaleMetricValue(84.38, period, true), filters, true)}
-          unit="percent"
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          target={85}
-          onRefresh={handleRefresh}
-        />
-        <MetricCard
-          metricKey="pts_expired"
-          label="Points Expired This Period"
-          value={applyFilterToMetric(scaleMetricValue(61000000, period, false, timeRangeMultiplier), filters, false)}
-          prevValue={applyFilterToMetric(scaleMetricValue(1900000, period, false, timeRangeMultiplier), filters, false)}
-          unit="count"
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          onRefresh={handleRefresh}
-        />
-      </div>
+      )}
 
-      {/* Hero chart — Points awarded vs redeemed */}
-      <ChartCard
-        title="Points Awarded vs Redeemed"
-        subtitle="Monthly points flow — redeemed shown as positive (absolute value)"
-        asOf={AS_OF}
-        dataRange={DATA_RANGE}
-        onRefresh={handleRefresh}
-      >
-        <DashboardLineChart
-          data={periodFlowTrend}
-          lines={[
-            { key: "awarded", color: "#3b82f6", label: "Awarded" },
-            { key: "redeemed", color: "#f59e0b", label: "Redeemed" },
-          ]}
-          height={300}
+      {/* Points flow trend */}
+      {flowTrend ? (
+        <ChartCard
+          title="Points Flow Trend"
+          subtitle="Earned, redeemed, expired, and net change"
+          asOf={AS_OF}
+          dataRange={DATA_RANGE}
+          onRefresh={handleRefresh}
+          liveData={isLive}
+          showIncrement
+        >
+          {(increment: ChartIncrement) => (
+            <>
+              <DashboardLineChart
+                data={aggregateByIncrement(flowTrend.map((r) => ({
+                  month: r.month,
+                  earned: r.earned,
+                  redeemed: r.redeemed,
+                  expired: r.expired,
+                })), increment, "month")}
+                lines={[
+                  { key: "earned", color: "#22c55e", label: "Earned" },
+                  { key: "redeemed", color: "#6366f1", label: "Redeemed" },
+                  { key: "expired", color: "#ef4444", label: "Expired" },
+                ]}
+                xAxisKey="month"
+                height={300}
+              />
+              <ChartInsights insights={flowInsights} />
+            </>
+          )}
+        </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
+      ) : (
+        <SampleDataBanner
+          dataset="mart_finexus"
+          reason="Points flow requires points_summary (DW010)"
         />
-        <ChartInsights insights={flowTrendInsights} />
-      </ChartCard>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Closing balance trend */}
-        <ChartCard
-          title="Points Liability (Closing Balance)"
-          subtitle="Total outstanding points balance over time"
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          onRefresh={handleRefresh}
-        >
-          <DashboardAreaChart
-            data={periodClosingTrend}
-            areas={[{ key: "closing", color: "#8b5cf6", label: "Closing Balance" }]}
-            height={280}
+        {closingBalance ? (
+          <ChartCard
+            title="Outstanding Points Liability"
+            subtitle="Total closing points balance"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            onRefresh={handleRefresh}
+            liveData
+            showIncrement
+          >
+            {(increment: ChartIncrement) => (
+              <>
+                <DashboardLineChart
+                  data={aggregateByIncrement(closingBalance.map((r) => ({
+                    date: r.month,
+                    points: r.total_points,
+                  })), increment, "date")}
+                  lines={[{ key: "points", color: "#f59e0b", label: "Total Points" }]}
+                  height={280}
+                />
+                <ChartInsights insights={closingInsights} />
+              </>
+            )}
+          </ChartCard>
+        ) : isLoading ? (
+          <ChartSkeleton />
+        ) : (
+          <SampleDataBanner
+            dataset="mart_finexus"
+            reason="Points liability requires points_summary (DW010)"
           />
-          <ChartInsights insights={closingBalanceInsights} />
-        </ChartCard>
+        )}
 
-        {/* Points distribution by bucket */}
-        <ChartCard
-          title="Points Distribution by Bucket"
-          subtitle="Account count by closing points balance range"
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          onRefresh={handleRefresh}
-        >
-          <DashboardBarChart
-            data={periodDistribution}
-            bars={[{ key: "account_count", color: "#22c55e", label: "Accounts" }]}
-            xAxisKey="bucket"
-            height={280}
+        {/* Redemption breakdown */}
+        {redemptionBreakdown ? (
+          <ChartCard
+            title="Redemption by Category"
+            subtitle="Points redeemed by transaction type"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            onRefresh={handleRefresh}
+            liveData
+          >
+            <DashboardBarChart
+              data={redemptionBreakdown.slice(0, 10).map((r) => ({
+                category: r.category,
+                points: r.points,
+              }))}
+              bars={[{ key: "points", color: "#8b5cf6", label: "Points Redeemed" }]}
+              xAxisKey="category"
+              height={280}
+            />
+            <ChartInsights insights={redemptionInsights} />
+          </ChartCard>
+        ) : isLoading ? (
+          <ChartSkeleton />
+        ) : (
+          <SampleDataBanner
+            dataset="mart_finexus"
+            reason="Redemption breakdown requires points_details (DW011)"
           />
-          <ChartInsights insights={distributionInsights} />
-        </ChartCard>
+        )}
       </div>
 
-      {/* Expiry trend */}
-      <ChartCard
-        title="Points Expiry Trend"
-        subtitle="Monthly expired points volume"
-        asOf={AS_OF}
-        dataRange={DATA_RANGE}
-        onRefresh={handleRefresh}
-      >
-        <DashboardLineChart
-          data={periodExpiryTrend}
-          lines={[{ key: "expired", color: "#ef4444", label: "Expired" }]}
-          height={280}
+      {/* Weekly summary trend */}
+      {summaryData ? (
+        <ChartCard
+          title="Redemption Rate Trend"
+          subtitle="% of awarded points redeemed"
+          asOf={AS_OF}
+          dataRange={DATA_RANGE}
+          onRefresh={handleRefresh}
+          liveData
+          showIncrement
+        >
+          {(increment: ChartIncrement) => (
+            <DashboardLineChart
+              data={aggregateByIncrement(summaryData.map((r) => ({
+                date: r.week_start,
+                rate: r.redemption_rate,
+              })), increment, "date")}
+              lines={[{ key: "rate", color: "#22c55e", label: "Redemption Rate %" }]}
+              valueType="percent"
+              height={300}
+            />
+          )}
+        </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
+      ) : (
+        <SampleDataBanner
+          dataset="mart_finexus"
+          reason="Redemption rate trend requires points_summary (DW010)"
         />
-        <ChartInsights insights={expiryInsights} />
-      </ChartCard>
+      )}
 
-      {/* Action items */}
       <ActionItems section="Points Program" items={actionItems} />
     </div>
   );

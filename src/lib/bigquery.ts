@@ -207,4 +207,7 @@ export const TABLES = {
 
   // Card delivery (AWB)
   card_delivery_tracking: "`storage-58f5a02c.raw_raw_card_delivery_tracking_job.ss_card_delivery_anteraja_tracking_notification`",
+
+  // QRIS experiment
+  qris_rollout: "`storage-58f5a02c.sandbox_risk.sample_qris_rollout_test_10k_202601`",
 } as const;

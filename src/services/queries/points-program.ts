@@ -59,6 +59,120 @@ export async function getPointsSummary(
 // 2. Points Distribution — Bucket analysis of closing balances
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// 2a. Points Flow Trend — monthly earned, redeemed, expired, net
+// ---------------------------------------------------------------------------
+
+export interface PointsFlowTrendRow {
+  month: string;
+  earned: number;
+  redeemed: number;
+  expired: number;
+  net: number;
+}
+
+export async function getPointsFlowTrend(
+  startDate: Date,
+  endDate: Date,
+): Promise<PointsFlowTrendRow[]> {
+  const sql = `
+    SELECT
+      FORMAT_DATE('%Y-%m', data_delivered_date) AS month,
+      SUM(f9_dw010_awrd_pt) AS earned,
+      SUM(ABS(f9_dw010_rdm_pt)) AS redeemed,
+      SUM(f9_dw010_expi_pt) AS expired,
+      SUM(f9_dw010_awrd_pt) - SUM(ABS(f9_dw010_rdm_pt)) - SUM(f9_dw010_expi_pt) AS net
+    FROM ${TABLES.points_summary}
+    WHERE data_delivered_date BETWEEN @startDate AND @endDate
+    GROUP BY month
+    ORDER BY month
+  `;
+
+  return runQuery<PointsFlowTrendRow>(sql, {
+    startDate: toSqlDate(startDate),
+    endDate: toSqlDate(endDate),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 2b. Points Closing Balance — monthly total points and member count
+// ---------------------------------------------------------------------------
+
+export interface PointsClosingBalanceRow {
+  month: string;
+  total_points: number;
+  total_members: number;
+}
+
+export async function getPointsClosingBalance(
+  startDate: Date,
+  endDate: Date,
+): Promise<PointsClosingBalanceRow[]> {
+  const sql = `
+    WITH monthly AS (
+      SELECT
+        FORMAT_DATE('%Y-%m', data_delivered_date) AS month,
+        px_dw010_sub_acct_num,
+        f9_dw010_cls_pt,
+        ROW_NUMBER() OVER (
+          PARTITION BY px_dw010_sub_acct_num, FORMAT_DATE('%Y-%m', data_delivered_date)
+          ORDER BY data_delivered_date DESC
+        ) AS rn
+      FROM ${TABLES.points_summary}
+      WHERE data_delivered_date BETWEEN @startDate AND @endDate
+    )
+    SELECT
+      month,
+      SUM(f9_dw010_cls_pt) AS total_points,
+      COUNT(DISTINCT CASE WHEN f9_dw010_cls_pt > 0 THEN px_dw010_sub_acct_num END) AS total_members
+    FROM monthly
+    WHERE rn = 1
+    GROUP BY month
+    ORDER BY month
+  `;
+
+  return runQuery<PointsClosingBalanceRow>(sql, {
+    startDate: toSqlDate(startDate),
+    endDate: toSqlDate(endDate),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 2c. Redemption Breakdown — by category (from points_details)
+// ---------------------------------------------------------------------------
+
+export interface RedemptionBreakdownRow {
+  category: string;
+  points: number;
+  count: number;
+}
+
+export async function getRedemptionBreakdown(
+  startDate: Date,
+  endDate: Date,
+): Promise<RedemptionBreakdownRow[]> {
+  const sql = `
+    SELECT
+      COALESCE(fx_dw011_txn_desc, 'Unknown') AS category,
+      SUM(ABS(f9_dw011_pt)) AS points,
+      COUNT(*) AS count
+    FROM ${TABLES.points_details}
+    WHERE data_delivered_date BETWEEN @startDate AND @endDate
+      AND f9_dw011_pt < 0
+    GROUP BY category
+    ORDER BY points DESC
+  `;
+
+  return runQuery<RedemptionBreakdownRow>(sql, {
+    startDate: toSqlDate(startDate),
+    endDate: toSqlDate(endDate),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 3. Points Distribution — Bucket analysis of closing balances
+// ---------------------------------------------------------------------------
+
 export async function getPointsDistribution(
   snapshotDate: Date,
 ): Promise<PointsDistributionRow[]> {

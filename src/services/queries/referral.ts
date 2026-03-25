@@ -108,3 +108,152 @@ export async function getReferralByChannel(
     endDate: toSqlDate(endDate),
   });
 }
+
+// ---------------------------------------------------------------------------
+// 3. Referral Funnel Trend — monthly shared, started, approved
+// ---------------------------------------------------------------------------
+
+export interface ReferralFunnelTrendRow {
+  month: string;
+  shared: number;
+  started: number;
+  approved: number;
+}
+
+export async function getReferralFunnelTrend(
+  startDate: Date,
+  endDate: Date,
+): Promise<ReferralFunnelTrendRow[]> {
+  const sql = `
+    WITH started AS (
+      SELECT
+        FORMAT_DATE('%Y-%m', DATE(timestamp, 'Asia/Jakarta')) AS month,
+        COUNT(DISTINCT referred_user_id) AS started,
+        COUNT(DISTINCT user_id) AS shared
+      FROM ${TABLES.referral_application_started}
+      WHERE DATE(timestamp, 'Asia/Jakarta') BETWEEN @startDate AND @endDate
+      GROUP BY month
+    ),
+    approved AS (
+      SELECT
+        FORMAT_DATE('%Y-%m', DATE(timestamp, 'Asia/Jakarta')) AS month,
+        COUNT(DISTINCT user_id) AS approved
+      FROM ${TABLES.referral_approved}
+      WHERE DATE(timestamp, 'Asia/Jakarta') BETWEEN @startDate AND @endDate
+      GROUP BY month
+    )
+    SELECT
+      s.month,
+      s.shared,
+      s.started,
+      COALESCE(a.approved, 0) AS approved
+    FROM started s
+    LEFT JOIN approved a ON s.month = a.month
+    ORDER BY s.month
+  `;
+
+  return runQuery<ReferralFunnelTrendRow>(sql, {
+    startDate: toSqlDate(startDate),
+    endDate: toSqlDate(endDate),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 4. Referral Approval Rate — monthly started vs approved with rate
+// ---------------------------------------------------------------------------
+
+export interface ReferralApprovalRateRow {
+  month: string;
+  started: number;
+  approved: number;
+  rate: number;
+}
+
+export async function getReferralApprovalRate(
+  startDate: Date,
+  endDate: Date,
+): Promise<ReferralApprovalRateRow[]> {
+  const sql = `
+    WITH started AS (
+      SELECT
+        FORMAT_DATE('%Y-%m', DATE(timestamp, 'Asia/Jakarta')) AS month,
+        COUNT(DISTINCT referred_user_id) AS started
+      FROM ${TABLES.referral_application_started}
+      WHERE DATE(timestamp, 'Asia/Jakarta') BETWEEN @startDate AND @endDate
+      GROUP BY month
+    ),
+    approved AS (
+      SELECT
+        FORMAT_DATE('%Y-%m', DATE(timestamp, 'Asia/Jakarta')) AS month,
+        COUNT(DISTINCT user_id) AS approved
+      FROM ${TABLES.referral_approved}
+      WHERE DATE(timestamp, 'Asia/Jakarta') BETWEEN @startDate AND @endDate
+      GROUP BY month
+    )
+    SELECT
+      s.month,
+      s.started,
+      COALESCE(a.approved, 0) AS approved,
+      ROUND(SAFE_DIVIDE(COALESCE(a.approved, 0), s.started) * 100, 2) AS rate
+    FROM started s
+    LEFT JOIN approved a ON s.month = a.month
+    ORDER BY s.month
+  `;
+
+  return runQuery<ReferralApprovalRateRow>(sql, {
+    startDate: toSqlDate(startDate),
+    endDate: toSqlDate(endDate),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 5. Referrals Per User — bucket distribution
+// ---------------------------------------------------------------------------
+
+export interface ReferralsPerUserRow {
+  bucket: string;
+  users: number;
+}
+
+export async function getReferralsPerUser(
+  startDate: Date,
+  endDate: Date,
+): Promise<ReferralsPerUserRow[]> {
+  const sql = `
+    WITH user_counts AS (
+      SELECT
+        user_id,
+        COUNT(DISTINCT referred_user_id) AS referral_count
+      FROM ${TABLES.referral_application_started}
+      WHERE DATE(timestamp, 'Asia/Jakarta') BETWEEN @startDate AND @endDate
+      GROUP BY user_id
+    ),
+    bucketed AS (
+      SELECT
+        CASE
+          WHEN referral_count = 1 THEN '1'
+          WHEN referral_count = 2 THEN '2'
+          WHEN referral_count = 3 THEN '3'
+          ELSE '4+'
+        END AS bucket
+      FROM user_counts
+    )
+    SELECT
+      bucket,
+      COUNT(*) AS users
+    FROM bucketed
+    GROUP BY bucket
+    ORDER BY
+      CASE bucket
+        WHEN '1' THEN 1
+        WHEN '2' THEN 2
+        WHEN '3' THEN 3
+        WHEN '4+' THEN 4
+      END
+  `;
+
+  return runQuery<ReferralsPerUserRow>(sql, {
+    startDate: toSqlDate(startDate),
+    endDate: toSqlDate(endDate),
+  });
+}

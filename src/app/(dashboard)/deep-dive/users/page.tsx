@@ -4,418 +4,344 @@ import { useMemo } from "react";
 import useSWR from "swr";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
+import type { ChartIncrement } from "@/components/dashboard/chart-card";
+import { aggregateByIncrement } from "@/lib/aggregate-by-increment";
+import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
+import { DashboardLineChart } from "@/components/charts/line-chart";
+import { HorizontalBar } from "@/components/charts/horizontal-bar";
+import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
+import { ChartSkeleton, MetricCardsSkeleton } from "@/components/dashboard/chart-skeleton";
 import { usePeriod } from "@/hooks/use-period";
-import { useFilters } from "@/hooks/use-filters";
-import { useTheme } from "@/hooks/use-theme";
-import { getPeriodRange } from "@/lib/period-data";
+import { useApiParams } from "@/hooks/use-api-params";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
+import { getPeriodRange } from "@/lib/period-data";
+
+import { PrintStyles } from "@/components/layout/print-styles";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
-// ==========================================================================
-// Mock Data — Users Overview
-// ==========================================================================
-
-const AS_OF = "Mar 17, 2026";
-
-const mockAccountStatuses = [
-  { status: "G", accounts: 366000 },
-  { status: "N", accounts: 81000 },
-  { status: "W", accounts: 74000 },
-  { status: "P", accounts: 17000 },
-  { status: "S", accounts: 5000 },
-  { status: "C", accounts: 4000 },
-];
+const AS_OF = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
 const STATUS_LABELS: Record<string, string> = {
-  G: "Good Standing",
-  N: "New",
-  W: "Warning",
-  P: "Past Due",
-  S: "Suspended",
+  G: "Good",
+  N: "Normal",
+  B: "Blocked",
   C: "Closed",
+  F: "Fraud",
+  D: "Delinquent",
+  W: "Write-Off",
+  P: "Blocked (P)",
+  S: "Suspended",
 };
 
-const mockDevices = [
-  { manufacturer: "Samsung", os: "Android", users: 6200 },
-  { manufacturer: "Xiaomi", os: "Android", users: 5000 },
-  { manufacturer: "OPPO", os: "Android", users: 3500 },
-  { manufacturer: "Vivo", os: "Android", users: 3000 },
-  { manufacturer: "Infinix", os: "Android", users: 2300 },
-  { manufacturer: "Realme", os: "Android", users: 1800 },
-  { manufacturer: "Apple", os: "iOS", users: 1500 },
-  { manufacturer: "Huawei", os: "Android", users: 900 },
-  { manufacturer: "POCO", os: "Android", users: 750 },
-  { manufacturer: "Nothing", os: "Android", users: 350 },
+const actionItems: ActionItem[] = [
+  {
+    id: "users-1",
+    priority: "positive",
+    action: "Account status breakdown now sourced from live DW004 data.",
+    detail: "Statuses reflect the latest business date snapshot from financial_account_updates.",
+  },
+  {
+    id: "users-2",
+    priority: "monitor",
+    action: "Device manufacturer mix should inform app testing priorities.",
+    detail: "Ensure QA covers top 5 device manufacturers for each release cycle.",
+  },
+  {
+    id: "users-3",
+    priority: "monitor",
+    action: "Geographic concentration risk — review top provinces.",
+    detail: "If a single province dominates, consider diversification strategies for acquisition.",
+  },
 ];
-
-const mockVerification = [
-  { reason: "DECISION_TO_SKIP", users: 188000 },
-  { reason: "VIDEO_VERIFIED", users: 145000 },
-  { reason: "VIDEO_FAILED", users: 12000 },
-  { reason: "EXPIRED", users: 8500 },
-];
-
-const mockGeographic = [
-  { province: "DKI Jakarta", users: 8200 },
-  { province: "Jawa Barat", users: 5400 },
-  { province: "Jawa Timur", users: 3100 },
-  { province: "Banten", users: 2800 },
-  { province: "Jawa Tengah", users: 2200 },
-  { province: "Sumatera Utara", users: 1500 },
-  { province: "Sulawesi Selatan", users: 1100 },
-  { province: "Bali", users: 950 },
-  { province: "Kalimantan Timur", users: 820 },
-  { province: "Sumatera Selatan", users: 680 },
-  { province: "DI Yogyakarta", users: 620 },
-  { province: "Riau", users: 540 },
-  { province: "Lampung", users: 480 },
-  { province: "Kalimantan Selatan", users: 410 },
-  { province: "Sumatera Barat", users: 380 },
-];
-
-const mockProfessions = [
-  { profession: "Private Employee", users: 12500 },
-  { profession: "Entrepreneur", users: 4200 },
-  { profession: "Civil Servant", users: 2800 },
-  { profession: "Professional", users: 2100 },
-  { profession: "Freelancer", users: 1600 },
-  { profession: "Student", users: 900 },
-  { profession: "Housewife", users: 450 },
-  { profession: "Other", users: 1200 },
-];
-
-const mockEducation = [
-  { education: "S1 (Bachelor)", users: 15200 },
-  { education: "SMA (High School)", users: 5800 },
-  { education: "D3 (Diploma)", users: 2400 },
-  { education: "S2 (Master)", users: 1800 },
-  { education: "SMP (Junior High)", users: 350 },
-  { education: "S3 (Doctorate)", users: 200 },
-];
-
-const mockIncome = [
-  { income: "3-5 Juta", users: 4800 },
-  { income: "5-10 Juta", users: 8200 },
-  { income: "10-15 Juta", users: 6100 },
-  { income: "15-25 Juta", users: 3500 },
-  { income: "25-50 Juta", users: 1800 },
-  { income: ">50 Juta", users: 650 },
-  { income: "<3 Juta", users: 700 },
-];
-
-// ==========================================================================
-// Component
-// ==========================================================================
 
 export default function UsersDeepDivePage() {
-  const { period, dateRange } = usePeriod();
-  const { filters } = useFilters();
-  const { isDark } = useTheme();
+  const { period } = usePeriod();
+  const { apiParams } = useApiParams();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
-  // Fetch real data from BigQuery
-  const endStr = dateRange.end.toISOString().slice(0, 10);
-  const { data: apiData } = useSWR(
-    `/api/users-overview?startDate=2025-01-01&endDate=${endStr}`,
+  const { data: apiData, isLoading } = useSWR(
+    `/api/users-overview?${apiParams}`,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 300_000 },
   );
 
-  // ---------- Account Status ----------
-  const accountStatusData = useMemo(() => {
-    const raw = apiData?.accountStatuses?.length
-      ? (apiData.accountStatuses as { status: string; accounts: number }[])
-      : mockAccountStatuses;
-    return raw.map((r) => ({
-      status: STATUS_LABELS[r.status] || r.status,
-      accounts: Number(r.accounts),
+  // --- Account status breakdown (bar chart) ---
+  const statusBarData = useMemo(() => {
+    if (!apiData?.statusBreakdown?.length) return null;
+    const raw = (apiData.statusBreakdown as { status: string; accounts: number }[]).map((r) => ({
+      label: STATUS_LABELS[r.status] ?? r.status,
+      accounts: r.accounts,
+    }));
+    return raw;
+  }, [apiData]);
+  const statusIsLive = !!statusBarData?.length;
+
+  // KPI values from status breakdown
+  const totalAccounts = useMemo(() => {
+    if (!apiData?.statusBreakdown?.length) return 0;
+    return (apiData.statusBreakdown as { accounts: number }[]).reduce((sum, r) => sum + r.accounts, 0);
+  }, [apiData]);
+
+  const activeAccounts = useMemo(() => {
+    if (!apiData?.statusBreakdown?.length) return 0;
+    return (apiData.statusBreakdown as { status: string; accounts: number }[])
+      .filter((r) => r.status === "G" || r.status === "N")
+      .reduce((sum, r) => sum + r.accounts, 0);
+  }, [apiData]);
+
+  const blockedAccounts = useMemo(() => {
+    if (!apiData?.statusBreakdown?.length) return 0;
+    return (apiData.statusBreakdown as { status: string; accounts: number }[])
+      .filter((r) => r.status === "B" || r.status === "P" || r.status === "S")
+      .reduce((sum, r) => sum + r.accounts, 0);
+  }, [apiData]);
+
+  // --- Device manufacturer breakdown (bar chart) ---
+  const deviceBarData = useMemo(() => {
+    if (!apiData?.deviceManufacturers?.length) return null;
+    const raw = (apiData.deviceManufacturers as { manufacturer: string; users: number }[]).map((r) => ({
+      label: r.manufacturer,
+      users: r.users,
+    }));
+    return raw;
+  }, [apiData]);
+  const deviceIsLive = !!deviceBarData?.length;
+
+  const totalDeviceUsers = useMemo(() => {
+    if (!apiData?.deviceManufacturers?.length) return 0;
+    return (apiData.deviceManufacturers as { users: number }[]).reduce((sum, r) => sum + r.users, 0);
+  }, [apiData]);
+
+  // --- OS breakdown (bar chart) ---
+  const osBarData = useMemo(() => {
+    if (!apiData?.osBreakdown?.length) return null;
+    const raw = (apiData.osBreakdown as { os: string; users: number }[]).map((r) => ({
+      label: r.os,
+      users: r.users,
+    }));
+    return raw;
+  }, [apiData]);
+  const osIsLive = !!osBarData?.length;
+
+  // --- Geographic distribution (horizontal bar) ---
+  const geoBarData = useMemo(() => {
+    if (!apiData?.geoDeepDive?.length) return null;
+    const rows = apiData.geoDeepDive as { province: string; users: number }[];
+    const maxVal = Math.max(...rows.map((r) => r.users));
+    return rows.map((r) => ({
+      label: r.province,
+      value: r.users,
+      maxValue: maxVal,
     }));
   }, [apiData]);
+  const geoIsLive = !!geoBarData?.length;
 
-  const totalAccounts = useMemo(
-    () => accountStatusData.reduce((s, r) => s + r.accounts, 0),
-    [accountStatusData],
-  );
-
-  const activeAccounts = useMemo(
-    () =>
-      accountStatusData
-        .filter((r) => r.status === "Good Standing" || r.status === "New")
-        .reduce((s, r) => s + r.accounts, 0),
-    [accountStatusData],
-  );
-
-  const activeRate = useMemo(
-    () => (totalAccounts > 0 ? (activeAccounts / totalAccounts) * 100 : 0),
-    [activeAccounts, totalAccounts],
-  );
-
-  // ---------- Devices ----------
-  const deviceData = useMemo(() => {
-    if (apiData?.devices?.length) {
-      return (apiData.devices as { manufacturer: string; os: string; users: number }[]).map(
-        (r) => ({ manufacturer: r.manufacturer || "Unknown", users: Number(r.users) }),
-      );
-    }
-    return mockDevices.map((r) => ({ manufacturer: r.manufacturer, users: r.users }));
+  // --- Account growth trend (line chart) ---
+  const growthTrend = useMemo(() => {
+    if (!apiData?.accountGrowth?.length) return null;
+    const raw = (apiData.accountGrowth as { month: string; total_accounts: number; new_accounts: number }[]).map((r) => ({
+      date: r.month,
+      totalAccounts: r.total_accounts,
+      newAccounts: r.new_accounts ?? 0,
+    }));
+    return raw;
   }, [apiData]);
-
-  // ---------- Verification ----------
-  const verificationData = useMemo(() => {
-    if (apiData?.verification?.length) {
-      return (apiData.verification as { reason: string; users: number }[]).map((r) => ({
-        reason: r.reason,
-        users: Number(r.users),
-      }));
-    }
-    return mockVerification;
-  }, [apiData]);
-
-  const videoVerifiedCount = useMemo(
-    () =>
-      verificationData.find((r) => r.reason === "VIDEO_VERIFIED")?.users ?? 145000,
-    [verificationData],
-  );
-
-  const decisionToSkipCount = useMemo(
-    () =>
-      verificationData.find((r) => r.reason === "DECISION_TO_SKIP")?.users ?? 188000,
-    [verificationData],
-  );
-
-  // ---------- Geographic ----------
-  const geoData = useMemo(() => {
-    if (apiData?.geographic?.length) {
-      return (apiData.geographic as { province: string; users: number }[]).map((r) => ({
-        province: r.province || "Unknown",
-        users: Number(r.users),
-      }));
-    }
-    return mockGeographic;
-  }, [apiData]);
-
-  // ---------- Demographics ----------
-  const professionData = useMemo(() => {
-    if (apiData?.demographics?.length) {
-      const agg = new Map<string, number>();
-      for (const r of apiData.demographics as { profession: string; users: number }[]) {
-        const key = r.profession || "Unknown";
-        agg.set(key, (agg.get(key) || 0) + Number(r.users));
-      }
-      return [...agg.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10)
-        .map(([profession, users]) => ({ profession, users }));
-    }
-    return mockProfessions;
-  }, [apiData]);
-
-  const educationData = useMemo(() => {
-    if (apiData?.demographics?.length) {
-      const agg = new Map<string, number>();
-      for (const r of apiData.demographics as { education: string; users: number }[]) {
-        const key = r.education || "Unknown";
-        agg.set(key, (agg.get(key) || 0) + Number(r.users));
-      }
-      return [...agg.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 8)
-        .map(([education, users]) => ({ education, users }));
-    }
-    return mockEducation;
-  }, [apiData]);
-
-  const incomeData = useMemo(() => {
-    if (apiData?.demographics?.length) {
-      const agg = new Map<string, number>();
-      for (const r of apiData.demographics as { income: string; users: number }[]) {
-        const key = r.income || "Unknown";
-        agg.set(key, (agg.get(key) || 0) + Number(r.users));
-      }
-      return [...agg.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10)
-        .map(([income, users]) => ({ income, users }));
-    }
-    return mockIncome;
-  }, [apiData]);
-
-  const isLiveData = !!apiData?.accountStatuses?.length;
-  const displayAsOf = isLiveData && apiData?.asOf
-    ? new Date(apiData.asOf).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-    : AS_OF;
+  const growthIsLive = !!growthTrend?.length;
 
   return (
     <div className="space-y-6">
+      <PrintStyles />
       <ActiveFiltersBanner />
 
-      {/* KPI row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard
-          metricKey="users_total_accounts"
-          label="Total Accounts"
-          value={totalAccounts}
-          prevValue={530000}
-          unit="count"
-          asOf={displayAsOf}
-          dataRange={DATA_RANGE}
+      {/* KPI Row */}
+      {statusIsLive ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <MetricCard
+            metricKey="users_total_accounts"
+            label="Total Accounts"
+            value={totalAccounts}
+            unit="count"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            liveData={statusIsLive}
+          />
+          <MetricCard
+            metricKey="users_active_accounts"
+            label="Active Accounts"
+            value={activeAccounts}
+            unit="count"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            liveData={statusIsLive}
+          />
+          <MetricCard
+            metricKey="users_blocked_accounts"
+            label="Blocked / Suspended"
+            value={blockedAccounts}
+            unit="count"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            liveData={statusIsLive}
+          />
+          <MetricCard
+            metricKey="users_device_users"
+            label="Users with Device Data"
+            value={totalDeviceUsers}
+            unit="count"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            liveData={deviceIsLive}
+          />
+        </div>
+      ) : isLoading ? (
+        <MetricCardsSkeleton />
+      ) : (
+        <SampleDataBanner
+          dataset="mart_finexus"
+          reason="Account status KPIs require financial_account_updates (DW004)"
         />
-        <MetricCard
-          metricKey="users_active_rate"
-          label="Active Rate"
-          value={Math.round(activeRate * 100) / 100}
-          prevValue={80.5}
-          unit="percent"
-          asOf={displayAsOf}
-          dataRange={DATA_RANGE}
-          higherIsBetter={true}
-        />
-        <MetricCard
-          metricKey="users_video_verified"
-          label="Video Verified"
-          value={videoVerifiedCount}
-          prevValue={138000}
-          unit="count"
-          asOf={displayAsOf}
-          dataRange={DATA_RANGE}
-        />
-        <MetricCard
-          metricKey="users_decision_skip"
-          label="Decision to Skip"
-          value={decisionToSkipCount}
-          prevValue={180000}
-          unit="count"
-          asOf={displayAsOf}
-          dataRange={DATA_RANGE}
-        />
-      </div>
+      )}
 
-      {/* Account Status Distribution */}
-      <ChartCard
-        title="Account Status Distribution"
-        subtitle="Current account statuses from latest DW004 snapshot"
-        asOf={displayAsOf}
-        dataRange={DATA_RANGE}
-      >
-        <DashboardBarChart
-          data={accountStatusData}
-          bars={[
-            { key: "accounts", color: isDark ? "#7C4DFF" : "#D00083", label: "Accounts" },
-          ]}
-          xAxisKey="status"
-          height={300}
-        />
-      </ChartCard>
-
-      {/* Two-column: Devices + Geographic */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Device Breakdown */}
+      {/* Account Status Breakdown */}
+      {statusBarData ? (
         <ChartCard
-          title="Device Breakdown"
-          subtitle="Top device manufacturers among decided applicants"
-          asOf={displayAsOf}
+          title="Account Status Breakdown"
+          subtitle="Distribution of account statuses at latest available business date"
+          asOf={AS_OF}
           dataRange={DATA_RANGE}
+          liveData={statusIsLive}
         >
           <DashboardBarChart
-            data={deviceData}
-            bars={[
-              { key: "users", color: "#3b82f6", label: "Users" },
-            ]}
-            xAxisKey="manufacturer"
+            data={statusBarData}
+            bars={[{ key: "accounts", color: "#3b82f6", label: "Accounts" }]}
+            xAxisKey="label"
             height={300}
           />
         </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
+      ) : (
+        <SampleDataBanner
+          dataset="mart_finexus"
+          reason="Account status breakdown requires financial_account_updates (DW004)"
+        />
+      )}
 
-        {/* Geographic Distribution */}
+      {/* Account Growth Trend */}
+      {growthTrend ? (
+        <ChartCard
+          title="Account Growth Trend"
+          subtitle="Total accounts and net new accounts from DW004"
+          asOf={AS_OF}
+          dataRange={DATA_RANGE}
+          liveData={growthIsLive}
+          showIncrement
+        >
+          {(increment: ChartIncrement) => (
+            <DashboardLineChart
+              data={aggregateByIncrement(growthTrend, increment, "date")}
+              lines={[
+                { key: "totalAccounts", color: "#3b82f6", label: "Total Accounts" },
+                { key: "newAccounts", color: "#22c55e", label: "New Accounts" },
+              ]}
+              xAxisKey="date"
+              height={300}
+            />
+          )}
+        </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
+      ) : (
+        <SampleDataBanner
+          dataset="mart_finexus"
+          reason="Account growth trend requires financial_account_updates (DW004)"
+        />
+      )}
+
+      {/* Device & OS Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {deviceBarData ? (
+          <ChartCard
+            title="Device Manufacturers"
+            subtitle="Top 15 device manufacturers from rudderstack users"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            liveData={deviceIsLive}
+          >
+            <DashboardBarChart
+              data={deviceBarData}
+              bars={[{ key: "users", color: "#8b5cf6", label: "Users" }]}
+              xAxisKey="label"
+              height={300}
+            />
+          </ChartCard>
+        ) : isLoading ? (
+          <ChartSkeleton />
+        ) : (
+          <SampleDataBanner
+            dataset="refined_rudderstack"
+            reason="Device breakdown requires refined_rudderstack.users"
+          />
+        )}
+
+        {osBarData ? (
+          <ChartCard
+            title="OS Distribution"
+            subtitle="Operating system breakdown from rudderstack users"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            liveData={osIsLive}
+          >
+            <DashboardBarChart
+              data={osBarData}
+              bars={[{ key: "users", color: "#06b6d4", label: "Users" }]}
+              xAxisKey="label"
+              height={300}
+            />
+          </ChartCard>
+        ) : isLoading ? (
+          <ChartSkeleton />
+        ) : (
+          <SampleDataBanner
+            dataset="refined_rudderstack"
+            reason="OS breakdown requires refined_rudderstack.users"
+          />
+        )}
+      </div>
+
+      {/* Geographic Distribution */}
+      {geoBarData ? (
         <ChartCard
           title="Geographic Distribution"
-          subtitle="Top provinces by decided applicants"
-          asOf={displayAsOf}
+          subtitle="Top provinces by approved user count"
+          asOf={AS_OF}
           dataRange={DATA_RANGE}
+          liveData={geoIsLive}
         >
-          <DashboardBarChart
-            data={geoData}
-            bars={[
-              { key: "users", color: "#06b6d4", label: "Users" },
-            ]}
-            xAxisKey="province"
-            height={300}
-          />
+          <div className="space-y-1">
+            {geoBarData.map((g) => (
+              <HorizontalBar
+                key={g.label}
+                label={g.label}
+                value={g.value}
+                maxValue={g.maxValue}
+                subLabel={`${g.value.toLocaleString()} users`}
+              />
+            ))}
+          </div>
         </ChartCard>
-      </div>
-
-      {/* Verification Breakdown */}
-      <ChartCard
-        title="Verification Breakdown"
-        subtitle="Video call verification outcomes"
-        asOf={displayAsOf}
-        dataRange={DATA_RANGE}
-      >
-        <DashboardBarChart
-          data={verificationData}
-          bars={[
-            { key: "users", color: "#8b5cf6", label: "Users" },
-          ]}
-          xAxisKey="reason"
-          height={280}
+      ) : isLoading ? (
+        <ChartSkeleton />
+      ) : (
+        <SampleDataBanner
+          dataset="refined_rudderstack"
+          reason="Geographic distribution requires milestone_complete province traits"
         />
-      </ChartCard>
+      )}
 
-      {/* Demographics Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Profession */}
-        <ChartCard
-          title="Top Professions"
-          subtitle="Self-reported profession of applicants"
-          asOf={displayAsOf}
-          dataRange={DATA_RANGE}
-        >
-          <DashboardBarChart
-            data={professionData}
-            bars={[
-              { key: "users", color: "#22c55e", label: "Users" },
-            ]}
-            xAxisKey="profession"
-            height={300}
-          />
-        </ChartCard>
-
-        {/* Education */}
-        <ChartCard
-          title="Education Level"
-          subtitle="Highest education attained"
-          asOf={displayAsOf}
-          dataRange={DATA_RANGE}
-        >
-          <DashboardBarChart
-            data={educationData}
-            bars={[
-              { key: "users", color: "#f59e0b", label: "Users" },
-            ]}
-            xAxisKey="education"
-            height={300}
-          />
-        </ChartCard>
-
-        {/* Income */}
-        <ChartCard
-          title="Monthly Income"
-          subtitle="Self-reported income bracket"
-          asOf={displayAsOf}
-          dataRange={DATA_RANGE}
-        >
-          <DashboardBarChart
-            data={incomeData}
-            bars={[
-              { key: "users", color: "#ef4444", label: "Users" },
-            ]}
-            xAxisKey="income"
-            height={300}
-          />
-        </ChartCard>
-      </div>
+      <ActionItems section="Users" items={actionItems} />
     </div>
   );
 }

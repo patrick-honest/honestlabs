@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { useCurrency } from "@/hooks/use-currency";
 import { usePeriod, COMPARISON_OPTIONS, type TimeRangePreset, type ComparisonMode, type DateRange } from "@/hooks/use-period";
 import { useTheme } from "@/hooks/use-theme";
 import {
@@ -11,6 +10,7 @@ import {
   CARD_TYPE_OPTIONS,
   PRODUCT_TYPE_OPTIONS,
   COHORT_OPTIONS,
+  CYCLE_DATE_OPTIONS,
   TRANSACTION_TYPE_OPTIONS,
   TRANSACTION_CHANNEL_OPTIONS,
   TRANSACTION_STATUS_OPTIONS,
@@ -20,10 +20,12 @@ import {
   RISK_CATEGORY_OPTIONS,
   DECISIONING_MODEL_OPTIONS,
   type FilterSelections,
+  type SavedFilterPreset,
 } from "@/hooks/use-filters";
 import { HeaderFilterDropdown } from "@/components/filters/header-filter-dropdown";
 import { getVisibleFilters, isFilterVisible, type FilterKey } from "@/lib/page-filter-config";
-import { Sun, Moon, Calendar, SlidersHorizontal, ChevronDown, X } from "lucide-react";
+import { Calendar, Filter, ChevronDown, ChevronLeft, ChevronRight, X, Save, Bookmark, Trash2, Pencil, Check } from "lucide-react";
+import { useTranslations } from "next-intl";
 import type { Cycle } from "@/types/reports";
 // Types already imported above from use-period
 
@@ -36,31 +38,33 @@ interface FilterGroup {
   }[];
 }
 
-const FILTER_GROUPS: FilterGroup[] = [
+// Filter group definitions — labels are i18n keys resolved at render time
+const FILTER_GROUP_DEFS = [
   {
-    label: "Acct",
+    tKey: "acct" as const,
     filters: [
-      { key: "cardType", label: "Card", options: CARD_TYPE_OPTIONS },
-      { key: "productType", label: "Product", options: PRODUCT_TYPE_OPTIONS },
-      { key: "cohort", label: "Cohort", options: COHORT_OPTIONS },
+      { key: "cardType" as const, tKey: "card" as const, options: CARD_TYPE_OPTIONS },
+      { key: "productType" as const, tKey: "product" as const, options: PRODUCT_TYPE_OPTIONS },
+      { key: "cohort" as const, tKey: "cohort" as const, options: COHORT_OPTIONS },
+      { key: "cycleDate" as const, tKey: "cycle" as const, options: CYCLE_DATE_OPTIONS },
     ],
   },
   {
-    label: "Txn",
+    tKey: "txn" as const,
     filters: [
-      { key: "transactionType", label: "Type", options: TRANSACTION_TYPE_OPTIONS },
-      { key: "transactionChannel", label: "Channel", options: TRANSACTION_CHANNEL_OPTIONS },
-      { key: "transactionStatus", label: "Status", options: TRANSACTION_STATUS_OPTIONS },
-      { key: "merchantCategory", label: "MCC", options: MERCHANT_CATEGORY_OPTIONS },
-      { key: "amountRange", label: "Amount", options: AMOUNT_RANGE_OPTIONS },
-      { key: "recurringType", label: "Recurring", options: RECURRING_TYPE_OPTIONS },
+      { key: "transactionType" as const, tKey: "type" as const, options: TRANSACTION_TYPE_OPTIONS },
+      { key: "transactionChannel" as const, tKey: "channel" as const, options: TRANSACTION_CHANNEL_OPTIONS },
+      { key: "transactionStatus" as const, tKey: "status" as const, options: TRANSACTION_STATUS_OPTIONS },
+      { key: "merchantCategory" as const, tKey: "mcc" as const, options: MERCHANT_CATEGORY_OPTIONS },
+      { key: "amountRange" as const, tKey: "amount" as const, options: AMOUNT_RANGE_OPTIONS },
+      { key: "recurringType" as const, tKey: "recurring" as const, options: RECURRING_TYPE_OPTIONS },
     ],
   },
   {
-    label: "Risk",
+    tKey: "riskGroup" as const,
     filters: [
-      { key: "riskCategory", label: "Category", options: RISK_CATEGORY_OPTIONS },
-      { key: "decisioningModel", label: "Model", options: DECISIONING_MODEL_OPTIONS },
+      { key: "riskCategory" as const, tKey: "category" as const, options: RISK_CATEGORY_OPTIONS },
+      { key: "decisioningModel" as const, tKey: "model" as const, options: DECISIONING_MODEL_OPTIONS },
     ],
   },
 ];
@@ -74,24 +78,75 @@ interface TimeOption {
   group: string;
 }
 
-const TIME_OPTIONS: TimeOption[] = [
-  { label: "Last Full Week", period: "weekly", timeRange: "last_full", group: "Weekly" },
-  { label: "Week to Date", period: "weekly", timeRange: "xtd", group: "Weekly" },
-  { label: "Last Full Month", period: "monthly", timeRange: "last_full", group: "Monthly" },
-  { label: "Month to Date", period: "monthly", timeRange: "xtd", group: "Monthly" },
-  { label: "Last Full Quarter", period: "quarterly", timeRange: "last_full", group: "Quarterly" },
-  { label: "Quarter to Date", period: "quarterly", timeRange: "xtd", group: "Quarterly" },
-  { label: "Year to Date", period: "yearly", timeRange: "xtd", group: "Yearly" },
+// Time option definitions — labels are i18n keys resolved at render time
+const TIME_OPTION_DEFS: { tKey: string; period: Cycle; timeRange: TimeRangePreset; groupTKey: string }[] = [
+  { tKey: "lastFullWeek", period: "weekly", timeRange: "last_full", groupTKey: "weekly" },
+  { tKey: "weekToDate", period: "weekly", timeRange: "xtd", groupTKey: "weekly" },
+  { tKey: "lastFullMonth", period: "monthly", timeRange: "last_full", groupTKey: "monthly" },
+  { tKey: "monthToDate", period: "monthly", timeRange: "xtd", groupTKey: "monthly" },
+  { tKey: "lastFullQuarter", period: "quarterly", timeRange: "last_full", groupTKey: "quarterly" },
+  { tKey: "quarterToDate", period: "quarterly", timeRange: "xtd", groupTKey: "quarterly" },
+  { tKey: "yearToDate", period: "yearly", timeRange: "xtd", groupTKey: "yearly" },
 ];
 
-function getActiveLabel(period: Cycle, timeRange: TimeRangePreset): string {
-  const found = TIME_OPTIONS.find((o) => o.period === period && o.timeRange === timeRange);
-  return found?.label ?? "Custom";
+// ── Inline Mini Calendar ────────────────────────────────────────────────────
+
+const MONTH_KEYS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"] as const;
+const DOW_KEYS = ["mo", "tu", "we", "th", "fr", "sa", "su"] as const;
+
+function getMonthGrid(year: number, month: number): (number | null)[] {
+  const firstDay = new Date(year, month, 1).getDay();
+  const mondayOffset = firstDay === 0 ? 6 : firstDay - 1;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const grid: (number | null)[] = [];
+  for (let i = 0; i < mondayOffset; i++) grid.push(null);
+  for (let i = 1; i <= daysInMonth; i++) grid.push(i);
+  return grid;
 }
 
+function MiniCalendar({
+  year, month, selectedStart, selectedEnd, onSelect, onPrev, onNext, isDark, months, dow,
+}: {
+  year: number; month: number; selectedStart: Date | null; selectedEnd: Date | null;
+  onSelect: (d: Date) => void; onPrev: () => void; onNext: () => void; isDark: boolean;
+  months: string[]; dow: string[];
+}) {
+  const grid = getMonthGrid(year, month);
+  return (
+    <div className="w-[200px]">
+      <div className="flex items-center justify-between mb-1.5">
+        <button onClick={onPrev} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-0.5"><ChevronLeft className="h-3 w-3" /></button>
+        <span className="text-[10px] font-semibold text-[var(--text-primary)]">{months[month]} {year}</span>
+        <button onClick={onNext} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-0.5"><ChevronRight className="h-3 w-3" /></button>
+      </div>
+      <div className="grid grid-cols-7 gap-0.5 text-center">
+        {dow.map((d) => <span key={d} className="text-[7px] font-medium text-[var(--text-muted)] py-0.5">{d}</span>)}
+        {grid.map((day, i) => {
+          if (day === null) return <span key={`e-${i}`} />;
+          const date = new Date(year, month, day);
+          const isStart = selectedStart && date.getTime() === selectedStart.getTime();
+          const isEnd = selectedEnd && date.getTime() === selectedEnd.getTime();
+          const isInRange = selectedStart && selectedEnd && date > selectedStart && date < selectedEnd;
+          const isSelected = isStart || isEnd;
+          return (
+            <button key={day} onClick={() => onSelect(date)} className={cn(
+              "h-5 w-5 mx-auto rounded text-[9px] font-medium transition-colors",
+              isSelected ? (isDark ? "bg-[#5B22FF] text-white" : "bg-[#D00083] text-white")
+                : isInRange ? (isDark ? "bg-[#5B22FF]/15 text-[#7C4DFF]" : "bg-[#D00083]/10 text-[#D00083]")
+                : "text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
+            )}>{day}</button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Unified Time Selector ──────────────────────────────────────────────────
+
 function UnifiedTimeSelector({
-  period, timeRange, dateRange, prevDateRange, comparisonMode,
-  onSelectRange, onComparisonChange, isDark,
+  period, timeRange, dateRange,
+  onSelectRange, onCustomRange, isDark,
 }: {
   period: Cycle;
   timeRange: TimeRangePreset;
@@ -100,6 +155,266 @@ function UnifiedTimeSelector({
   comparisonMode: ComparisonMode;
   onSelectRange: (period: Cycle, timeRange: TimeRangePreset) => void;
   onComparisonChange: (mode: ComparisonMode) => void;
+  onCustomRange: (start: Date, end: Date) => void;
+  isDark: boolean;
+}) {
+  const tTime = useTranslations("time");
+  const tCommon = useTranslations("common");
+  const [open, setOpen] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Translated month and day-of-week arrays
+  const months = MONTH_KEYS.map((k) => tCommon(`months.${k}`));
+  const dow = DOW_KEYS.map((k) => tCommon(`dow.${k}`));
+
+  // Calendar state
+  const now = new Date();
+  const [leftYear, setLeftYear] = useState(now.getFullYear());
+  const [leftMonth, setLeftMonth] = useState(now.getMonth() - 1 < 0 ? 11 : now.getMonth() - 1);
+  const [rightYear, setRightYear] = useState(now.getFullYear());
+  const [rightMonth, setRightMonth] = useState(now.getMonth());
+  const [calStart, setCalStart] = useState<Date | null>(null);
+  const [calEnd, setCalEnd] = useState<Date | null>(null);
+  const [selecting, setSelecting] = useState<"start" | "end">("start");
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setShowCalendar(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const activeLabel = (() => {
+    const found = TIME_OPTION_DEFS.find((o) => o.period === period && o.timeRange === timeRange);
+    return found ? tTime(found.tKey) : tTime("custom");
+  })();
+
+  const handleCalSelect = (date: Date) => {
+    if (selecting === "start") {
+      setCalStart(date);
+      if (calEnd && date > calEnd) setCalEnd(date);
+      setSelecting("end");
+    } else {
+      if (date < (calStart ?? date)) {
+        setCalStart(date);
+        setSelecting("end");
+      } else {
+        setCalEnd(date);
+        setSelecting("start");
+      }
+    }
+  };
+
+  const handleApplyCustom = () => {
+    if (calStart && calEnd) {
+      onCustomRange(calStart, calEnd);
+      setShowCalendar(false);
+      setOpen(false);
+    }
+  };
+
+  // Quick day-based selections
+  const QUICK_DAYS = [
+    { label: "Today", days: 0 },
+    { label: "Yesterday", days: 1 },
+    { label: "Last 7 Days", days: 7 },
+    { label: "Last 14 Days", days: 14 },
+    { label: "Last 30 Days", days: 30 },
+    { label: "Last 60 Days", days: 60 },
+    { label: "Last 90 Days", days: 90 },
+  ];
+
+  const handleQuickDays = (days: number) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (days === 0) {
+      onCustomRange(today, today);
+    } else if (days === 1) {
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      onCustomRange(yesterday, yesterday);
+    } else {
+      const start = new Date(today);
+      start.setDate(start.getDate() - days);
+      onCustomRange(start, today);
+    }
+    setOpen(false);
+  };
+
+  const handleOpen = () => {
+    if (!open) {
+      setCalStart(dateRange.start);
+      setCalEnd(dateRange.end);
+      setSelecting("start");
+    }
+    setOpen(!open);
+  };
+
+  return (
+    <div className="flex items-center gap-2 shrink-0">
+      <div ref={ref} className="relative">
+        <button
+          onClick={handleOpen}
+          className={cn(
+            "flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors",
+            isDark
+              ? "border-[#5B22FF]/40 bg-[#5B22FF]/10 text-[#7C4DFF]"
+              : "border-[#D00083]/30 bg-[#D00083]/5 text-[#D00083]"
+          )}
+        >
+          <Calendar className="h-3 w-3" />
+          <span>{activeLabel}</span>
+          <ChevronDown className={cn("h-3 w-3 transition-transform", open && "rotate-180")} />
+        </button>
+
+        {/* Combined calendar + quick selections popup */}
+        {open && (
+          <div className={cn(
+            "absolute left-0 top-full z-[80] mt-1 rounded-xl border shadow-2xl p-3",
+            isDark
+              ? "border-[var(--border)] bg-[#141226] shadow-black/40"
+              : "border-[var(--border)] bg-white shadow-black/10"
+          )}>
+            {/* Dual calendars */}
+            <div className="flex gap-3">
+              <MiniCalendar
+                year={leftYear} month={leftMonth}
+                selectedStart={calStart} selectedEnd={calEnd}
+                onSelect={handleCalSelect}
+                onPrev={() => { if (leftMonth === 0) { setLeftMonth(11); setLeftYear(leftYear - 1); } else setLeftMonth(leftMonth - 1); }}
+                onNext={() => { if (leftMonth === 11) { setLeftMonth(0); setLeftYear(leftYear + 1); } else setLeftMonth(leftMonth + 1); }}
+                isDark={isDark} months={months} dow={dow}
+              />
+              <div className="w-px bg-[var(--border)]" />
+              <MiniCalendar
+                year={rightYear} month={rightMonth}
+                selectedStart={calStart} selectedEnd={calEnd}
+                onSelect={handleCalSelect}
+                onPrev={() => { if (rightMonth === 0) { setRightMonth(11); setRightYear(rightYear - 1); } else setRightMonth(rightMonth - 1); }}
+                onNext={() => { if (rightMonth === 11) { setRightMonth(0); setRightYear(rightYear + 1); } else setRightMonth(rightMonth + 1); }}
+                isDark={isDark} months={months} dow={dow}
+              />
+            </div>
+
+            {/* Selected range display + Apply */}
+            <div className="flex items-center justify-between mt-2.5 pt-2.5 border-t border-[var(--border)]">
+              <div className="text-[10px] text-[var(--text-secondary)]">
+                {calStart ? (
+                  <span className="font-medium">{calStart.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</span>
+                ) : <span className="text-[var(--text-muted)]">{tCommon("start")}</span>}
+                <span className="text-[var(--text-muted)] mx-1">→</span>
+                {calEnd ? (
+                  <span className="font-medium">{calEnd.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</span>
+                ) : <span className="text-[var(--text-muted)]">{tCommon("end")}</span>}
+              </div>
+              <button
+                onClick={handleApplyCustom}
+                disabled={!calStart || !calEnd}
+                className={cn(
+                  "rounded px-2.5 py-0.5 text-[10px] font-medium text-white disabled:opacity-40",
+                  isDark ? "bg-[#5B22FF]" : "bg-[#D00083]"
+                )}
+              >
+                {tCommon("apply")}
+              </button>
+            </div>
+
+            {/* Quick selections — Rolling vs Fixed side by side */}
+            <div className="mt-2.5 pt-2.5 border-t border-[var(--border)] flex gap-3">
+              {/* Left column: Rolling windows */}
+              <div className="flex-1 min-w-0">
+                <p className={cn("text-[8px] font-semibold uppercase tracking-wider mb-1 px-1", isDark ? "text-[#7C4DFF]/60" : "text-[#D00083]/50")}>Rolling</p>
+                {QUICK_DAYS.map((q) => (
+                  <button
+                    key={q.label}
+                    onClick={() => handleQuickDays(q.days)}
+                    className="flex w-full items-center rounded-md px-2 py-1 text-[10px] transition-colors text-left text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
+                  >
+                    {q.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="w-px bg-[var(--border)]" />
+
+              {/* Middle column: To Date */}
+              <div className="flex-1 min-w-0">
+                <p className={cn("text-[8px] font-semibold uppercase tracking-wider mb-1 px-1", isDark ? "text-[#7C4DFF]/60" : "text-[#D00083]/50")}>To Date</p>
+                {TIME_OPTION_DEFS.filter(o => o.timeRange === "xtd").map((opt) => {
+                  const isActive = opt.period === period && opt.timeRange === timeRange;
+                  return (
+                    <button
+                      key={`${opt.period}-${opt.timeRange}`}
+                      onClick={() => { onSelectRange(opt.period, opt.timeRange); setOpen(false); }}
+                      className={cn(
+                        "flex w-full items-center gap-1 rounded-md px-2 py-1 text-[10px] transition-colors text-left",
+                        isActive
+                          ? isDark ? "text-[#7C4DFF] bg-[#5B22FF]/10 font-medium" : "text-[#D00083] bg-[#D00083]/5 font-medium"
+                          : "text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
+                      )}
+                    >
+                      {isActive && <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", isDark ? "bg-[#5B22FF]" : "bg-[#D00083]")} />}
+                      {tTime(opt.tKey)}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="w-px bg-[var(--border)]" />
+
+              {/* Right column: Last Full */}
+              <div className="flex-1 min-w-0">
+                <p className={cn("text-[8px] font-semibold uppercase tracking-wider mb-1 px-1", isDark ? "text-[#7C4DFF]/60" : "text-[#D00083]/50")}>Last Full</p>
+                {TIME_OPTION_DEFS.filter(o => o.timeRange === "last_full").map((opt) => {
+                  const isActive = opt.period === period && opt.timeRange === timeRange;
+                  return (
+                    <button
+                      key={`${opt.period}-${opt.timeRange}`}
+                      onClick={() => { onSelectRange(opt.period, opt.timeRange); setOpen(false); }}
+                      className={cn(
+                        "flex w-full items-center gap-1 rounded-md px-2 py-1 text-[10px] transition-colors text-left",
+                        isActive
+                          ? isDark ? "text-[#7C4DFF] bg-[#5B22FF]/10 font-medium" : "text-[#D00083] bg-[#D00083]/5 font-medium"
+                          : "text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
+                      )}
+                    >
+                      {isActive && <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", isDark ? "bg-[#5B22FF]" : "bg-[#D00083]")} />}
+                      {tTime(opt.tKey)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+    </div>
+  );
+}
+
+// ── Filter Group Popup ──────────────────────────────────────────────────────
+
+function FilterGroupPopup({
+  label,
+  filters,
+  filterValues,
+  onToggle,
+  onClear,
+  activeCount,
+  isDark,
+}: {
+  label: string;
+  filters: { key: keyof FilterSelections; label: string; options: readonly { readonly value: string; readonly label: string; readonly group?: string }[] }[];
+  filterValues: FilterSelections;
+  onToggle: (key: keyof FilterSelections, value: string) => void;
+  onClear: (key: keyof FilterSelections) => void;
+  activeCount: number;
   isDark: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -113,97 +428,54 @@ function UnifiedTimeSelector({
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  const activeLabel = getActiveLabel(period, timeRange);
-
   return (
-    <div className="flex items-center gap-2 shrink-0">
-      {/* Unified range dropdown */}
-      <div ref={ref} className="relative">
-        <button
-          onClick={() => setOpen(!open)}
-          className={cn(
-            "flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors",
-            isDark
-              ? "border-[#5B22FF]/40 bg-[#5B22FF]/10 text-[#7C4DFF]"
-              : "border-[#D00083]/30 bg-[#D00083]/5 text-[#D00083]"
-          )}
-        >
-          <Calendar className="h-3 w-3" />
-          <span>{activeLabel}</span>
-          <ChevronDown className={cn("h-3 w-3 transition-transform", open && "rotate-180")} />
-        </button>
-
-        {open && (
-          <div className={cn(
-            "absolute left-0 top-full z-[80] mt-1 w-56 rounded-xl border shadow-2xl py-1",
-            isDark
-              ? "border-[var(--border)] bg-[#141226] shadow-black/40"
-              : "border-[var(--border)] bg-white shadow-black/10"
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className={cn(
+          "flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors",
+          activeCount > 0
+            ? isDark
+              ? "bg-[#5B22FF]/15 text-[#7C4DFF] border border-[#5B22FF]/30"
+              : "bg-[#D00083]/10 text-[#D00083] border border-[#D00083]/30"
+            : isDark
+              ? "text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
+              : "text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
+        )}
+      >
+        {label}
+        {activeCount > 0 && (
+          <span className={cn(
+            "flex h-3.5 min-w-[14px] items-center justify-center rounded-full px-0.5 text-[8px] font-bold text-white",
+            isDark ? "bg-[#5B22FF]" : "bg-[#D00083]"
           )}>
-            {TIME_OPTIONS.map((opt, idx) => {
-              const showGroup = idx === 0 || TIME_OPTIONS[idx - 1].group !== opt.group;
-              const isActive = opt.period === period && opt.timeRange === timeRange;
-              return (
-                <div key={`${opt.period}-${opt.timeRange}`}>
-                  {showGroup && (
-                    <div className={cn(
-                      "px-3 pt-2 pb-1 text-[9px] font-bold uppercase tracking-widest",
-                      idx > 0 && "border-t border-[var(--border)] mt-1",
-                      "text-[var(--text-muted)]"
-                    )}>
-                      {opt.group}
-                    </div>
-                  )}
-                  <button
-                    onClick={() => {
-                      onSelectRange(opt.period, opt.timeRange);
-                      setOpen(false);
-                    }}
-                    className={cn(
-                      "flex w-full items-center gap-2 px-3 py-2 text-xs transition-colors",
-                      isActive
-                        ? isDark ? "text-[#7C4DFF] bg-[#5B22FF]/10" : "text-[#D00083] bg-[#D00083]/5"
-                        : "text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
-                    )}
-                  >
-                    {isActive && <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", isDark ? "bg-[#5B22FF]" : "bg-[#D00083]")} />}
-                    <span className={isActive ? "font-medium" : ""}>{opt.label}</span>
-                  </button>
-                </div>
-              );
-            })}
+            {activeCount}
+          </span>
+        )}
+        <ChevronDown className={cn("h-2.5 w-2.5 transition-transform", open && "rotate-180")} />
+      </button>
+
+      {open && (
+        <div className={cn(
+          "absolute left-0 top-full z-[80] mt-1 rounded-xl border shadow-2xl p-2 min-w-[200px]",
+          isDark
+            ? "border-[var(--border)] bg-[#141226] shadow-black/40"
+            : "border-[var(--border)] bg-white shadow-black/10"
+        )}>
+          <div className="flex flex-wrap gap-1">
+            {filters.map((f) => (
+              <HeaderFilterDropdown
+                key={String(f.key)}
+                label={f.label}
+                options={f.options}
+                selected={filterValues[f.key] ?? []}
+                onToggle={(val) => onToggle(f.key, val)}
+                onClear={() => onClear(f.key)}
+              />
+            ))}
           </div>
-        )}
-      </div>
-
-      {/* Date range display */}
-      <div className="flex items-center gap-1 text-[10px]">
-        <span className={cn("font-semibold", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>
-          {dateRange.label}
-        </span>
-        {comparisonMode !== "none" && (
-          <span className="text-[var(--text-muted)]">vs {prevDateRange.label}</span>
-        )}
-      </div>
-
-      {/* Comparison mode */}
-      <div className="relative shrink-0">
-        <select
-          value={comparisonMode}
-          onChange={(e) => onComparisonChange(e.target.value as ComparisonMode)}
-          className={cn(
-            "appearance-none rounded-md border px-1.5 py-0.5 pr-4 text-[10px] font-medium cursor-pointer outline-none transition-colors",
-            isDark
-              ? "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]"
-              : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]"
-          )}
-        >
-          {COMPARISON_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
-        </select>
-        <ChevronDown className="pointer-events-none absolute right-0.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-[var(--text-muted)]" />
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -216,15 +488,24 @@ interface HeaderProps {
 
 export function Header({ title }: HeaderProps) {
   const pathname = usePathname();
-  const { currency, toggleCurrency } = useCurrency();
   const {
     period, setPeriod, dateRange, prevDateRange,
     timeRange, setTimeRange, availablePresets,
-    setPeriodAndRange, comparisonMode, setComparisonMode,
+    setPeriodAndRange, comparisonMode, setComparisonMode, setCustomRange,
   } = usePeriod();
-  const { isDark, toggleTheme } = useTheme();
-  const { filters, toggleFilterValue, clearFilter, clearFilters, activeFilterCount } = useFilters();
+  const { isDark } = useTheme();
+  const tCommon = useTranslations("common");
+  const tTime = useTranslations("time");
+  const tFilters = useTranslations("filters");
+  const {
+    filters, toggleFilterValue, clearFilter, clearFilters, activeFilterCount,
+    savedPresets, savePreset, loadPreset, renamePreset, deletePreset, suggestPresetName,
+  } = useFilters();
   const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [presetName, setPresetName] = useState("");
+  const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
 
   // Resolve which filters are visible on this page
   const visibleKeys = getVisibleFilters(pathname);
@@ -236,7 +517,7 @@ export function Header({ title }: HeaderProps) {
       prevPathRef.current = pathname;
       if (visibleKeys !== null) {
         const allKeys: FilterKey[] = [
-          "cardType", "productType", "cohort",
+          "cardType", "productType", "cohort", "cycleDate",
           "transactionType", "transactionChannel", "transactionStatus",
           "merchantCategory", "amountRange", "recurringType",
           "riskCategory", "decisioningModel",
@@ -256,10 +537,13 @@ export function Header({ title }: HeaderProps) {
 
   const hasAnyFilters = visibleKeys === null || visibleKeys.length > 0;
 
-  const visibleGroups = FILTER_GROUPS
+  const visibleGroups = FILTER_GROUP_DEFS
     .map((group) => ({
       ...group,
-      filters: group.filters.filter((f) => isFilterVisible(f.key, visibleKeys)),
+      label: tFilters(group.tKey),
+      filters: group.filters
+        .filter((f) => isFilterVisible(f.key, visibleKeys))
+        .map((f) => ({ ...f, label: tFilters(f.tKey) })),
     }))
     .filter((group) => group.filters.length > 0);
 
@@ -272,12 +556,8 @@ export function Header({ title }: HeaderProps) {
           : "border-[var(--border)] bg-[var(--background)]/95"
       )}
     >
-      {/* Main row: title + time controls + filters + settings */}
-      <div className="flex items-center gap-2 px-4 py-1.5">
-        {/* Title */}
-        <h1 className="text-sm font-semibold text-[var(--text-primary)] shrink-0">{title}</h1>
-
-        {/* ── Unified time range dropdown + date + comparison ── */}
+      {/* Row 1: Time controls */}
+      <div className="flex items-center gap-2 px-4 pt-1.5 pb-0.5">
         <UnifiedTimeSelector
           period={period}
           timeRange={timeRange}
@@ -286,41 +566,30 @@ export function Header({ title }: HeaderProps) {
           comparisonMode={comparisonMode}
           onSelectRange={setPeriodAndRange}
           onComparisonChange={setComparisonMode}
+          onCustomRange={setCustomRange}
           isDark={isDark}
         />
-
-        {/* Spacer */}
-        <div className="flex-1" />
-
-        <div className="h-4 w-px bg-[var(--border)] shrink-0" />
-
-        {/* Filters toggle */}
-        {hasAnyFilters && (
-          <button
-            onClick={() => setFiltersExpanded((p) => !p)}
+        <span className={cn("text-[10px] font-semibold", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>
+          {dateRange.label}
+        </span>
+        {comparisonMode !== "none" && (
+          <span className="text-[10px] text-[var(--text-muted)]">vs {prevDateRange.label}</span>
+        )}
+        <div className="relative shrink-0">
+          <select
+            value={comparisonMode}
+            onChange={(e) => setComparisonMode(e.target.value as ComparisonMode)}
             className={cn(
-              "flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors shrink-0",
-              totalFilters > 0
-                ? isDark
-                  ? "bg-[#5B22FF]/15 text-[#7C4DFF] border border-[#5B22FF]/30"
-                  : "bg-[#D00083]/10 text-[#D00083] border border-[#D00083]/30"
-                : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+              "appearance-none rounded-md border px-1.5 py-0.5 pr-4 text-[10px] font-medium cursor-pointer outline-none transition-colors",
+              "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]"
             )}
           >
-            <SlidersHorizontal className="h-3 w-3" />
-            <span>Filters</span>
-            {totalFilters > 0 && (
-              <span className={cn(
-                "flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[9px] font-bold text-white",
-                isDark ? "bg-[#5B22FF]" : "bg-[#D00083]"
-              )}>
-                {totalFilters}
-              </span>
-            )}
-            <ChevronDown className={cn("h-3 w-3 transition-transform", filtersExpanded && "rotate-180")} />
-          </button>
-        )}
-
+            {COMPARISON_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{tTime(opt.tKey)}</option>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-0.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-[var(--text-muted)]" />
+        </div>
         {totalFilters > 0 && (
           <button
             onClick={() => clearFilters()}
@@ -330,69 +599,32 @@ export function Header({ title }: HeaderProps) {
             <X className="h-3.5 w-3.5" />
           </button>
         )}
-
-        <div className="h-4 w-px bg-[var(--border)] shrink-0" />
-
-        {/* Currency toggle */}
-        <button
-          onClick={toggleCurrency}
-          className="flex items-center gap-0.5 rounded-md bg-[var(--surface-elevated)] px-2 py-1 text-[11px] font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] shrink-0"
-        >
-          <span className={cn(currency === "IDR" && (isDark ? "text-[#7C4DFF] font-bold" : "text-[#D00083] font-bold"))}>IDR</span>
-          <span className="text-[var(--border)]">/</span>
-          <span className={cn(currency === "USD" && (isDark ? "text-[#7C4DFF] font-bold" : "text-[#D00083] font-bold"))}>USD</span>
-        </button>
-
-        {/* Theme toggle */}
-        <button
-          onClick={toggleTheme}
-          className={cn(
-            "flex h-7 w-7 items-center justify-center rounded-md transition-colors shrink-0",
-            isDark
-              ? "bg-[var(--surface-elevated)] text-[#FFD166] hover:bg-[#2D2955]"
-              : "bg-[#F0D9F7]/50 text-[#D00083] hover:bg-[#F0D9F7]"
-          )}
-          aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-        >
-          {isDark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
-        </button>
       </div>
 
-      {/* Expandable filter panel */}
-      {filtersExpanded && hasAnyFilters && (
-        <div className={cn(
-          "border-t px-4 py-2",
-          isDark ? "border-[var(--border)] bg-[var(--surface)]/50" : "border-[var(--border)] bg-[var(--surface)]/50"
-        )}>
-          <div className="flex items-start gap-4">
-            {visibleGroups.map((group, gi) => (
-              <div key={group.label} className="flex items-center gap-1.5">
-                <span className={cn(
-                  "text-[9px] font-bold uppercase tracking-widest shrink-0 w-7",
-                  isDark ? "text-[#7C4DFF]/60" : "text-[#D00083]/60"
-                )}>
-                  {group.label}
-                </span>
-                <div className="flex flex-wrap gap-1">
-                  {group.filters.map((f) => (
-                    <HeaderFilterDropdown
-                      key={f.key}
-                      label={f.label}
-                      options={f.options}
-                      selected={filters[f.key]}
-                      onToggle={(v) => toggleFilterValue(f.key, v)}
-                      onClear={() => clearFilter(f.key)}
-                    />
-                  ))}
-                </div>
-                {gi < visibleGroups.length - 1 && (
-                  <div className="h-5 w-px bg-[var(--border)] ml-1.5 shrink-0" />
-                )}
-              </div>
-            ))}
-          </div>
+      {/* Row 2: Filter group buttons (ACCT / TXN / RISK) — each is a popup with subcategory dropdowns */}
+      {hasAnyFilters && (
+        <div className="flex items-center gap-1.5 px-4 pb-1.5">
+          <Filter className="h-3 w-3 text-[var(--text-muted)] shrink-0" />
+          {visibleGroups.map((group) => {
+            const groupFilterCount = group.filters.reduce(
+              (sum, f) => sum + (filters[f.key]?.length ?? 0), 0
+            );
+            return (
+              <FilterGroupPopup
+                key={group.label}
+                label={group.label}
+                filters={group.filters}
+                filterValues={filters}
+                onToggle={toggleFilterValue}
+                onClear={clearFilter}
+                activeCount={groupFilterCount}
+                isDark={isDark}
+              />
+            );
+          })}
         </div>
       )}
+
     </header>
   );
 }

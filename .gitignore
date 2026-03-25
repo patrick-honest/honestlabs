@@ -52,3 +52,9 @@ next-env.d.ts
 
 # reference PDFs
 reference/
+.wrangler/
+logs/
+.dev.vars
+
+# generated PDF reports
+pdf_reports/

@@ -1,0 +1,6 @@
+name = "honestinfoapp"
+compatibility_date = "2024-09-23"
+
+[[kv_namespaces]]
+binding = "KPI_CACHE"
+id = "d4fd02c837cb4e048ceeb59a830216c3"

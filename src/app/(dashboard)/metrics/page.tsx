@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { Header } from "@/components/layout/header";
+import { useTranslations } from "next-intl";
 import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
 import { ChevronDown, Search } from "lucide-react";
@@ -28,63 +29,63 @@ interface MetricDef {
 // SQL Snippets — extracted from src/services/queries/*
 // ==========================================================================
 
-const SQL_ELIGIBLE_AND_TRANSACTORS = `-- Product type filtering handled by UI (productType filter dimension)
-WITH card_unblocked AS (
-  SELECT DISTINCT f9_dw005_loc_acct AS loc_acct
-  FROM \${TABLES.principal_card_updates}
-  WHERE f9_dw005_1st_unblk_all_mtd_tms IS NOT NULL
-    AND TRIM(CAST(f9_dw005_1st_unblk_all_mtd_tms AS STRING)) != ''
-    AND f9_dw005_hce_txn_ind LIKE '%0%'
-    AND f9_dw005_net_txn_ind LIKE '%0%'
-    AND fx_dw005_contc_less_flg LIKE '%Y%'
-    AND f9_dw005_contc_txn_ind LIKE '%0%'
+const SQL_ELIGIBLE_AND_TRANSACTORS = `-- Cohort-based Spend Active Rate
+-- For each ISOWEEK cohort of users who become first-time eligible,
+-- what % transacted within 7 days of their individual first-eligible date.
+WITH regular_users AS (
+  SELECT DISTINCT dc.user_id, loc.external_id AS loc_acct
+  FROM \${TABLES.decision_completed} dc
+  INNER JOIN \${TABLES.cms_line_of_credit} loc ON dc.user_id = loc.user_id
+  WHERE UPPER(dc.decision) = 'APPROVED'
+    AND (dc.is_prepaid_card_applicable IS NULL OR dc.is_prepaid_card_applicable = FALSE)
+    AND (dc.is_account_opening_fee_applicable IS NULL OR dc.is_account_opening_fee_applicable = FALSE)
 ),
-
-weekly_eligible AS (
-  SELECT
-    DATE_TRUNC(dw4.f9_dw004_bus_dt, ISOWEEK) AS week_start,
-    COUNT(DISTINCT dw4.p9_dw004_loc_acct) AS eligible_count
+eligible_check AS (
+  SELECT dw4.f9_dw004_bus_dt AS eligible_date, dw4.p9_dw004_prin_crn AS crn, ru.user_id
   FROM \${TABLES.financial_account_updates} dw4
-  JOIN card_unblocked cu
-    ON dw4.p9_dw004_loc_acct = cu.loc_acct
-  WHERE dw4.f9_dw004_bus_dt BETWEEN @startDate AND @endDate
-    AND EXTRACT(DAYOFWEEK FROM dw4.f9_dw004_bus_dt) = 1
-    AND dw4.fx_dw004_loc_stat IN ('G', 'N')
-    AND dw4.f9_dw004_curr_dpd >= 0
-  GROUP BY week_start
+  INNER JOIN regular_users ru ON dw4.p9_dw004_loc_acct = ru.loc_acct
+  INNER JOIN \${TABLES.principal_card_updates} dw5
+    ON dw4.p9_dw004_loc_acct = dw5.f9_dw005_loc_acct
+    AND CAST(DATETIME(dw5.f9_dw005_upd_tms, 'Asia/Jakarta') AS DATE) <= dw4.f9_dw004_bus_dt
+  WHERE dw4.fx_dw004_loc_stat IN ('G','N') AND dw4.f9_dw004_curr_dpd >= 0
+    AND TRIM(CAST(dw5.f9_dw005_1st_unblk_all_mtd_tms AS STRING)) != ''
+    AND (dw5.fx_dw005_crd_stat IS NULL OR TRIM(CAST(dw5.fx_dw005_crd_stat AS STRING)) != '')
+    AND dw5.f9_dw005_hce_txn_ind LIKE '%0%' AND dw5.f9_dw005_net_txn_ind LIKE '%0%'
+    AND dw5.fx_dw005_contc_less_flg LIKE '%Y%' AND dw5.f9_dw005_contc_txn_ind LIKE '%0%'
+  QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY dw4.p9_dw004_loc_acct, dw4.f9_dw004_bus_dt
+    ORDER BY dw5.f9_dw005_upd_tms DESC
+  ) = 1
 ),
-
-card_acct_map AS (
-  SELECT DISTINCT
-    f9_dw005_crn AS crn,
-    f9_dw005_loc_acct AS loc_acct
-  FROM \${TABLES.principal_card_updates}
+first_eligible AS (
+  SELECT user_id, crn, MIN(eligible_date) AS first_eligible_date
+  FROM eligible_check GROUP BY user_id, crn
+  QUALIFY ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY MIN(eligible_date)) = 1
 ),
-
-weekly_transactors AS (
-  SELECT
-    DATE_TRUNC(dw7.f9_dw007_dt, ISOWEEK) AS week_start,
-    COUNT(DISTINCT cam.loc_acct) AS transactor_count,
-    COUNT(*) AS total_transactions
-  FROM \${TABLES.authorized_transaction} dw7
-  JOIN card_acct_map cam
-    ON dw7.f9_dw007_prin_crn = cam.crn
-  WHERE dw7.f9_dw007_dt BETWEEN @startDate AND @endDate
-    AND (dw7.fx_dw007_stat IS NULL OR TRIM(dw7.fx_dw007_stat) = '' OR dw7.fx_dw007_stat = ' ')
-    AND dw7.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
-  GROUP BY week_start
+weekly_cohort AS (
+  SELECT DATE_TRUNC(first_eligible_date, ISOWEEK) AS week_start,
+    user_id, first_eligible_date, crn
+  FROM first_eligible
+  WHERE DATE_ADD(DATE_TRUNC(first_eligible_date, ISOWEEK), INTERVAL 13 DAY) <= CURRENT_DATE('Asia/Jakarta')
+),
+transactors AS (
+  SELECT DISTINCT wc.user_id, wc.week_start
+  FROM weekly_cohort wc
+  INNER JOIN \${TABLES.authorized_transaction} t
+    ON wc.crn = t.f9_dw007_prin_crn
+    AND t.f9_dw007_dt BETWEEN wc.first_eligible_date AND DATE_ADD(wc.first_eligible_date, INTERVAL 7 DAY)
+  WHERE (t.fx_dw007_stat IS NULL OR t.fx_dw007_stat = '' OR t.fx_dw007_stat = ' ')
+    AND t.fx_dw007_txn_typ NOT IN ('PM','BE','RF')
 )
-
 SELECT
-  FORMAT_DATE('%Y-%m-%d', e.week_start) AS week_start,
-  e.eligible_count,
-  COALESCE(t.transactor_count, 0) AS transactor_count,
-  COALESCE(t.total_transactions, 0) AS total_transactions,
-  ROUND(SAFE_DIVIDE(COALESCE(t.transactor_count, 0), e.eligible_count) * 100, 2) AS spend_active_rate
-FROM weekly_eligible e
-LEFT JOIN weekly_transactors t
-  ON e.week_start = t.week_start
-ORDER BY e.week_start`;
+  wc.week_start + 7 AS week_start,
+  COUNT(DISTINCT wc.user_id) AS newly_eligible_users,
+  COUNT(DISTINCT tr.user_id) AS activated_users,
+  ROUND(COUNT(DISTINCT tr.user_id) * 100.0 / COUNT(DISTINCT wc.user_id), 2) AS spend_activation_rate_pct
+FROM weekly_cohort wc
+LEFT JOIN transactors tr ON wc.user_id = tr.user_id AND wc.week_start = tr.week_start
+GROUP BY wc.week_start
+ORDER BY wc.week_start`;
 
 const SQL_SPEND_METRICS = `WITH valid_spend AS (
   SELECT
@@ -556,9 +557,9 @@ ORDER BY total_approved DESC`;
 
 const ALL_METRICS: MetricDef[] = [
   // --- Executive ---
-  { key: "eligible_count", label: "Eligible Accounts", unit: "count", section: "Executive", queryFn: "getEligibleAndTransactors", description: "Number of active accounts eligible for spend (unblocked, status G/N, DPD >= 0)", sql: SQL_ELIGIBLE_AND_TRANSACTORS, higherIsBetter: true },
+  { key: "eligible_count", label: "Eligible Accounts", unit: "count", section: "Executive", queryFn: "getEligibleAndTransactors", description: "Accounts eligible to spend on last day of period. Requires: account status G or N, DPD = 0 (current), card unblocked (videocall verified + all txn channels enabled).", sql: SQL_ELIGIBLE_AND_TRANSACTORS, higherIsBetter: true },
   { key: "transactor_count", label: "Transactors", unit: "count", section: "Executive", queryFn: "getEligibleAndTransactors", description: "Number of eligible accounts with at least one valid authorized transaction", sql: SQL_ELIGIBLE_AND_TRANSACTORS, higherIsBetter: true },
-  { key: "spend_active_rate", label: "Spend Active Rate", unit: "percent", section: "Executive", queryFn: "getEligibleAndTransactors", description: "Percentage of eligible accounts that transacted (transactors / eligible)", sql: SQL_ELIGIBLE_AND_TRANSACTORS, target: 60, warningThreshold: 50, dangerThreshold: 40, higherIsBetter: true },
+  { key: "spend_active_rate", label: "Spend Active Rate", unit: "percent", section: "Executive", queryFn: "getEligibleAndTransactors", description: "Cohort-based: % of newly first-time eligible users who transacted within 7 days of becoming eligible (excludes prepaid and fee-only accounts)", sql: SQL_ELIGIBLE_AND_TRANSACTORS, target: 60, warningThreshold: 50, dangerThreshold: 40, higherIsBetter: true },
   { key: "total_spend", label: "Total Spend", unit: "idr", section: "Executive", queryFn: "getSpendMetrics", description: "Total authorized spend amount in IDR across all valid transactions", sql: SQL_SPEND_METRICS, higherIsBetter: true },
   { key: "avg_spend_per_txn", label: "Avg Spend per Txn", unit: "idr", section: "Executive", queryFn: "getSpendMetrics", description: "Average transaction amount in IDR (total spend / total transactions)", sql: SQL_SPEND_METRICS, higherIsBetter: true },
   { key: "new_customer_activation_rate", label: "New Customer Activation Rate", unit: "percent", section: "Executive", queryFn: "getNewCustomerActivationRate", description: "Percentage of newly approved customers who transacted within 7 days", sql: SQL_NEW_CUSTOMER_ACTIVATION, target: 52, warningThreshold: 45, dangerThreshold: 35, higherIsBetter: true },
@@ -591,7 +592,7 @@ const ALL_METRICS: MetricDef[] = [
   // --- Portfolio ---
   { key: "total_active_accounts", label: "Total Active Accounts", unit: "count", section: "Portfolio", queryFn: "getPortfolioSnapshot", description: "Total number of accounts with status G (Good) or N (Normal)", sql: SQL_PORTFOLIO_SUMMARY, higherIsBetter: true },
   { key: "total_credit_limit", label: "Total Credit Limit", unit: "idr", section: "Portfolio", queryFn: "getPortfolioSnapshot", description: "Sum of credit limits across all active accounts", sql: SQL_PORTFOLIO_SUMMARY, higherIsBetter: true },
-  { key: "avg_utilization", label: "Avg Utilization", unit: "percent", section: "Portfolio", queryFn: "getPortfolioSnapshot", description: "Average credit utilization across active accounts (balance / limit)", sql: SQL_PORTFOLIO_SUMMARY, target: 60, warningThreshold: 70, dangerThreshold: 80, higherIsBetter: false },
+  { key: "avg_utilization", label: "Avg Utilization", unit: "percent", section: "Portfolio", queryFn: "getPortfolioSnapshot", description: "Average credit utilization across active accounts. Formula: SUM(clo_bal/100) / SUM(loc_lmt) × 100. clo_bal is in cents (÷100), loc_lmt is already in IDR.", sql: SQL_PORTFOLIO_SUMMARY, target: 60, warningThreshold: 70, dangerThreshold: 80, higherIsBetter: false },
   { key: "new_accounts", label: "New Accounts", unit: "count", section: "Portfolio", queryFn: "getDecisionFunnel", description: "Number of newly approved accounts in the period", sql: SQL_DECISION_FUNNEL, higherIsBetter: true },
   { key: "repayment_total", label: "Total Repayments", unit: "count", section: "Portfolio", queryFn: "getRepaymentMetrics", description: "Total number of repayment transactions", sql: SQL_REPAYMENT_METRICS, higherIsBetter: true },
   { key: "repayment_amount", label: "Total Repayment Amount", unit: "idr", section: "Portfolio", queryFn: "getRepaymentMetrics", description: "Total repayment amount in IDR", sql: SQL_REPAYMENT_METRICS, higherIsBetter: true },
@@ -878,6 +879,7 @@ function MetricDefCard({
 
 export default function MetricsDefinitionsPage() {
   const { isDark } = useTheme();
+  const tNav = useTranslations("nav");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
@@ -952,7 +954,7 @@ export default function MetricsDefinitionsPage() {
 
   return (
     <>
-      <Header title="Metrics Definitions" />
+      <Header title={tNav("definitions")} />
 
       <style jsx global>{`
         :root {

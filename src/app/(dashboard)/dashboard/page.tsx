@@ -1,86 +1,30 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
+import { useTranslations } from "next-intl";
 import { Header } from "@/components/layout/header";
 import { MetricCard } from "@/components/dashboard/metric-card";
+import { ChartCard } from "@/components/dashboard/chart-card";
+import type { ChartIncrement } from "@/components/dashboard/chart-card";
+import { aggregateByIncrement } from "@/lib/aggregate-by-increment";
 import { DashboardLineChart } from "@/components/charts/line-chart";
-import { DashboardBarChart } from "@/components/charts/bar-chart";
-import { Newspaper, TrendingUp, TrendingDown, AlertTriangle, Sparkles, ArrowRight } from "lucide-react";
+import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
+import { Newspaper, TrendingUp, TrendingDown, AlertTriangle, Sparkles, ArrowRight, Info, X, Download } from "lucide-react";
+import { PdfDownloadModal } from "@/components/dashboard/pdf-download-modal";
+import useSWR from "swr";
 import { usePeriod } from "@/hooks/use-period";
+import { useApiParams } from "@/hooks/use-api-params";
 import { useTheme } from "@/hooks/use-theme";
 import { useFilters } from "@/hooks/use-filters";
-import { useCurrency } from "@/hooks/use-currency";
-import { useKpis } from "@/hooks/use-cached-fetch";
-import { applyFilterToData, applyFilterToMetric, hasActiveFilters } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
-import { getPeriodRange, scaleMetricValue } from "@/lib/period-data";
-import { formatAmountCompact } from "@/lib/currency";
+import { getPeriodRange } from "@/lib/period-data";
+import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
+import { ChartSkeleton, MetricCardsSkeleton } from "@/components/dashboard/chart-skeleton";
 import { cn } from "@/lib/utils";
 import type { KpiMetric, Cycle } from "@/types/reports";
 import Link from "next/link";
-
-// ── Mock data generators (period-aware) ─────────────────────────────────────
-
-function generateMockKpis(period: Cycle, trm: number = 1): KpiMetric[] {
-  const m: Record<Cycle, number> = { weekly: 0.25, monthly: 1, quarterly: 3, yearly: 12 };
-  const scale = m[period] * trm; // Apply time range multiplier to absolute values
-  return [
-    { metric: "eligible_to_spend", label: "Active Accounts", value: Math.round(60240 * (0.85 + scale * 0.05)), prevValue: Math.round(58100 * (0.85 + m[period] * 0.05)), unit: "count", changePercent: 3.7, direction: "up" },
-    { metric: "spend_active_rate", label: "Spend Active Rate", value: period === "weekly" ? 39.8 : period === "monthly" ? 42.1 : period === "quarterly" ? 40.5 : 38.9, prevValue: period === "weekly" ? 38.5 : period === "monthly" ? 41.6 : period === "quarterly" ? 39.2 : 36.1, unit: "percent", changePercent: period === "weekly" ? 3.4 : 1.2, direction: "up" },
-    { metric: "total_spend", label: "Total Spend", value: Math.round(78500000000 * scale), prevValue: Math.round(72000000000 * m[period]), unit: "idr", changePercent: 9.0, direction: "up" },
-    { metric: "dpd_30_plus_rate", label: "30+ DPD Rate", value: period === "weekly" ? 4.8 : period === "monthly" ? 4.6 : period === "quarterly" ? 4.9 : 5.2, prevValue: period === "weekly" ? 5.0 : period === "monthly" ? 5.1 : period === "quarterly" ? 5.2 : 5.8, unit: "percent", changePercent: -4.0, direction: "down" },
-  ];
-}
-
-function generateSparklines(period: Cycle) {
-  const base: Record<string, number[]> = {
-    eligible_to_spend: [52000, 54000, 55200, 56800, 57500, 58100, 59400, 60240],
-    spend_active_rate: [38.5, 39.2, 39.8, 40.1, 40.9, 41.6, 41.8, 42.1],
-    total_spend: [58e9, 62e9, 65e9, 67e9, 70e9, 72e9, 75e9, 78.5e9],
-    dpd_30_plus_rate: [5.8, 5.6, 5.4, 5.2, 5.1, 5.0, 4.8, 4.6],
-  };
-  const m: Record<Cycle, number> = { weekly: 0.25, monthly: 1, quarterly: 3, yearly: 12 };
-  const scale = m[period];
-  const result: Record<string, number[]> = {};
-  for (const [key, values] of Object.entries(base)) {
-    const isRate = key.includes("rate");
-    result[key] = values.map((v) => (isRate ? v : Math.round(v * scale)));
-  }
-  return result;
-}
-
-function generateChartData(period: Cycle) {
-  const labels: Record<Cycle, string[]> = {
-    weekly: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-    monthly: ["Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb"],
-    quarterly: ["Q1 2025", "Q2 2025", "Q3 2025", "Q4 2025", "Q1 2026"],
-    yearly: ["2022", "2023", "2024", "2025", "2026 YTD"],
-  };
-  const dates = labels[period];
-
-  const spendRateData = dates.map((d, i) => ({
-    date: d,
-    rate: 38.5 + i * (period === "weekly" ? 0.5 : period === "monthly" ? 0.5 : period === "quarterly" ? 0.8 : 1.2),
-    target: 50,
-  }));
-  const prevSpendRateData = dates.map((d, i) => ({
-    date: d,
-    rate: 36.8 + i * (period === "weekly" ? 0.4 : period === "monthly" ? 0.4 : period === "quarterly" ? 0.7 : 1.0),
-    target: 50,
-  }));
-
-  const m: Record<Cycle, number> = { weekly: 0.25, monthly: 1, quarterly: 3, yearly: 12 };
-  const scale = m[period];
-  const dpdData = [
-    { bucket: "Current", count: Math.round(42500 * (0.9 + scale * 0.03)), prev: Math.round(40100 * (0.9 + scale * 0.03)) },
-    { bucket: "1-30 DPD", count: Math.round(8200 * (0.9 + scale * 0.03)), prev: Math.round(8800 * (0.9 + scale * 0.03)) },
-    { bucket: "31-60", count: Math.round(2100 * (0.9 + scale * 0.03)), prev: Math.round(2350 * (0.9 + scale * 0.03)) },
-    { bucket: "61-90", count: Math.round(850 * (0.9 + scale * 0.03)), prev: Math.round(920 * (0.9 + scale * 0.03)) },
-    { bucket: "90+", count: Math.round(730 * (0.9 + scale * 0.03)), prev: Math.round(800 * (0.9 + scale * 0.03)) },
-  ];
-
-  return { spendRateData, prevSpendRateData, dpdData };
-}
+import { PrintStyles } from "@/components/layout/print-styles";
 
 // ── Health score computation ────────────────────────────────────────────────
 
@@ -94,7 +38,8 @@ interface HealthScore {
   keyAlert: string;
 }
 
-function computeHealth(kpis: KpiMetric[], isDark: boolean): HealthScore {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function computeHealth(kpis: KpiMetric[], isDark: boolean, t: any): HealthScore {
   const find = (key: string) => kpis.find((k) => k.metric === key);
   const sar = find("spend_active_rate");
   const dpd = find("dpd_30_plus_rate");
@@ -123,23 +68,23 @@ function computeHealth(kpis: KpiMetric[], isDark: boolean): HealthScore {
       ? isDark ? "from-[#FFD166]/10 to-transparent" : "from-amber-50 to-transparent"
       : isDark ? "from-[#FF6B6B]/10 to-transparent" : "from-red-50 to-transparent";
 
-  const label = score >= 70 ? "Healthy" : score >= 45 ? "Monitor" : "At Risk";
+  const label = score >= 70 ? t("healthy") : score >= 45 ? t("monitor") : t("atRisk");
 
   // Build verdict
   const parts: string[] = [];
-  if (accounts && accounts.changePercent && accounts.changePercent > 0) parts.push("Portfolio growing");
-  if (sar && sar.changePercent && sar.changePercent > 0) parts.push("engagement improving");
-  if (dpd && dpd.changePercent && dpd.changePercent < 0) parts.push("credit quality strengthening");
-  if (spend && spend.changePercent && spend.changePercent > 0) parts.push(`spend +${spend.changePercent.toFixed(1)}%`);
+  if (accounts && accounts.changePercent && accounts.changePercent > 0) parts.push(t("portfolioGrowing"));
+  if (sar && sar.changePercent && sar.changePercent > 0) parts.push(t("engagementImproving"));
+  if (dpd && dpd.changePercent && dpd.changePercent < 0) parts.push(t("creditQualityStrengthening"));
+  if (spend && spend.changePercent && spend.changePercent > 0) parts.push(t("spendUp", { pct: spend.changePercent.toFixed(1) }));
 
   // Alerts
   const alerts: string[] = [];
-  if (sar && sar.value < 40) alerts.push("spend engagement below 40%");
-  if (dpd && dpd.value > 5) alerts.push("DPD 30+ above 5% threshold");
+  if (sar && sar.value < 40) alerts.push(t("spendBelowThreshold"));
+  if (dpd && dpd.value > 5) alerts.push(t("dpdAboveThreshold"));
 
   const verdict = parts.length > 0
     ? parts.slice(0, 3).join(", ") + "." + (alerts.length > 0 ? ` Watch: ${alerts.join(", ")}.` : "")
-    : "Insufficient data for assessment.";
+    : t("insufficientData");
 
   // Best / worst
   const metrics = [sar, dpd, spend, accounts].filter(Boolean) as KpiMetric[];
@@ -161,7 +106,7 @@ function computeHealth(kpis: KpiMetric[], isDark: boolean): HealthScore {
     verdict,
     bestMetric: `${best.label} ${best.direction === "up" ? "↑" : "↓"} ${Math.abs(best.changePercent ?? 0).toFixed(1)}%`,
     worstMetric: `${worst.label} ${worst.direction === "up" ? "↑" : "↓"} ${Math.abs(worst.changePercent ?? 0).toFixed(1)}%`,
-    keyAlert: alerts.length > 0 ? alerts[0] : "No critical alerts",
+    keyAlert: alerts.length > 0 ? alerts[0] : t("noAlerts"),
   };
 }
 
@@ -175,7 +120,8 @@ interface Alert {
   link?: string;
 }
 
-function generateAlerts(kpis: KpiMetric[], period: Cycle): Alert[] {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function generateAlerts(kpis: KpiMetric[], period: Cycle, t: any): Alert[] {
   const alerts: Alert[] = [];
   const sar = kpis.find((k) => k.metric === "spend_active_rate");
   const dpd = kpis.find((k) => k.metric === "dpd_30_plus_rate");
@@ -186,17 +132,17 @@ function generateAlerts(kpis: KpiMetric[], period: Cycle): Alert[] {
   if (spend && spend.changePercent && spend.changePercent > 5) {
     alerts.push({
       severity: "highlight",
-      title: `Total spend grew ${spend.changePercent.toFixed(1)}% vs prior period`,
-      detail: "Strong top-line momentum. Investor-ready headline.",
-      action: "Include in next investor update as key growth metric.",
+      title: t("spendGrew", { pct: spend.changePercent.toFixed(1) }),
+      detail: t("strongMomentum"),
+      action: t("includeInvestorUpdate"),
     });
   }
   if (sar && sar.value > 40) {
     alerts.push({
       severity: "highlight",
-      title: `Spend active rate at ${sar.value.toFixed(1)}% — strong engagement`,
-      detail: "Above 40% threshold indicates healthy card usage.",
-      action: "Highlight in board deck as engagement proof point.",
+      title: t("sarDeclining", { val: sar.value.toFixed(1) }).replace("declining", "strong"),
+      detail: t("engagementRisk"),
+      action: t("reviewActivation"),
       link: "/deep-dive/spend",
     });
   }
@@ -205,9 +151,9 @@ function generateAlerts(kpis: KpiMetric[], period: Cycle): Alert[] {
   if (sar && sar.changePercent && sar.changePercent < 1 && sar.changePercent > -2) {
     alerts.push({
       severity: "watch",
-      title: "Spend active rate growth slowing",
-      detail: `Only ${sar.changePercent.toFixed(1)}% change. Monitor for another period before acting.`,
-      action: "Review spend activation campaigns with marketing.",
+      title: t("sarStagnant", { val: sar.value.toFixed(1), pct: sar.changePercent.toFixed(1) }),
+      detail: t("monitorSar", { pct: sar.changePercent.toFixed(1) }),
+      action: t("reviewActivation"),
       link: "/deep-dive/spend",
     });
   }
@@ -216,9 +162,9 @@ function generateAlerts(kpis: KpiMetric[], period: Cycle): Alert[] {
   if (dpd && dpd.value > 5) {
     alerts.push({
       severity: "act",
-      title: `30+ DPD rate at ${dpd.value.toFixed(1)}% — above 5% threshold`,
-      detail: "Collections strategy may need recalibration.",
-      action: "Schedule risk review with Atanu this week.",
+      title: t("dpdRising", { val: dpd.value.toFixed(1) }),
+      detail: t("collectionsPressure"),
+      action: t("reviewCollections"),
       link: "/deep-dive/risk",
     });
   }
@@ -226,9 +172,9 @@ function generateAlerts(kpis: KpiMetric[], period: Cycle): Alert[] {
   // Additional context alerts
   alerts.push({
     severity: "highlight",
-    title: "QRIS adoption reached 27.4%",
-    detail: "Up from 3% six months ago. Feature story for investors.",
-    action: "Prepare QRIS case study for next board meeting.",
+    title: t("qrisAdoption", { pct: "27.4" }),
+    detail: t("qrisGrowth"),
+    action: t("prepareQrisCase"),
     link: "/qris-experiment",
   });
 
@@ -240,11 +186,11 @@ function generateAlerts(kpis: KpiMetric[], period: Cycle): Alert[] {
 
 // ── Investor highlights ─────────────────────────────────────────────────────
 
-const INVESTOR_HIGHLIGHTS = [
-  { stat: "32%", context: "YoY transactor growth", detail: "19.2K → 25.4K active spenders" },
-  { stat: "IDR 942B", context: "Total annual spend (+28% YoY)", detail: "Driven by QRIS & e-commerce" },
-  { stat: "3% → 27%", context: "QRIS adoption in 6 months", detail: "Fastest-growing payment channel" },
-  { stat: "4.6%", context: "30+ DPD rate (improved)", detail: "Down from 5.8% — tighter collections" },
+const INVESTOR_HIGHLIGHT_KEYS = [
+  { stat: "32%", contextKey: "investorYoyGrowth", detailKey: "investorYoyDetail" },
+  { stat: "IDR 942B", contextKey: "investorAnnualSpend", detailKey: "investorAnnualDetail" },
+  { stat: "3% → 27%", contextKey: "investorQris", detailKey: "investorQrisDetail" },
+  { stat: "4.6%", contextKey: "investorDpd", detailKey: "investorDpdDetail" },
 ];
 
 // ── News ────────────────────────────────────────────────────────────────────
@@ -255,83 +201,168 @@ const NEWS = [
   { title: "OJK announces new digital lending guidelines for 2026", date: "Mar 12", source: "Kontan" },
 ];
 
+// ── Dashboard Charts (extracted for clean JSX typing) ────────────────────────
+
+function DashboardCharts({ chartData, dataRange, isLive }: { chartData: Record<string, unknown>; dataRange: { start: string; end: string; label?: string }; isLive: boolean }) {
+  const eligible = chartData.eligible as { date: string; eligible: number; transactors: number; rate: number }[] | undefined;
+  const spend = chartData.spend as { date: string; total: number }[] | undefined;
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {eligible && eligible.length > 0 && (
+        <ChartCard
+          title="Spend Active Rate Trend"
+          subtitle="% of eligible accounts transacting"
+          asOf={dataRange.end}
+          dataRange={dataRange}
+          liveData={isLive}
+          showIncrement
+        >
+          {(increment: ChartIncrement) => (
+            <DashboardLineChart
+              data={aggregateByIncrement(eligible.map((r) => ({ date: r.date, rate: r.rate })), increment, "date")}
+              lines={[{ key: "rate", color: "#22c55e", label: "SAR %" }]}
+              valueType="percent"
+              height={280}
+            />
+          )}
+        </ChartCard>
+      )}
+      {spend && spend.length > 0 && (
+        <ChartCard
+          title="Total Spend Trend"
+          subtitle="Total transaction volume (IDR)"
+          asOf={dataRange.end}
+          dataRange={dataRange}
+          liveData={isLive}
+          showIncrement
+        >
+          {(increment: ChartIncrement) => (
+            <DashboardLineChart
+              data={aggregateByIncrement(spend.map((r) => ({ week: r.date, spend: r.total })), increment, "week")}
+              lines={[{ key: "spend", color: "#6366f1", label: "Total Spend (IDR)" }]}
+              xAxisKey="week"
+              height={280}
+            />
+          )}
+        </ChartCard>
+      )}
+    </div>
+  );
+}
+
 // ── Page ────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-  const { period, periodLabel, dateRange, prevDateRange, comparisonMode, timeRangeMultiplier } = usePeriod();
+  const tDash = useTranslations("dashboard");
+  const tCommon = useTranslations("common");
+  const [showHealthInfo, setShowHealthInfo] = useState(false);
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
+  const { period, periodLabel, dateRange } = usePeriod();
   const { isDark } = useTheme();
   const { filters } = useFilters();
-  const { currency } = useCurrency();
-  const { data: apiData, isLoading: loading } = useKpis(period);
+  const { apiParams } = useApiParams();
+
+  const fetcher = useCallback(async (url: string) => {
+    const res = await fetch(url);
+    if (res.ok) return res.json();
+    if (res.status === 404) {
+      const refreshRes = await fetch("/api/kpis/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cycle: period }),
+      });
+      if (refreshRes.ok) return refreshRes.json();
+    }
+    throw new Error(`Fetch failed (${res.status})`);
+  }, [period]);
+
+  const { data: apiData, isLoading: loading } = useSWR<{
+    kpis: unknown[];
+    chartData: Record<string, unknown>;
+    trends: string[];
+    asOf: string;
+    dataRange: { start: string; end: string };
+  }>(`/api/kpis?${apiParams}`, {
+    fetcher,
+    revalidateOnFocus: false,
+    dedupingInterval: 300_000,
+  });
+  const kpisAreLive = !!apiData?.kpis;
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
-  // KPIs: extract the Big 4 from API data, or fall back to mock
-  const kpis = useMemo(() => {
+  // KPIs: extract the Big 4 from API data
+  const kpis = useMemo((): KpiMetric[] | null => {
     const apiKpis = apiData?.kpis as KpiMetric[] | undefined;
+    if (!apiKpis || apiKpis.length === 0) return null;
 
     // Map API KPIs to our Big 4 dashboard metrics
     const big4Keys = ["eligible_count", "spend_active_rate", "total_spend", "total_delinquent_rate"];
     const big4Labels: Record<string, string> = {
-      eligible_count: "Active Accounts",
-      spend_active_rate: "Spend Active Rate",
-      total_spend: "Total Spend",
-      total_delinquent_rate: "30+ DPD Rate",
+      eligible_count: tDash("activeAccounts"),
+      spend_active_rate: tDash("spendActiveRate"),
+      total_spend: tDash("totalSpend"),
+      total_delinquent_rate: tDash("dpdRate"),
     };
 
-    let raw: KpiMetric[];
-    if (apiKpis && apiKpis.length > 0) {
-      // Use real BQ data — pick the Big 4
-      raw = big4Keys.map((key) => {
-        const found = apiKpis.find((k) => k.metric === key);
-        if (found) return { ...found, label: big4Labels[key] ?? found.label };
-        // Fallback for missing metrics
-        return { metric: key, label: big4Labels[key] ?? key, value: 0, prevValue: null, unit: key.includes("rate") ? "percent" : "count", changePercent: null, direction: "flat" as const };
-      });
-    } else {
-      raw = generateMockKpis(period, timeRangeMultiplier);
-    }
+    const raw = big4Keys.map((key) => {
+      const found = apiKpis.find((k) => k.metric === key);
+      if (found) return { ...found, label: big4Labels[key] ?? found.label };
+      return { metric: key, label: big4Labels[key] ?? key, value: 0, prevValue: null, unit: (key.includes("rate") ? "percent" : "count") as "count" | "percent" | "idr" | "usd", changePercent: null, direction: "flat" as const };
+    });
 
-    if (!hasActiveFilters(filters)) return raw;
-    return raw.map((k) => ({
-      ...k,
-      value: applyFilterToMetric(k.value, filters, k.unit === "percent"),
-      prevValue: k.prevValue != null ? applyFilterToMetric(k.prevValue, filters, k.unit === "percent") : k.prevValue,
-    }));
-  }, [apiData, period, timeRangeMultiplier, filters]);
+    return raw;
+  }, [apiData]);
 
-  const sparklines = useMemo(() => generateSparklines(period), [period]);
-  const { spendRateData, prevSpendRateData, dpdData } = useMemo(() => {
-    const raw = generateChartData(period);
-    if (!hasActiveFilters(filters)) return raw;
-    return {
-      spendRateData: applyFilterToData(raw.spendRateData, filters),
-      prevSpendRateData: applyFilterToData(raw.prevSpendRateData, filters),
-      dpdData: applyFilterToData(raw.dpdData, filters),
-    };
-  }, [period, filters]);
-
-  const health = useMemo(() => computeHealth(kpis, isDark), [kpis, isDark]);
-  const alerts = useMemo(() => generateAlerts(kpis, period), [kpis, period]);
+  const health = useMemo(() => kpis ? computeHealth(kpis, isDark, tDash) : null, [kpis, isDark, tDash]);
+  const alerts = useMemo(() => kpis ? generateAlerts(kpis, period, tDash) : [], [kpis, period, tDash]);
 
   const severityConfig = {
-    act: { icon: AlertTriangle, label: "Act Now", bg: isDark ? "bg-red-500/10 border-red-500/30" : "bg-red-50 border-red-200", text: isDark ? "text-[#FF6B6B]" : "text-red-700" },
-    watch: { icon: AlertTriangle, label: "Watch", bg: isDark ? "bg-amber-500/10 border-amber-500/30" : "bg-amber-50 border-amber-200", text: isDark ? "text-[#FFD166]" : "text-amber-700" },
-    highlight: { icon: Sparkles, label: "Highlight", bg: isDark ? "bg-emerald-500/10 border-emerald-500/30" : "bg-emerald-50 border-emerald-200", text: isDark ? "text-[#06D6A0]" : "text-emerald-700" },
+    act: { icon: AlertTriangle, label: tDash("actNow"), bg: isDark ? "bg-red-500/10 border-red-500/30" : "bg-red-50 border-red-200", text: isDark ? "text-[#FF6B6B]" : "text-red-700" },
+    watch: { icon: AlertTriangle, label: tDash("watch"), bg: isDark ? "bg-amber-500/10 border-amber-500/30" : "bg-amber-50 border-amber-200", text: isDark ? "text-[#FFD166]" : "text-amber-700" },
+    highlight: { icon: Sparkles, label: tDash("investorHighlight"), bg: isDark ? "bg-emerald-500/10 border-emerald-500/30" : "bg-emerald-50 border-emerald-200", text: isDark ? "text-[#06D6A0]" : "text-emerald-700" },
   };
 
   return (
     <div className="flex flex-col">
-      <Header title="Dashboard" />
+      <PrintStyles />
+      <Header title={tDash("title")} />
 
       <div className="flex-1 space-y-5 p-6">
-        <ActiveFiltersBanner />
+        {/* Title row with Download PDF */}
+        <div className="flex items-center justify-between -mb-2">
+          <ActiveFiltersBanner />
+          <button
+            onClick={() => setPdfModalOpen(true)}
+            className={cn(
+              "flex items-center gap-1.5 shrink-0 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+              isDark
+                ? "text-[#7C4DFF] hover:bg-[#5B22FF]/15 border border-[#5B22FF]/30"
+                : "text-[#D00083] hover:bg-[#D00083]/10 border border-[#D00083]/30"
+            )}
+          >
+            <Download className="h-3.5 w-3.5" />
+            {tCommon("savePdf")}
+          </button>
+        </div>
 
         {/* ════════════════════════════════════════════════════════════════ */}
         {/* 1. HEALTH SCORE BANNER                                         */}
         {/* ════════════════════════════════════════════════════════════════ */}
+        {!kpis && (
+          loading ? (
+            <><MetricCardsSkeleton /><ChartSkeleton /></>
+          ) : (
+            <SampleDataBanner
+              dataset="mart_finexus"
+              reason="KPI data requires financial_account_updates (DW004) and authorized_transaction (DW007)"
+            />
+          )
+        )}
+
+        {kpis && health && (
         <div className={cn(
-          "rounded-2xl border p-6 bg-gradient-to-r",
+          "rounded-2xl border p-6 bg-gradient-to-r relative",
           isDark ? "border-[var(--border)] bg-[var(--surface)]" : "border-[var(--border)] bg-[var(--surface)] shadow-sm",
           health.score >= 70
             ? isDark ? "from-[#06D6A0]/5 to-transparent" : "from-emerald-50/80 to-white"
@@ -339,6 +370,28 @@ export default function DashboardPage() {
               ? isDark ? "from-[#FFD166]/5 to-transparent" : "from-amber-50/80 to-white"
               : isDark ? "from-[#FF6B6B]/5 to-transparent" : "from-red-50/80 to-white"
         )}>
+          {/* Title row */}
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--text-muted)]">
+                Portfolio Health Score
+              </h3>
+              <p className="text-[10px] text-[var(--text-muted)] mt-0.5">
+                Weighted composite of spend engagement, credit quality, growth, and portfolio size
+              </p>
+            </div>
+            <button
+              onClick={() => setShowHealthInfo(true)}
+              className={cn(
+                "flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium transition-colors",
+                isDark ? "text-[#7C4DFF] hover:bg-[#5B22FF]/15" : "text-[#D00083] hover:bg-[#D00083]/10"
+              )}
+            >
+              <Info className="h-3 w-3" />
+              Learn more
+            </button>
+          </div>
+
           <div className="flex items-start justify-between gap-6">
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-2">
@@ -369,11 +422,92 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
-        </div>
+
+        </div>)}
+
+        {/* Learn More modal overlay — portaled to body to escape sidebar stacking context */}
+        {showHealthInfo && typeof document !== "undefined" && createPortal(
+          <div
+            className="fixed inset-0 z-[200] flex items-center justify-center p-6"
+            onClick={() => setShowHealthInfo(false)}
+          >
+            {/* Backdrop */}
+            <div className={cn("absolute inset-0", isDark ? "bg-black/60" : "bg-black/30")} />
+
+            {/* Modal */}
+            <div
+              className={cn(
+                "relative z-10 w-full max-w-lg rounded-2xl border p-6 shadow-2xl overflow-y-auto max-h-[80vh]",
+                isDark
+                  ? "border-[var(--border)] bg-[#141226] shadow-black/50"
+                  : "border-[var(--border)] bg-white shadow-black/10"
+              )}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between mb-4">
+                <h3 className={cn("text-sm font-bold", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>
+                  How the Health Score Works
+                </h3>
+                <button onClick={() => setShowHealthInfo(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <p className="text-xs text-[var(--text-secondary)] mb-4">
+                The Health Score is a 0–100 weighted composite that summarizes portfolio performance at a glance. It combines four key dimensions into a single number.
+              </p>
+
+              {/* Score scale */}
+              <div className="flex items-center gap-1 mb-4 rounded-lg overflow-hidden h-3">
+                <div className="flex-1 bg-red-500 relative"><span className="absolute inset-0 flex items-center justify-center text-[7px] font-bold text-white">0–44</span></div>
+                <div className="flex-1 bg-amber-400 relative"><span className="absolute inset-0 flex items-center justify-center text-[7px] font-bold text-white">45–69</span></div>
+                <div className="flex-1 bg-emerald-500 relative"><span className="absolute inset-0 flex items-center justify-center text-[7px] font-bold text-white">70–100</span></div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                {[
+                  { label: "At Risk", range: "0–44", color: "text-red-500", desc: "Multiple KPIs underperforming. Immediate action needed on engagement or risk." },
+                  { label: "Monitor", range: "45–69", color: "text-amber-500", desc: "Mixed signals. Some metrics improving while others need attention." },
+                  { label: "Healthy", range: "70–100", color: "text-emerald-500", desc: "Strong performance across all dimensions. Portfolio growing sustainably." },
+                ].map((s) => (
+                  <div key={s.label} className={cn("rounded-lg border p-2.5", isDark ? "border-[var(--border)]" : "border-[var(--border)]")}>
+                    <div className={cn("text-xs font-bold", s.color)}>{s.label}</div>
+                    <div className="text-[9px] text-[var(--text-muted)] mb-1">{s.range}</div>
+                    <p className="text-[10px] text-[var(--text-secondary)] leading-tight">{s.desc}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Weight breakdown */}
+              <h4 className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-2">Score Weights</h4>
+              <div className="space-y-1.5">
+                {[
+                  { label: "Spend Active Rate vs 50% target", weight: "30%", icon: "📊" },
+                  { label: "DPD inverse (lower DPD = higher score)", weight: "25%", icon: "🛡️" },
+                  { label: "Spend growth vs prior period", weight: "25%", icon: "📈" },
+                  { label: "Account growth vs prior period", weight: "20%", icon: "👥" },
+                ].map((w) => (
+                  <div key={w.label} className="flex items-center gap-2">
+                    <span className="text-xs">{w.icon}</span>
+                    <div className="flex-1">
+                      <div className={cn("h-1.5 rounded-full", isDark ? "bg-[var(--surface-elevated)]" : "bg-gray-100")}>
+                        <div className={cn("h-full rounded-full", isDark ? "bg-[#5B22FF]" : "bg-[#D00083]")} style={{ width: w.weight }} />
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-medium text-[var(--text-secondary)] w-8 text-right">{w.weight}</span>
+                    <span className="text-[10px] text-[var(--text-muted)] flex-1">{w.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
 
         {/* ════════════════════════════════════════════════════════════════ */}
         {/* 2. THE BIG 4 KPIs                                              */}
         {/* ════════════════════════════════════════════════════════════════ */}
+        {kpis && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {kpis.map((kpi) => (
             <MetricCard
@@ -385,22 +519,23 @@ export default function DashboardPage() {
               unit={kpi.unit as "count" | "percent" | "idr" | "usd"}
               asOf={DATA_RANGE.end}
               dataRange={DATA_RANGE}
-              sparklineData={sparklines[kpi.metric]}
               target={kpi.metric === "spend_active_rate" ? 50 : kpi.metric === "dpd_30_plus_rate" ? 3 : undefined}
               higherIsBetter={kpi.metric !== "dpd_30_plus_rate"}
+              liveData={kpisAreLive}
             />
           ))}
         </div>
+        )}
 
         {/* ════════════════════════════════════════════════════════════════ */}
         {/* 3. ALERTS & ACTIONS                                            */}
         {/* ════════════════════════════════════════════════════════════════ */}
-        <div className={cn(
+        {kpis && alerts.length > 0 && <div className={cn(
           "rounded-xl border p-5",
           isDark ? "border-[var(--border)] bg-[var(--surface)]" : "border-[var(--border)] bg-[var(--surface)] shadow-sm"
         )}>
           <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--text-muted)] mb-3">
-            Actions & Alerts
+            {tDash("actionsAlerts")}
           </h3>
           <div className="space-y-2.5">
             {alerts.map((alert, i) => {
@@ -419,7 +554,7 @@ export default function DashboardPage() {
                       <span className="text-xs font-medium text-[var(--text-secondary)]">→ {alert.action}</span>
                       {alert.link && (
                         <Link href={alert.link} className={cn("text-[10px] font-medium flex items-center gap-0.5", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>
-                          View details <ArrowRight className="h-2.5 w-2.5" />
+                          {tDash("viewDetails")} <ArrowRight className="h-2.5 w-2.5" />
                         </Link>
                       )}
                     </div>
@@ -428,79 +563,40 @@ export default function DashboardPage() {
               );
             })}
           </div>
-        </div>
+        </div>}
 
         {/* ════════════════════════════════════════════════════════════════ */}
         {/* 4. TWO KEY CHARTS                                              */}
         {/* ════════════════════════════════════════════════════════════════ */}
-        <div className="grid gap-5 lg:grid-cols-2">
-          {/* Growth Story */}
-          <div className={cn(
-            "rounded-xl border p-5",
-            isDark ? "border-[var(--border)] bg-[var(--surface)]" : "border-[var(--border)] bg-[var(--surface)] shadow-sm"
-          )}>
-            <div className="flex items-center justify-between mb-1">
-              <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--text-muted)]">Growth Story</h3>
-              <Link href="/deep-dive/spend" className={cn("text-[10px] font-medium flex items-center gap-0.5", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>
-                Deep dive <ArrowRight className="h-2.5 w-2.5" />
-              </Link>
-            </div>
-            <p className="text-[11px] text-[var(--text-muted)] mb-3">Spend Active Rate — % of eligible accounts transacting</p>
-            <DashboardLineChart
-              data={spendRateData}
-              lines={[
-                { key: "rate", color: isDark ? "#06D6A0" : "#059669", label: "Spend Active Rate %" },
-                { key: "target", color: isDark ? "#ffffff20" : "#00000015", label: "Target (50%)" },
-              ]}
-              prevPeriodData={comparisonMode !== "none" ? prevSpendRateData : undefined}
-              prevPeriodLabel="Prior"
-              valueType="percent"
-              height={200}
-            />
-          </div>
-
-          {/* Risk Story */}
-          <div className={cn(
-            "rounded-xl border p-5",
-            isDark ? "border-[var(--border)] bg-[var(--surface)]" : "border-[var(--border)] bg-[var(--surface)] shadow-sm"
-          )}>
-            <div className="flex items-center justify-between mb-1">
-              <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--text-muted)]">Risk Story</h3>
-              <Link href="/deep-dive/risk" className={cn("text-[10px] font-medium flex items-center gap-0.5", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>
-                Deep dive <ArrowRight className="h-2.5 w-2.5" />
-              </Link>
-            </div>
-            <p className="text-[11px] text-[var(--text-muted)] mb-3">DPD Distribution — current vs prior period</p>
-            <DashboardBarChart
-              data={dpdData}
-              bars={[
-                { key: "count", color: isDark ? "#FFD166" : "#F5A623", label: "Current" },
-                { key: "prev", color: isDark ? "#ffffff20" : "#00000015", label: "Prior" },
-              ]}
-              xAxisKey="bucket"
-              height={200}
-            />
-          </div>
-        </div>
+        {apiData?.chartData ? (
+          <DashboardCharts chartData={apiData.chartData as Record<string, unknown>} dataRange={DATA_RANGE} isLive={kpisAreLive} />
+        ) : loading ? (
+          <ChartSkeleton />
+        ) : (
+          <SampleDataBanner
+            dataset="mart_finexus"
+            reason="KPI data requires financial_account_updates (DW004) and authorized_transaction (DW007)"
+          />
+        )}
 
         {/* ════════════════════════════════════════════════════════════════ */}
         {/* 5. INVESTOR SNAPSHOT                                            */}
         {/* ════════════════════════════════════════════════════════════════ */}
-        <div>
-          <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--text-muted)] mb-3">Investor Highlights</h3>
+        {kpis && <div>
+          <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--text-muted)] mb-3">{tDash("investorSnapshot")}</h3>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {INVESTOR_HIGHLIGHTS.map((h, i) => (
+            {INVESTOR_HIGHLIGHT_KEYS.map((h, i) => (
               <div key={i} className={cn(
                 "rounded-xl border px-4 py-3",
                 isDark ? "border-[var(--border)] bg-[var(--surface)]" : "border-[var(--border)] bg-[var(--surface)] shadow-sm"
               )}>
                 <p className={cn("text-2xl font-bold", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>{h.stat}</p>
-                <p className="text-xs font-medium text-[var(--text-primary)] mt-0.5">{h.context}</p>
-                <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{h.detail}</p>
+                <p className="text-xs font-medium text-[var(--text-primary)] mt-0.5">{tDash(h.contextKey)}</p>
+                <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{tDash(h.detailKey)}</p>
               </div>
             ))}
           </div>
-        </div>
+        </div>}
 
         {/* ════════════════════════════════════════════════════════════════ */}
         {/* 6. MARKET CONTEXT (slim footer)                                 */}
@@ -519,6 +615,17 @@ export default function DashboardPage() {
           ))}
         </div>
       </div>
+
+      {/* PDF Download Modal */}
+      <PdfDownloadModal
+        isOpen={pdfModalOpen}
+        onClose={() => setPdfModalOpen(false)}
+        reportId="dashboard"
+        reportTitle={tDash("title")}
+        defaultStartDate={dateRange.start.toISOString().slice(0, 10)}
+        defaultEndDate={dateRange.end.toISOString().slice(0, 10)}
+        defaultPeriod={period}
+      />
     </div>
   );
 }

@@ -1,82 +1,28 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
-import { MetricCard } from "@/components/dashboard/metric-card";
+import useSWR from "swr";
 import { ChartCard } from "@/components/dashboard/chart-card";
+import type { ChartIncrement } from "@/components/dashboard/chart-card";
+import { aggregateByIncrement } from "@/lib/aggregate-by-increment";
+import { MetricCard } from "@/components/dashboard/metric-card";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
+import { ChartSkeleton, MetricCardsSkeleton } from "@/components/dashboard/chart-skeleton";
 import { usePeriod } from "@/hooks/use-period";
-import { useFilters } from "@/hooks/use-filters";
-import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
+import { useApiParams } from "@/hooks/use-api-params";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
-import { getPeriodRange, getPeriodInsightLabels, scaleTrendData, scaleMetricValue } from "@/lib/period-data";
+import { getPeriodRange, getPeriodInsightLabels, scaleTrendData } from "@/lib/period-data";
+import { PrintStyles } from "@/components/layout/print-styles";
 
-const AS_OF = "Mar 15, 2026";
+const AS_OF = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 // DATA_RANGE is now computed inside the component via useMemo
 
-// Mock data
-const activationRateTrend = [
-  { date: "Oct", rate: 58.2 },
-  { date: "Nov", rate: 60.5 },
-  { date: "Dec", rate: 62.1 },
-  { date: "Jan", rate: 59.8 },
-  { date: "Feb", rate: 63.4 },
-  { date: "Mar", rate: 65.2 },
-];
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
-const avgDaysToFirstTxn = [
-  { date: "Oct", days: 5.8 },
-  { date: "Nov", days: 5.5 },
-  { date: "Dec", days: 4.9 },
-  { date: "Jan", days: 5.2 },
-  { date: "Feb", days: 4.8 },
-  { date: "Mar", days: 4.5 },
-];
-
-const dormancy = [
-  { bucket: "No txn 7d", percent: 22.5 },
-  { bucket: "No txn 14d", percent: 18.3 },
-  { bucket: "No txn 30d", percent: 14.1 },
-  { bucket: "No txn 60d", percent: 9.8 },
-  { bucket: "No txn 90d", percent: 6.2 },
-];
-
-const activationByProduct = [
-  { product: "Standard CC", activated: 2100, total: 2800 },
-  { product: "Prepaid", activated: 620, total: 900 },
-  { product: "Opening Fee", activated: 380, total: 500 },
-];
-
-const deliveryToActivation = [
-  { days: "0-1", count: 850 },
-  { days: "2-3", count: 1200 },
-  { days: "4-7", count: 680 },
-  { days: "8-14", count: 420 },
-  { days: "15-30", count: 180 },
-  { days: "30+", count: 70 },
-];
-
-// Sample data — Revolving Rate (blocked by mart_finance)
-const revolvingRateTrend = [
-  { date: "Oct", rate: 63.2 },
-  { date: "Nov", rate: 64.8 },
-  { date: "Dec", rate: 66.1 },
-  { date: "Jan", rate: 67.5 },
-  { date: "Feb", rate: 68.9 },
-  { date: "Mar", rate: 70.3 },
-];
-
-// Sample data — Monthly Income Distribution (blocked by Credit Bureau + mart_finance)
-const monthlyIncomeDistribution = [
-  { bucket: "$400–$600", count: 820 },
-  { bucket: "$600–$800", count: 1450 },
-  { bucket: "$800–$1,000", count: 1180 },
-  { bucket: "$1,000–$1,200", count: 640 },
-  { bucket: "$1,200+", count: 310 },
-];
 
 const actionItems: ActionItem[] = [
   {
@@ -94,22 +40,112 @@ const actionItems: ActionItem[] = [
   {
     id: "act-3",
     priority: "urgent",
-    action: "Prepaid activation rate is lowest at 68.9%.",
-    detail: "Prepaid card users may not understand value prop. Investigate UX and consider first-load bonus.",
+    action: "RP1 activation rate is lowest at 68.9%.",
+    detail: "RP1 card users may not understand value prop. Investigate UX and consider first-load bonus.",
   },
 ];
 
 export default function ActivationPage() {
-  const { period, periodLabel, timeRangeMultiplier } = usePeriod();
-  const { filters } = useFilters();
+  const { period } = usePeriod();
+  const { apiParams } = useApiParams();
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
-  const periodActivationRate = useMemo(() => applyFilterToData(scaleTrendData(activationRateTrend, period), filters), [period, filters]);
-  const periodAvgDays = useMemo(() => applyFilterToData(scaleTrendData(avgDaysToFirstTxn, period), filters), [period, filters]);
-  const periodDormancy = useMemo(() => applyFilterToData(scaleTrendData(dormancy, period, "bucket"), filters), [period, filters]);
-  const periodActivationByProduct = useMemo(() => applyFilterToData(scaleTrendData(activationByProduct, period, "product"), filters), [period, filters]);
-  const periodDeliveryToActivation = useMemo(() => applyFilterToData(scaleTrendData(deliveryToActivation, period, "days"), filters), [period, filters]);
+  const { data: apiData, isLoading } = useSWR(
+    `/api/activation?${apiParams}`,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 300_000 },
+  );
+
+  const activationIsLive = !!apiData?.activationRateTrend;
+
+  // ── API-backed data ──
+  const apiActivationRate = useMemo((): { date: string; rate: number }[] | null => {
+    if (!apiData?.activationRateTrend) return null;
+    return apiData.activationRateTrend.map((r: { week: string; approved_count: number; activated_count: number; rate: number }) => ({
+      date: r.week,
+      rate: r.rate,
+    }));
+  }, [apiData]);
+
+  const apiDaysToFirstTxn = useMemo((): { days: string; count: number }[] | null => {
+    if (!apiData?.daysToFirstTransaction) return null;
+    return apiData.daysToFirstTransaction.map((r: { days_bucket: string; count: number }) => ({
+      days: r.days_bucket,
+      count: r.count,
+    }));
+  }, [apiData]);
+
+  const apiActivationByProduct = useMemo((): { product: string; activated: number; total: number }[] | null => {
+    if (!apiData?.activationByProductType) return null;
+    return apiData.activationByProductType.map((r: { product_type: string; approved: number; activated: number; rate: number }) => ({
+      product: r.product_type,
+      activated: r.activated,
+      total: r.approved,
+    }));
+  }, [apiData]);
+
+  const apiPinSetRate = useMemo((): { date: string; rate: number }[] | null => {
+    if (!apiData?.pinSetRateTrend) return null;
+    return apiData.pinSetRateTrend.map((r: { week: string; decision_count: number; pin_set_count: number; rate: number }) => ({
+      date: r.week,
+      rate: r.rate,
+    }));
+  }, [apiData]);
+
+  // Product activation rate trend — weekly line chart
+  const productRateTrend = useMemo(() => {
+    if (!apiData?.productRateTrend?.length) return null;
+    const rows = apiData.productRateTrend as { week_start: string; product_type: string; rate: number }[];
+    const weeks = [...new Set(rows.map(r => r.week_start))].sort();
+    return weeks.map(w => {
+      const weekRows = rows.filter(r => r.week_start === w);
+      const entry: Record<string, string | number> = { date: w };
+      for (const r of weekRows) entry[r.product_type] = r.rate;
+      return entry;
+    });
+  }, [apiData]);
+
+  // Days-to-activation distribution trend — weekly line chart
+  const daysDistTrend = useMemo(() => {
+    if (!apiData?.daysDistributionTrend?.length) return null;
+    return (apiData.daysDistributionTrend as { week_start: string; pct_0_1: number; pct_2_3: number; pct_4_7: number; pct_within_7d: number }[]).map(r => ({
+      date: r.week_start,
+      "0-1 days": r.pct_0_1,
+      "2-3 days": r.pct_2_3,
+      "4-7 days": r.pct_4_7,
+      "Within 7d": r.pct_within_7d,
+    }));
+  }, [apiData]);
+
+  // Dormancy analysis from DW004
+  const dormancyAnalysis = useMemo((): { bucket: string; accounts: number }[] | null => {
+    if (!apiData?.dormancyAnalysis?.length) return null;
+    return apiData.dormancyAnalysis as { bucket: string; accounts: number }[];
+  }, [apiData]);
+
+  // KPI summary values computed from API data
+  const kpiSummary = useMemo(() => {
+    if (!apiData?.activationRateTrend?.length) return null;
+    const trend = apiData.activationRateTrend as { week: string; approved_count: number; activated_count: number; rate: number }[];
+    const latest = trend[trend.length - 1];
+    const prev = trend.length > 1 ? trend[trend.length - 2] : null;
+    const totalApproved = trend.reduce((s: number, r: { approved_count: number }) => s + r.approved_count, 0);
+    const totalActivated = trend.reduce((s: number, r: { activated_count: number }) => s + r.activated_count, 0);
+    const overallRate = totalApproved > 0 ? Math.round((totalActivated / totalApproved) * 10000) / 100 : 0;
+
+    return {
+      latestRate: latest?.rate ?? 0,
+      prevRate: prev?.rate ?? null,
+      totalApproved,
+      totalActivated,
+      overallRate,
+    };
+  }, [apiData]);
+
+  const periodActivationRate = useMemo(() => apiActivationRate?.length ? scaleTrendData(apiActivationRate, period) : null, [period, apiActivationRate]);
+  const periodActivationByProduct = useMemo(() => apiActivationByProduct?.length ? scaleTrendData(apiActivationByProduct, period, "product") : null, [period, apiActivationByProduct]);
+  const periodDeliveryToActivation = useMemo(() => apiDaysToFirstTxn?.length ? scaleTrendData(apiDaysToFirstTxn, period, "days") : null, [period, apiDaysToFirstTxn]);
 
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
 
@@ -137,9 +173,9 @@ export default function ActivationPage() {
 
   const activationByProductInsights = useMemo<ChartInsight[]>(() => [
     { text: `Standard CC leads activation at 75% (2,100 of 2,800), benefiting from the most mature onboarding flow and highest credit limits.`, type: "positive" },
-    { text: `Prepaid activates at 68.89% (620 of 900), the lowest rate across products. Users may not perceive urgency to load and spend on a prepaid card.`, type: "negative" },
+    { text: `RP1 activates at 68.89% (620 of 900), the lowest rate across products. Users may not perceive urgency to load and spend on an RP1 card.`, type: "negative" },
     { text: `Opening Fee product activates at 76% (380 of 500), outperforming Standard CC despite a smaller base, suggesting high-intent applicants.`, type: "positive" },
-    { text: `The 7.11pp gap between Prepaid and Opening Fee indicates product-level UX and value-prop clarity matter more than volume for activation outcomes.`, type: "neutral" },
+    { text: `The 7.11pp gap between RP1 and Opening Fee indicates product-level UX and value-prop clarity matter more than volume for activation outcomes.`, type: "neutral" },
   ], [p]);
 
   const deliveryToActivationInsights = useMemo<ChartInsight[]>(() => [
@@ -169,185 +205,207 @@ export default function ActivationPage() {
 
   return (
     <div className="space-y-6">
+      <PrintStyles />
       <ActiveFiltersBanner />
 
-      {/* KPI row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard
-          metricKey="act_activation_rate"
-          label="Activation (1st Txn ≤7d of Approval)"
-          value={applyFilterToMetric(scaleMetricValue(65.2, period, true), filters, true)}
-          prevValue={applyFilterToMetric(scaleMetricValue(63.4, period, true), filters, true)}
-          unit="percent"
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          sparklineData={periodActivationRate.map((d) => d.rate)}
-          target={70}
-          onRefresh={handleRefresh}
+      {/* KPI row — Activation summary MetricCards */}
+      {kpiSummary ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <MetricCard
+            metricKey="activation-rate"
+            label="Latest Activation Rate"
+            value={kpiSummary.latestRate}
+            prevValue={kpiSummary.prevRate}
+            unit="percent"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            target={70}
+            liveData
+          />
+          <MetricCard
+            metricKey="overall-activation-rate"
+            label="Overall Activation Rate"
+            value={kpiSummary.overallRate}
+            unit="percent"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            target={70}
+            liveData
+          />
+          <MetricCard
+            metricKey="total-approved"
+            label="Total Approved"
+            value={kpiSummary.totalApproved}
+            unit="count"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            liveData
+          />
+          <MetricCard
+            metricKey="total-activated"
+            label="Total Activated"
+            value={kpiSummary.totalActivated}
+            unit="count"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            liveData
+          />
+        </div>
+      ) : isLoading ? (
+        <MetricCardsSkeleton />
+      ) : (
+        <SampleDataBanner
+          dataset="mart_finexus"
+          reason="Activation KPIs require financial_account_updates (DW004) and authorized_transaction (DW007)"
         />
-        <MetricCard
-          metricKey="act_cards_activated"
-          label="Cards Activated"
-          value={applyFilterToMetric(scaleMetricValue(3100, period, false, timeRangeMultiplier), filters, false)}
-          prevValue={applyFilterToMetric(scaleMetricValue(2850, period, false, timeRangeMultiplier), filters, false)}
-          unit="count"
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          onRefresh={handleRefresh}
-        />
-        <MetricCard
-          metricKey="act_avg_days"
-          label="Avg Days to First Txn"
-          value={applyFilterToMetric(4.5, filters, false)}
-          prevValue={applyFilterToMetric(4.8, filters, false)}
-          unit="count"
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          higherIsBetter={false}
-          onRefresh={handleRefresh}
-        />
-        <MetricCard
-          metricKey="act_dormant_30d"
-          label="Dormant 30d+"
-          value={applyFilterToMetric(scaleMetricValue(14.1, period, true), filters, true)}
-          prevValue={applyFilterToMetric(scaleMetricValue(15.2, period, true), filters, true)}
-          unit="percent"
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          higherIsBetter={false}
-          onRefresh={handleRefresh}
-        />
-      </div>
+      )}
 
       {/* Hero chart */}
-      <ChartCard
-        title="New Customer Activation Rate"
-        subtitle="% making first purchase within 7 days of approval"
-        asOf={AS_OF}
-        dataRange={DATA_RANGE}
-        onRefresh={handleRefresh}
-      >
-        <DashboardLineChart
-          data={periodActivationRate}
-          lines={[{ key: "rate", color: "#22c55e", label: "Activation Rate %" }]}
-          valueType="percent"
-          height={300}
+      {periodActivationRate ? (
+        <ChartCard
+          title="New Customer Activation Rate"
+          subtitle="% making first purchase within 7 days of approval"
+          asOf={AS_OF}
+          dataRange={DATA_RANGE}
+          onRefresh={handleRefresh}
+          liveData={activationIsLive}
+          showIncrement
+        >
+          {(increment: ChartIncrement) => (
+            <>
+              <DashboardLineChart
+                data={aggregateByIncrement(periodActivationRate, increment, "date")}
+                lines={[{ key: "rate", color: "#22c55e", label: "Activation Rate %" }]}
+                valueType="percent"
+                height={300}
+              />
+              <ChartInsights insights={activationRateInsights} />
+            </>
+          )}
+        </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
+      ) : (
+        <SampleDataBanner
+          dataset="mart_finexus"
+          reason="Activation rate trend requires financial_account_updates (DW004) and authorized_transaction (DW007)"
         />
-        <ChartInsights insights={activationRateInsights} />
-      </ChartCard>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ChartCard
-          title="Avg Days to First Transaction"
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          onRefresh={handleRefresh}
-        >
-          <DashboardLineChart
-            data={periodAvgDays}
-            lines={[{ key: "days", color: "#f59e0b", label: "Avg Days" }]}
-            height={280}
+        {daysDistTrend ? (
+          <ChartCard
+            title="Activation Timeline Trend"
+            subtitle="% of approved users activating within each time bucket — weekly trend"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            liveData={true}
+            showIncrement
+          >
+            {(increment: ChartIncrement) => (
+              <>
+                <DashboardLineChart
+                  data={aggregateByIncrement(daysDistTrend, increment, "date")}
+                  lines={[
+                    { key: "Within 7d", color: "#22c55e", label: "Within 7 Days" },
+                    { key: "0-1 days", color: "#3b82f6", label: "0-1 Days" },
+                    { key: "2-3 days", color: "#8b5cf6", label: "2-3 Days" },
+                    { key: "4-7 days", color: "#f59e0b", label: "4-7 Days" },
+                  ]}
+                  xAxisKey="date"
+                  valueType="percent"
+                  height={280}
+                />
+                <ChartInsights insights={deliveryToActivationInsights} />
+              </>
+            )}
+          </ChartCard>
+        ) : isLoading ? (
+          <ChartSkeleton />
+        ) : (
+          <SampleDataBanner
+            dataset="mart_finexus"
+            reason="Activation timeline requires financial_account_updates (DW004)"
           />
-          <ChartInsights insights={avgDaysInsights} />
-        </ChartCard>
+        )}
 
+        {productRateTrend ? (
+          <ChartCard
+            title="Activation Rate by Product Type"
+            subtitle="7-day activation rate (%) per product — weekly trend"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            liveData={true}
+            showIncrement
+          >
+            {(increment: ChartIncrement) => (
+              <>
+                <DashboardLineChart
+                  data={aggregateByIncrement(productRateTrend, increment, "date")}
+                  lines={[
+                    { key: "Standard CC", color: "#3b82f6", label: "Standard CC" },
+                    { key: "RP1", color: "#22c55e", label: "RP1" },
+                    { key: "Opening Fee", color: "#f59e0b", label: "Opening Fee" },
+                  ]}
+                  xAxisKey="date"
+                  valueType="percent"
+                  height={280}
+                />
+                <ChartInsights insights={activationByProductInsights} />
+              </>
+            )}
+          </ChartCard>
+        ) : isLoading ? (
+          <ChartSkeleton />
+        ) : (
+          <SampleDataBanner
+            dataset="mart_finexus"
+            reason="Activation by product requires financial_account_updates (DW004)"
+          />
+        )}
+      </div>
+
+      {/* Dormancy Analysis — from DW004 */}
+      {dormancyAnalysis ? (
         <ChartCard
           title="Dormancy Analysis"
-          subtitle="% of accounts with no transaction by period"
+          subtitle="Account status distribution by DPD bucket"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
           onRefresh={handleRefresh}
+          liveData
         >
           <DashboardBarChart
-            data={periodDormancy}
-            bars={[{ key: "percent", color: "#ef4444", label: "% Dormant" }]}
+            data={dormancyAnalysis.map((r: { bucket: string; accounts: number }) => ({
+              bucket: r.bucket,
+              accounts: r.accounts,
+            }))}
+            bars={[{ key: "accounts", color: "#f59e0b", label: "Accounts" }]}
             xAxisKey="bucket"
             height={280}
           />
           <ChartInsights insights={dormancyInsights} />
         </ChartCard>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ChartCard
-          title="Activation by Product Type"
-          subtitle="Activated vs total by product"
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          onRefresh={handleRefresh}
-        >
-          <DashboardBarChart
-            data={periodActivationByProduct}
-            bars={[
-              { key: "total", color: "#475569", label: "Total" },
-              { key: "activated", color: "#22c55e", label: "Activated" },
-            ]}
-            xAxisKey="product"
-            height={280}
-          />
-          <ChartInsights insights={activationByProductInsights} />
-        </ChartCard>
-
-        <ChartCard
-          title="Card Delivery to Activation Timeline"
-          subtitle="Distribution of days from delivery to first transaction"
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          onRefresh={handleRefresh}
-        >
-          <DashboardBarChart
-            data={periodDeliveryToActivation}
-            bars={[{ key: "count", color: "#8b5cf6", label: "Accounts" }]}
-            xAxisKey="days"
-            height={280}
-          />
-          <ChartInsights insights={deliveryToActivationInsights} />
-        </ChartCard>
-      </div>
+      ) : isLoading ? (
+        <ChartSkeleton />
+      ) : (
+        <SampleDataBanner
+          dataset="mart_finexus"
+          reason="Dormancy analysis requires financial_account_updates (DW004)"
+        />
+      )}
 
       {/* Revolving Rate — blocked by mart_finance */}
       <SampleDataBanner
         dataset="mart_finance"
         reason="Revolving rate data requires mart_finance access for balance and minimum due calculations"
-      >
-        <ChartCard
-          title="Revolving Rate Trend"
-          subtitle="% of accounts revolving (paying less than full statement balance)"
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          onRefresh={handleRefresh}
-        >
-          <DashboardLineChart
-            data={revolvingRateTrend}
-            lines={[{ key: "rate", color: "#ef4444", label: "Revolving Rate %" }]}
-            valueType="percent"
-            height={300}
-          />
-          <ChartInsights insights={revolvingRateInsights} />
-        </ChartCard>
-      </SampleDataBanner>
+      />
 
       {/* Monthly Income Distribution — blocked by Credit Bureau + mart_finance */}
       <SampleDataBanner
         dataset="Credit Bureau + mart_finance"
         reason="Customer income data requires credit bureau integration and mart_finance access"
-      >
-        <ChartCard
-          title="Monthly Income Distribution"
-          subtitle="Activated customer income brackets (avg $560–$1,204)"
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          onRefresh={handleRefresh}
-        >
-          <DashboardBarChart
-            data={monthlyIncomeDistribution}
-            bars={[{ key: "count", color: "#6366f1", label: "Customers" }]}
-            xAxisKey="bucket"
-            height={300}
-          />
-          <ChartInsights insights={monthlyIncomeInsights} />
-        </ChartCard>
-      </SampleDataBanner>
+      />
 
       <ActionItems section="Activation" items={actionItems} />
     </div>

@@ -129,9 +129,10 @@ export function SearchStateProvider({ children }: { children: ReactNode }) {
       // Don't duplicate
       if (prev.some((u) => u.user_id === userId)) return prev;
 
-      const label = result.loc_acct
-        ? `LOC ${result.loc_acct}`
-        : userId.slice(-8);
+      // Show truncated user_id (first 8 chars + "…") for aesthetics
+      const label = userId.length > 12
+        ? `${userId.slice(0, 8)}…`
+        : userId;
 
       const next = [
         { user_id: userId, label, savedAt: Date.now() },

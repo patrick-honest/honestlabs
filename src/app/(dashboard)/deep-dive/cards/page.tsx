@@ -1,271 +1,263 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import useSWR from "swr";
-import { MetricCard } from "@/components/dashboard/metric-card";
-import { ChartCard } from "@/components/dashboard/chart-card";
-import { DashboardBarChart } from "@/components/charts/bar-chart";
 import { usePeriod } from "@/hooks/use-period";
-import { useFilters } from "@/hooks/use-filters";
-import { useTheme } from "@/hooks/use-theme";
+import { useApiParams } from "@/hooks/use-api-params";
 import { getPeriodRange } from "@/lib/period-data";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
+import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
+import { ChartSkeleton, MetricCardsSkeleton } from "@/components/dashboard/chart-skeleton";
+import { ChartCard } from "@/components/dashboard/chart-card";
+import { MetricCard } from "@/components/dashboard/metric-card";
+import { DashboardBarChart } from "@/components/charts/bar-chart";
+import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
+
+import { PrintStyles } from "@/components/layout/print-styles";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
-// ---------------------------------------------------------------------------
-// Mock fallback data
-// ---------------------------------------------------------------------------
+const AS_OF = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
-const MOCK_CARD_STATUS = [
-  { card_status: "Active", accounts: 271000 },
-  { card_status: "WR", accounts: 73000 },
-  { card_status: "CC", accounts: 28000 },
-  { card_status: "OR", accounts: 28000 },
-  { card_status: "VE", accounts: 3200 },
+const actionItems: ActionItem[] = [
+  {
+    id: "cards-1",
+    priority: "positive",
+    action: "Mastercard dominates card program distribution.",
+    detail: "Review if Visa co-brand partnerships could diversify the portfolio and reduce network concentration risk.",
+  },
+  {
+    id: "cards-2",
+    priority: "monitor",
+    action: "Verification rate to be monitored.",
+    detail: "Track the ratio of video-verified vs not-verified accounts to ensure compliance targets are met.",
+  },
+  {
+    id: "cards-3",
+    priority: "urgent",
+    action: "Inactive/blocked card statuses need follow-up.",
+    detail: "Accounts with non-active statuses may represent churn risk or operational issues. Investigate root causes.",
+  },
 ];
-
-const MOCK_BRAND_SPLIT = [
-  { brand: "MC", accounts: 304000 },
-  { brand: "VS", accounts: 101000 },
-];
-
-const MOCK_CARD_PROGRAMS = [
-  { card_pgm: "PGM-001", brand: "MC", accounts: 180000 },
-  { card_pgm: "PGM-002", brand: "MC", accounts: 78000 },
-  { card_pgm: "PGM-003", brand: "VS", accounts: 62000 },
-  { card_pgm: "PGM-004", brand: "MC", accounts: 46000 },
-  { card_pgm: "PGM-005", brand: "VS", accounts: 39000 },
-];
-
-const MOCK_PRODUCT_TYPE = [
-  { product_type: "RP1", users: 297000 },
-  { product_type: "Regular", users: 119000 },
-  { product_type: "AOF", users: 61000 },
-  { product_type: "Salvage", users: 38000 },
-];
-
-const MOCK_VERIFICATION = [
-  { reason: "DECISION_TO_SKIP", users: 188000 },
-  { reason: "VIDEO_VERIFIED", users: 145000 },
-];
-
-const MOCK_AUTO_ACTIVATION = 360000;
-
-// ---------------------------------------------------------------------------
-// Page
-// ---------------------------------------------------------------------------
 
 export default function CardsOverviewPage() {
-  const { period, dateRange } = usePeriod();
-  const { isDark } = useTheme();
-  const { filters } = useFilters();
+  const { period } = usePeriod();
+  const { apiParams } = useApiParams();
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
 
-  const endStr = dateRange.end.toISOString().slice(0, 10);
-  const { data: apiData } = useSWR(
-    `/api/cards-overview?startDate=2025-01-01&endDate=${endStr}`,
+  const { data: apiData, isLoading } = useSWR(
+    `/api/cards-overview?${apiParams}`,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 300_000 },
   );
 
-  // -----------------------------------------------------------------------
-  // Resolve live vs mock data
-  // -----------------------------------------------------------------------
+  const handleRefresh = useCallback(async () => {
+    await new Promise((r) => setTimeout(r, 800));
+  }, []);
+
+  // ── Derived data ──
 
   const cardStatusData = useMemo(() => {
-    if (!apiData?.cardStatusDistribution?.length) return MOCK_CARD_STATUS;
-    // Aggregate across brands for the status chart
-    const map = new Map<string, number>();
-    for (const row of apiData.cardStatusDistribution) {
-      const status = row.card_status ?? "Active";
-      map.set(status, (map.get(status) ?? 0) + Number(row.accounts));
-    }
-    return Array.from(map.entries())
-      .map(([card_status, accounts]) => ({ card_status, accounts }))
-      .sort((a, b) => b.accounts - a.accounts);
-  }, [apiData]);
-
-  const brandSplitData = useMemo(() => {
-    if (!apiData?.cardBrandSplit?.length) return MOCK_BRAND_SPLIT;
-    return apiData.cardBrandSplit.map((r: { brand: string; accounts: number }) => ({
-      brand: r.brand,
-      accounts: Number(r.accounts),
-    }));
+    if (!apiData?.cardStatusBreakdown) return null;
+    return apiData.cardStatusBreakdown as { status: string; accounts: number }[];
   }, [apiData]);
 
   const cardProgramData = useMemo(() => {
-    if (!apiData?.cardProgramDistribution?.length) return MOCK_CARD_PROGRAMS;
-    return apiData.cardProgramDistribution
-      .slice(0, 10)
-      .map((r: { card_pgm: string; brand: string; accounts: number }) => ({
-        card_pgm: r.card_pgm,
-        brand: r.brand,
-        accounts: Number(r.accounts),
-      }));
-  }, [apiData]);
-
-  const productTypeData = useMemo(() => {
-    if (!apiData?.productTypeSplit?.length) return MOCK_PRODUCT_TYPE;
-    return apiData.productTypeSplit.map((r: { product_type: string; users: number }) => ({
-      product_type: r.product_type,
-      users: Number(r.users),
-    }));
+    if (!apiData?.cardProgramBreakdown) return null;
+    return apiData.cardProgramBreakdown as { card_pgm: string; brand: string; accounts: number }[];
   }, [apiData]);
 
   const verificationData = useMemo(() => {
-    if (!apiData?.verificationSplit?.length) return MOCK_VERIFICATION;
-    return apiData.verificationSplit.map((r: { reason: string; users: number }) => ({
-      reason: r.reason === "VIDEO_VERIFIED" ? "Video Verified" : r.reason === "DECISION_TO_SKIP" ? "Decision to Skip" : r.reason,
-      users: Number(r.users),
-    }));
+    if (!apiData?.verificationBreakdown) return null;
+    return apiData.verificationBreakdown as { verification: string; accounts: number }[];
   }, [apiData]);
 
-  const autoActivationCount = useMemo(() => {
-    if (apiData?.autoActivationCount != null) return Number(apiData.autoActivationCount);
-    return MOCK_AUTO_ACTIVATION;
-  }, [apiData]);
-
-  // -----------------------------------------------------------------------
-  // KPI values
-  // -----------------------------------------------------------------------
+  // Brand split from card program data
+  const brandSplit = useMemo(() => {
+    if (!cardProgramData) return null;
+    const totals: Record<string, number> = {};
+    for (const row of cardProgramData) {
+      totals[row.brand] = (totals[row.brand] || 0) + row.accounts;
+    }
+    return Object.entries(totals).map(([brand, accounts]) => ({ brand, accounts }));
+  }, [cardProgramData]);
 
   const totalCards = useMemo(() => {
-    return brandSplitData.reduce((s: number, r: { accounts: number }) => s + r.accounts, 0);
-  }, [brandSplitData]);
+    if (!cardStatusData) return 0;
+    return cardStatusData.reduce((sum, r) => sum + r.accounts, 0);
+  }, [cardStatusData]);
 
-  const mcCards = useMemo(() => {
-    const mc = brandSplitData.find((r: { brand: string }) => r.brand === "MC");
-    return mc ? mc.accounts : 0;
-  }, [brandSplitData]);
+  const brandTotal = useMemo(() => {
+    if (!brandSplit) return 0;
+    return brandSplit.reduce((sum, r) => sum + r.accounts, 0);
+  }, [brandSplit]);
 
-  const vsCards = useMemo(() => {
-    const vs = brandSplitData.find((r: { brand: string }) => r.brand === "VS");
-    return vs ? vs.accounts : 0;
-  }, [brandSplitData]);
+  const mcPct = useMemo(() => {
+    if (!brandSplit || brandTotal === 0) return 0;
+    const mc = brandSplit.find((b) => b.brand === "Mastercard");
+    return mc ? Math.round((mc.accounts / brandTotal) * 10000) / 100 : 0;
+  }, [brandSplit, brandTotal]);
 
-  const asOf = apiData?.asOf
-    ? new Date(apiData.asOf).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-    : "Mar 17, 2026";
+  const visaPct = useMemo(() => {
+    if (!brandSplit || brandTotal === 0) return 0;
+    const visa = brandSplit.find((b) => b.brand === "Visa");
+    return visa ? Math.round((visa.accounts / brandTotal) * 10000) / 100 : 0;
+  }, [brandSplit, brandTotal]);
+
+  const isLive = !!apiData?.cardStatusBreakdown;
 
   return (
     <div className="space-y-6">
+      <PrintStyles />
       <ActiveFiltersBanner />
 
-      {/* KPI row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard
-          metricKey="cards_total"
-          label="Total Cards"
-          value={totalCards}
-          unit="count"
-          asOf={asOf}
-          dataRange={DATA_RANGE}
+      {/* KPI Metric Cards */}
+      {isLive ? (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <MetricCard
+            metricKey="total-cards"
+            label="Total Cards"
+            value={totalCards}
+            unit="count"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            liveData
+          />
+          <MetricCard
+            metricKey="mc-pct"
+            label="Mastercard %"
+            value={mcPct}
+            unit="percent"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            liveData
+          />
+          <MetricCard
+            metricKey="visa-pct"
+            label="Visa %"
+            value={visaPct}
+            unit="percent"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            liveData
+          />
+        </div>
+      ) : isLoading ? (
+        <MetricCardsSkeleton />
+      ) : (
+        <SampleDataBanner
+          dataset="mart_finexus"
+          reason="Card KPIs require principal_card_updates (DW005)"
         />
-        <MetricCard
-          metricKey="cards_mc"
-          label="Mastercard"
-          value={mcCards}
-          unit="count"
-          asOf={asOf}
-          dataRange={DATA_RANGE}
-        />
-        <MetricCard
-          metricKey="cards_vs"
-          label="Visa"
-          value={vsCards}
-          unit="count"
-          asOf={asOf}
-          dataRange={DATA_RANGE}
-        />
-        <MetricCard
-          metricKey="cards_auto_activated"
-          label="Auto-Activated"
-          value={autoActivationCount}
-          unit="count"
-          asOf={asOf}
-          dataRange={DATA_RANGE}
-        />
-      </div>
+      )}
 
       {/* Card Status Distribution */}
-      <ChartCard
-        title="Card Status Distribution"
-        subtitle="Account count by card status code (latest DW005 snapshot)"
-        asOf={asOf}
-        dataRange={DATA_RANGE}
-      >
-        <DashboardBarChart
-          data={cardStatusData}
-          bars={[{ key: "accounts", color: isDark ? "#5B22FF" : "#D00083", label: "Accounts" }]}
-          xAxisKey="card_status"
-          height={300}
+      {cardStatusData ? (
+        <ChartCard
+          title="Card Status Distribution"
+          subtitle="Unique accounts by card status code"
+          asOf={AS_OF}
+          dataRange={DATA_RANGE}
+          onRefresh={handleRefresh}
+          liveData
+        >
+          <DashboardBarChart
+            data={cardStatusData}
+            bars={[{ key: "accounts", color: "#8b5cf6", label: "Accounts" }]}
+            xAxisKey="status"
+            height={300}
+          />
+        </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
+      ) : (
+        <SampleDataBanner
+          dataset="mart_finexus"
+          reason="Card status distribution requires principal_card_updates (DW005)"
         />
-      </ChartCard>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Card Brand Split */}
-        <ChartCard
-          title="Card Brand Split"
-          subtitle="Mastercard vs Visa account distribution"
-          asOf={asOf}
-          dataRange={DATA_RANGE}
-        >
-          <DashboardBarChart
-            data={brandSplitData}
-            bars={[{ key: "accounts", color: isDark ? "#06D6A0" : "#059669", label: "Accounts" }]}
-            xAxisKey="brand"
-            height={280}
+        {brandSplit ? (
+          <ChartCard
+            title="Card Brand Split"
+            subtitle="Mastercard vs Visa account distribution"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            onRefresh={handleRefresh}
+            liveData
+          >
+            <DashboardBarChart
+              data={brandSplit}
+              bars={[{ key: "accounts", color: "#22c55e", label: "Accounts" }]}
+              xAxisKey="brand"
+              height={280}
+            />
+          </ChartCard>
+        ) : isLoading ? (
+          <ChartSkeleton />
+        ) : (
+          <SampleDataBanner
+            dataset="mart_finexus"
+            reason="Brand split requires principal_card_updates (DW005)"
           />
-        </ChartCard>
+        )}
 
-        {/* Card Program Distribution */}
+        {/* Verification Breakdown */}
+        {verificationData ? (
+          <ChartCard
+            title="Verification Breakdown"
+            subtitle="Video Verified vs Not Verified accounts"
+            asOf={AS_OF}
+            dataRange={DATA_RANGE}
+            onRefresh={handleRefresh}
+            liveData
+          >
+            <DashboardBarChart
+              data={verificationData}
+              bars={[{ key: "accounts", color: "#f59e0b", label: "Accounts" }]}
+              xAxisKey="verification"
+              height={280}
+            />
+          </ChartCard>
+        ) : isLoading ? (
+          <ChartSkeleton />
+        ) : (
+          <SampleDataBanner
+            dataset="mart_finexus"
+            reason="Verification breakdown requires principal_card_updates (DW005)"
+          />
+        )}
+      </div>
+
+      {/* Card Program Distribution */}
+      {cardProgramData ? (
         <ChartCard
           title="Card Program Distribution"
-          subtitle="Top card programs by account count"
-          asOf={asOf}
+          subtitle="Account distribution by card program code and brand"
+          asOf={AS_OF}
           dataRange={DATA_RANGE}
+          onRefresh={handleRefresh}
+          liveData
         >
           <DashboardBarChart
             data={cardProgramData}
-            bars={[{ key: "accounts", color: isDark ? "#7C4DFF" : "#9333EA", label: "Accounts" }]}
+            bars={[{ key: "accounts", color: "#3b82f6", label: "Accounts" }]}
             xAxisKey="card_pgm"
-            height={280}
+            height={300}
           />
         </ChartCard>
-      </div>
+      ) : isLoading ? (
+        <ChartSkeleton />
+      ) : (
+        <SampleDataBanner
+          dataset="mart_finexus"
+          reason="Card program distribution requires principal_card_updates (DW005)"
+        />
+      )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Product Type Split */}
-        <ChartCard
-          title="Product Type Split"
-          subtitle="Approved applicants by product category"
-          asOf={asOf}
-          dataRange={DATA_RANGE}
-        >
-          <DashboardBarChart
-            data={productTypeData}
-            bars={[{ key: "users", color: isDark ? "#FFD166" : "#F5A623", label: "Users" }]}
-            xAxisKey="product_type"
-            height={280}
-          />
-        </ChartCard>
-
-        {/* Verification Method */}
-        <ChartCard
-          title="Verification Method Split"
-          subtitle="Video Verified vs Decision to Skip"
-          asOf={asOf}
-          dataRange={DATA_RANGE}
-        >
-          <DashboardBarChart
-            data={verificationData}
-            bars={[{ key: "users", color: isDark ? "#FF6B6B" : "#DC2626", label: "Users" }]}
-            xAxisKey="reason"
-            height={280}
-          />
-        </ChartCard>
-      </div>
+      <ActionItems section="Cards" items={actionItems} />
     </div>
   );
 }

@@ -9,15 +9,19 @@ import {
   ChevronDown, ChevronRight, LogOut, QrCode, MessageCircle,
   PanelLeftClose, PanelLeftOpen, ArrowLeftRight, ArrowDownCircle, Settings,
   ShieldCheck, Activity, Users, TrendingUp, Star, Target, BookOpen,
-  Fingerprint, Sprout, CreditCard,
+  CircleUser, Sprout, CreditCard,
   type LucideIcon,
 } from "lucide-react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { navigation, type NavItem } from "@/config/navigation";
 import { useTheme } from "@/hooks/use-theme";
+import { useCurrency } from "@/hooks/use-currency";
+import { useLanguage, type Locale } from "@/hooks/use-language";
 import { useSession, signOut } from "next-auth/react";
-import { IS_STATIC_EXPORT } from "@/lib/static-mode";
+import { IS_STATIC_EXPORT, setStaticAuthenticated } from "@/lib/static-mode";
+import { useTranslations } from "next-intl";
+import { Sun, Moon, Globe } from "lucide-react";
 
 const iconMap: Record<string, LucideIcon> = {
   // Top-level
@@ -26,7 +30,7 @@ const iconMap: Record<string, LucideIcon> = {
   // Deep dive children
   UserPlus, PieChart, Wallet, ShieldAlert, Zap, Scale, ArrowDownCircle,
   MessageCircle, ShieldCheck, Activity, Users, TrendingUp, Star,
-  Fingerprint, CreditCard,
+  CircleUser, CreditCard,
 };
 
 const MIN_WIDTH = 56;   // collapsed
@@ -40,10 +44,12 @@ function NavLinkExpanded({
   item,
   pathname,
   isDark,
+  tNav,
 }: {
   item: NavItem;
   pathname: string;
   isDark: boolean;
+  tNav: (key: string) => string;
 }) {
   const [expanded, setExpanded] = useState(
     item.children?.some((c) => pathname.startsWith(c.href)) ?? false
@@ -63,7 +69,7 @@ function NavLinkExpanded({
           )}
         >
           <Icon className="h-4 w-4 shrink-0" />
-          <span className="flex-1 text-left truncate">{item.label}</span>
+          <span className="flex-1 text-left truncate">{item.tKey ? tNav(item.tKey) : item.label}</span>
           {expanded ? (
             <ChevronDown className="h-4 w-4 shrink-0" />
           ) : (
@@ -94,7 +100,7 @@ function NavLinkExpanded({
                   )}
                 >
                   <ChildIcon className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">{child.label}</span>
+                  <span className="truncate">{child.tKey ? tNav(child.tKey) : child.label}</span>
                 </Link>
               );
             })}
@@ -117,7 +123,7 @@ function NavLinkExpanded({
       )}
     >
       <Icon className="h-4 w-4 shrink-0" />
-      <span className="truncate">{item.label}</span>
+      <span className="truncate">{item.tKey ? tNav(item.tKey) : item.label}</span>
     </Link>
   );
 }
@@ -127,10 +133,12 @@ function NavLinkExpanded({
 function NavLinkCollapsed({
   item,
   pathname,
+  tNav,
   isDark,
 }: {
   item: NavItem;
   pathname: string;
+  tNav: (key: string) => string;
   isDark: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
@@ -185,7 +193,7 @@ function NavLinkCollapsed({
 
       {/* Hover flyout — uses fixed positioning to escape stacking context */}
       {hovered && (
-        <FlyoutPortal item={item} isDark={isDark} isActive={!!isActive} pathname={pathname} onEnter={handleEnter} onLeave={handleLeave} />
+        <FlyoutPortal item={item} isDark={isDark} isActive={!!isActive} pathname={pathname} onEnter={handleEnter} onLeave={handleLeave} tNav={tNav} />
       )}
     </div>
   );
@@ -199,12 +207,14 @@ function FlyoutPortal({
   pathname,
   onEnter,
   onLeave,
+  tNav,
 }: {
   item: NavItem;
   isDark: boolean;
   isActive: boolean;
   pathname: string;
   onEnter: () => void;
+  tNav: (key: string) => string;
   onLeave: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -253,12 +263,12 @@ function FlyoutPortal({
                 : "text-[var(--text-primary)] hover:bg-[var(--surface-elevated)]"
             )}
           >
-            {item.label}
+            {item.tKey ? tNav(item.tKey) : item.label}
           </Link>
         ) : (
           <>
             <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-              {item.label}
+              {item.tKey ? tNav(item.tKey) : item.label}
             </div>
             {item.children!.map((child) => {
               const ChildIcon = iconMap[child.icon] ?? BarChart3;
@@ -277,7 +287,7 @@ function FlyoutPortal({
                   )}
                 >
                   <ChildIcon className="h-3.5 w-3.5 shrink-0" />
-                  <span>{child.label}</span>
+                  <span>{child.tKey ? tNav(child.tKey) : child.label}</span>
                 </Link>
               );
             })}
@@ -292,7 +302,10 @@ function FlyoutPortal({
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { isDark } = useTheme();
+  const { isDark, toggleTheme } = useTheme();
+  const { currency, toggleCurrency } = useCurrency();
+  const { locale, setLocale, localeLabels } = useLanguage();
+  const tNav = useTranslations("nav");
   const { data: session } = useSession();
   const userName = session?.user?.name || "User";
   const userEmail = session?.user?.email || "";
@@ -394,10 +407,10 @@ export function Sidebar() {
               "-mt-0.5 text-[11px] font-semibold tracking-wide",
               isDark ? "text-[var(--text-secondary)]" : "text-[var(--text-secondary)]"
             )}>
-              Business Reviews
+              {tNav("businessReviews")}
             </span>
             <p className="text-[8px] font-medium tracking-wider text-[var(--text-muted)] opacity-50">
-              by claudetrick
+              {tNav("byClaudetrick")}
             </p>
           </div>
         )}
@@ -415,7 +428,7 @@ export function Sidebar() {
                     "text-[9px] font-bold uppercase tracking-[0.15em]",
                     isDark ? "text-[var(--text-muted)]/50" : "text-[var(--text-muted)]/60"
                   )}>
-                    {item.divider}
+                    {item.dividerTKey ? tNav(item.dividerTKey) : item.divider}
                   </span>
                 </div>
               )}
@@ -423,6 +436,7 @@ export function Sidebar() {
                 <NavLinkCollapsed
                   item={item}
                   pathname={pathname}
+                  tNav={tNav}
                   isDark={isDark}
                 />
               ) : (
@@ -430,6 +444,7 @@ export function Sidebar() {
                   item={item}
                   pathname={pathname}
                   isDark={isDark}
+                  tNav={tNav}
                 />
               )}
             </div>
@@ -444,24 +459,86 @@ export function Sidebar() {
           isDark ? "border-[var(--border)]" : "border-[var(--border)]"
         )}
       >
-        {/* Collapse toggle */}
-        <div className={cn("px-3 pt-2", collapsed && "flex justify-center px-2")}>
+        {/* Collapse + Settings toggles — all on one row, uniform h-7 */}
+        <div className={cn(
+          "flex items-center gap-1 px-3 py-2",
+          collapsed && "flex-col px-2"
+        )}>
+          {/* Language */}
+          {!collapsed ? (
+            <div className="relative">
+              <select
+                value={locale}
+                onChange={(e) => setLocale(e.target.value as Locale)}
+                className={cn(
+                  "appearance-none h-7 rounded-md border px-1.5 pr-5 text-[10px] font-medium cursor-pointer outline-none transition-colors",
+                  "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]"
+                )}
+              >
+                {(Object.entries(localeLabels) as [Locale, string][]).map(([val, label]) => (
+                  <option key={val} value={val}>{label}</option>
+                ))}
+              </select>
+              <Globe className="pointer-events-none absolute right-1 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-[var(--text-muted)]" />
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                const locales: Locale[] = ["en", "id", "ja"];
+                const next = locales[(locales.indexOf(locale) + 1) % locales.length];
+                setLocale(next);
+              }}
+              className="flex h-7 w-7 items-center justify-center rounded-md transition-colors text-[9px] font-bold bg-[var(--surface-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+              title={`Language: ${localeLabels[locale]}`}
+            >
+              {localeLabels[locale]}
+            </button>
+          )}
+
+          {/* Currency */}
+          <button
+            onClick={toggleCurrency}
+            className={cn(
+              "flex h-7 items-center gap-0.5 rounded-md px-2 text-[11px] font-medium transition-colors",
+              "bg-[var(--surface-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
+              collapsed && "w-7 justify-center px-0"
+            )}
+            title="Toggle currency"
+          >
+            <span className={cn(currency === "IDR" && (isDark ? "text-[#7C4DFF] font-bold" : "text-[#D00083] font-bold"))}>
+              {collapsed ? "$" : "IDR"}
+            </span>
+            {!collapsed && <span className="text-[var(--border)]">/</span>}
+            {!collapsed && (
+              <span className={cn(currency === "USD" && (isDark ? "text-[#7C4DFF] font-bold" : "text-[#D00083] font-bold"))}>USD</span>
+            )}
+          </button>
+
+          {/* Theme */}
+          <button
+            onClick={toggleTheme}
+            className={cn(
+              "flex h-7 w-7 items-center justify-center rounded-md transition-colors shrink-0",
+              isDark
+                ? "bg-[var(--surface-elevated)] text-[#FFD166] hover:bg-[#2D2955]"
+                : "bg-[#F0D9F7]/50 text-[#D00083] hover:bg-[#F0D9F7]"
+            )}
+            aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {isDark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+          </button>
+
+          {/* Collapse — right-justified */}
           <button
             onClick={toggleCollapse}
             className={cn(
-              "flex items-center gap-2 rounded-lg py-1.5 text-xs font-medium text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]",
-              collapsed ? "justify-center w-9 h-9 px-0" : "w-full px-3"
+              "flex h-7 w-7 items-center justify-center rounded-md transition-colors shrink-0",
+              "text-[var(--text-muted)] hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]",
+              !collapsed && "ml-auto"
             )}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            {collapsed ? (
-              <PanelLeftOpen className="h-4 w-4 shrink-0" />
-            ) : (
-              <>
-                <PanelLeftClose className="h-4 w-4 shrink-0" />
-                <span>Collapse</span>
-              </>
-            )}
+            {collapsed ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
           </button>
         </div>
 
@@ -498,11 +575,18 @@ export function Sidebar() {
                 </div>
               </div>
               <button
-                onClick={() => { if (!IS_STATIC_EXPORT) signOut({ callbackUrl: "/login" }); }}
+                onClick={() => {
+                  if (IS_STATIC_EXPORT) {
+                    setStaticAuthenticated(false);
+                    window.location.href = "/login/";
+                  } else {
+                    signOut({ callbackUrl: "/login" });
+                  }
+                }}
                 className="mt-2 flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]"
               >
                 <LogOut className="h-4 w-4" />
-                <span>Sign out</span>
+                <span>{tNav("signOut")}</span>
               </button>
             </>
           )}

@@ -8,6 +8,7 @@ import {
 } from "recharts";
 import { cn } from "@/lib/utils";
 import { formatNumber, formatPercent, formatCurrency } from "@/lib/utils";
+import { useTranslations } from "next-intl";
 import { useCurrency } from "@/hooks/use-currency";
 import type { KpiMetric } from "@/types/reports";
 
@@ -33,6 +34,7 @@ function formatValue(value: number, unit: KpiMetric["unit"], currency: "IDR" | "
 
 export function KpiCard({ kpi, sparklineData }: KpiCardProps) {
   const { currency } = useCurrency();
+  const tMetrics = useTranslations("metrics");
   const { label, value, unit, changePercent, direction } = kpi;
 
   const DirectionIcon =
@@ -77,7 +79,7 @@ export function KpiCard({ kpi, sparklineData }: KpiCardProps) {
       {changePercent !== null && (
         <div className={cn("mt-1 flex items-center gap-1 text-xs font-medium", changeColor)}>
           <DirectionIcon className="h-3 w-3" />
-          <span>{Math.abs(changePercent).toFixed(1)}% vs prev period</span>
+          <span>{Math.abs(changePercent).toFixed(1)}{tMetrics("vsPrevPeriod")}</span>
         </div>
       )}
     </div>

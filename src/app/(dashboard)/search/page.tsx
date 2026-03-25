@@ -4,52 +4,36 @@ import { Header } from "@/components/layout/header";
 import { UserSearchForm } from "@/components/search/user-search-form";
 import { UserInfoCard } from "@/components/search/user-info-card";
 import { useTheme } from "@/hooks/use-theme";
+import { useTranslations } from "next-intl";
 import { useSearchState } from "@/hooks/use-search-state";
-import { IS_STATIC_EXPORT } from "@/lib/static-mode";
 import { cn } from "@/lib/utils";
 import { AlertCircle, SearchX, Database, Clock, Bookmark, BookmarkPlus, X, User } from "lucide-react";
 
 export default function SearchPage() {
-  if (IS_STATIC_EXPORT) {
-    return (
-      <div className="flex flex-col">
-        <Header title="User Search" />
-        <div className="flex items-center justify-center min-h-[60vh] p-6">
-          <div className="max-w-md w-full text-center space-y-4">
-            <div className="mx-auto w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-              <Database className="w-8 h-8 text-amber-500" />
-            </div>
-            <h2 className="text-xl font-bold text-[var(--text-primary)]">Read-Only Mode</h2>
-            <p className="text-sm text-[var(--text-muted)]">
-              Live user search requires a BigQuery connection and is disabled in the public demo.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   const {
     result, loading, searched, error, meta, search,
     savedUsers, saveCurrentUser, removeSavedUser, loadSavedUser,
   } = useSearchState();
   const { isDark } = useTheme();
+  const tSearch = useTranslations("search");
+  const tForm = useTranslations("searchForm");
+  const tAuth = useTranslations("auth");
 
   const isCurrentSaved = result ? savedUsers.some((u) => u.user_id === result.user_id) : false;
 
   return (
     <div className="flex flex-col">
-      <Header title="User Search" />
+      <Header title={tSearch("title")} />
 
       <div className="flex-1 space-y-6 p-6">
         <div>
-          <h2 className="text-2xl font-bold text-[var(--text-primary)]">User Search</h2>
+          <h2 className="text-2xl font-bold text-[var(--text-primary)]">{tSearch("title")}</h2>
           <p className="mt-1 text-sm text-[var(--text-muted)]">
-            Look up a cardholder by ID, URN, CRN, LOC, or application ID
+            {tSearch("subtitle")}
           </p>
           <div className="mt-2 flex items-center gap-1.5 text-[10px] text-[var(--text-muted)]">
             <AlertCircle className="h-3 w-3" />
-            <span>Phone and email can be used for search but are never stored or displayed in results (PII protection)</span>
+            <span>{tSearch("piiNote")}</span>
           </div>
         </div>
 
@@ -63,7 +47,7 @@ export default function SearchPage() {
               isDark ? "text-[#7C4DFF]/60" : "text-[#D00083]/60"
             )}>
               <Bookmark className="h-3 w-3" />
-              Saved
+              {tForm("saved")}
             </span>
             {savedUsers.map((saved) => (
               <div
@@ -87,7 +71,7 @@ export default function SearchPage() {
                 <button
                   onClick={(e) => { e.stopPropagation(); removeSavedUser(saved.user_id); }}
                   className="opacity-0 group-hover:opacity-100 transition-opacity text-[var(--text-muted)] hover:text-[var(--danger)]"
-                  aria-label="Remove saved user"
+                  aria-label={tForm("removeSaved")}
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -130,7 +114,7 @@ export default function SearchPage() {
               </div>
             </div>
             <div className="flex justify-center pt-2">
-              <span className={cn("text-xs", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>Querying BigQuery...</span>
+              <span className={cn("text-xs", isDark ? "text-[#7C4DFF]" : "text-[#D00083]")}>{tForm("queryingBigQuery")}</span>
             </div>
           </div>
         )}
@@ -145,7 +129,7 @@ export default function SearchPage() {
               {error}
             </p>
             <p className="mt-1 text-xs text-[var(--text-muted)]">
-              Check the identifier and try again.
+              {tForm("checkAndRetry")}
             </p>
           </div>
         )}
@@ -182,12 +166,12 @@ export default function SearchPage() {
                   )}
                 >
                   <BookmarkPlus className="h-3.5 w-3.5" />
-                  <span>Save Result</span>
+                  <span>{tSearch("saveResult")}</span>
                 </button>
               ) : (
                 <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
                   <Bookmark className="h-3.5 w-3.5" />
-                  Saved
+                  {tForm("saved")}
                 </span>
               )}
             </div>

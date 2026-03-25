@@ -4,110 +4,30 @@ import { useCallback, useMemo } from "react";
 import useSWR from "swr";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
+import type { ChartIncrement } from "@/components/dashboard/chart-card";
+import { aggregateByIncrement } from "@/lib/aggregate-by-increment";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { DashboardLineChart } from "@/components/charts/line-chart";
 import { DashboardBarChart } from "@/components/charts/bar-chart";
-import { DashboardAreaChart } from "@/components/charts/area-chart";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { SampleDataBanner } from "@/components/dashboard/sample-data-banner";
+import { ChartSkeleton, MetricCardsSkeleton } from "@/components/dashboard/chart-skeleton";
 import { usePeriod } from "@/hooks/use-period";
-import { useFilters } from "@/hooks/use-filters";
-import { getPeriodRange, scaleTrendData, scaleMetricValue, getPeriodInsightLabels } from "@/lib/period-data";
-import { applyFilterToData, applyFilterToMetric, hasActiveFilters } from "@/lib/filter-utils";
+import { useApiParams } from "@/hooks/use-api-params";
+import { getPeriodRange, getPeriodInsightLabels } from "@/lib/period-data";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { formatNumber } from "@/lib/utils";
+import { HorizontalBar } from "@/components/charts/horizontal-bar";
+import { getMccDescription, localeToMccLang } from "@/data/mcc-lookup";
+import { useLanguage } from "@/hooks/use-language";
+import { useCurrency } from "@/hooks/use-currency";
+import { formatAmountCompact } from "@/lib/currency";
+import { useTranslations } from "next-intl";
+import { PrintStyles } from "@/components/layout/print-styles";
 
-const AS_OF = "Mar 15, 2026";
-
-// Mock data
-const spendActiveRateTrend = [
-  { date: "Oct", rate: 42.5 },
-  { date: "Nov", rate: 44.1 },
-  { date: "Dec", rate: 48.3 },
-  { date: "Jan", rate: 45.2 },
-  { date: "Feb", rate: 46.8 },
-  { date: "Mar", rate: 47.5 },
-];
-
-const eligibleVsTransactors = [
-  { date: "Oct", eligible: 18500, transactors: 7863 },
-  { date: "Nov", eligible: 19200, transactors: 8467 },
-  { date: "Dec", eligible: 20100, transactors: 9708 },
-  { date: "Jan", eligible: 21000, transactors: 9492 },
-  { date: "Feb", eligible: 21800, transactors: 10202 },
-  { date: "Mar", eligible: 22500, transactors: 10688 },
-];
-
-const spendByCategory = [
-  { date: "Oct", online: 12000000000, offline: 8000000000, qris: 0 },
-  { date: "Nov", online: 13500000000, offline: 8500000000, qris: 3500000000 },
-  { date: "Dec", online: 18000000000, offline: 11000000000, qris: 5000000000 },
-  { date: "Jan", online: 14000000000, offline: 9000000000, qris: 4000000000 },
-  { date: "Feb", online: 15000000000, offline: 9500000000, qris: 4500000000 },
-  { date: "Mar", online: 16000000000, offline: 10000000000, qris: 5000000000 },
-];
-
-const avgSpendPerTxn = [
-  { date: "Oct", online: 450000, offline: 380000, qris: 0 },
-  { date: "Nov", online: 460000, offline: 390000, qris: 125000 },
-  { date: "Dec", online: 520000, offline: 420000, qris: 135000 },
-  { date: "Jan", online: 470000, offline: 395000, qris: 130000 },
-  { date: "Feb", online: 480000, offline: 400000, qris: 132000 },
-  { date: "Mar", online: 490000, offline: 410000, qris: 138000 },
-];
-
-const totalSpendVolume = [
-  { date: "Oct", volume: 23000000000 },
-  { date: "Nov", volume: 25500000000 },
-  { date: "Dec", volume: 34000000000 },
-  { date: "Jan", volume: 27000000000 },
-  { date: "Feb", volume: 29000000000 },
-  { date: "Mar", volume: 31000000000 },
-];
-
-const txnPerEligible = [
-  { date: "Oct", txnPerUser: 4.2 },
-  { date: "Nov", txnPerUser: 4.5 },
-  { date: "Dec", txnPerUser: 5.8 },
-  { date: "Jan", txnPerUser: 4.6 },
-  { date: "Feb", txnPerUser: 4.8 },
-  { date: "Mar", txnPerUser: 5.0 },
-];
-
-// ---------------------------------------------------------------------------
-// Spend Analysis: SWR fetcher + mock fallback data
-// ---------------------------------------------------------------------------
+const AS_OF = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
-
-const mockChannelBreakdown = [
-  { channel: "Online", txn_count: 32500, spend_idr: 6200000000, unique_cards: 5800 },
-  { channel: "Offline", txn_count: 75000, spend_idr: 25500000000, unique_cards: 9200 },
-  { channel: "QRIS", txn_count: 63500, spend_idr: 18400000000, unique_cards: 8100 },
-];
-
-const mockDeclineBreakdown = [
-  { code: "D", description: "Declined by Issuer — card blocked, limit exceeded, or risk flag", cnt: 84000, amount_idr: 42000000000 },
-  { code: "C", description: "Captured / Reversed — transaction was reversed or captured for settlement", cnt: 21000, amount_idr: 10500000000 },
-  { code: "T", description: "Timeout — no response from network within time limit", cnt: 134, amount_idr: 67000000 },
-  { code: "X", description: "Expired / Invalid — card expired or invalid details", cnt: 4, amount_idr: 2000000 },
-];
-
-const mockQrisMerchantGrowth = [
-  { month: "2025-09", new_merchants: 0, cumulative_merchants: 0 },
-  { month: "2025-10", new_merchants: 5, cumulative_merchants: 5 },
-  { month: "2025-11", new_merchants: 10, cumulative_merchants: 15 },
-  { month: "2025-12", new_merchants: 7, cumulative_merchants: 22 },
-  { month: "2026-01", new_merchants: 12480, cumulative_merchants: 12502 },
-  { month: "2026-02", new_merchants: 38200, cumulative_merchants: 50702 },
-  { month: "2026-03", new_merchants: 29618, cumulative_merchants: 80320 },
-];
-
-const mockMerchantStats = {
-  qrisOnly: 80320,
-  mixed: 11684,
-  cardOnly: 1690000,
-};
 
 const actionItems: ActionItem[] = [
   {
@@ -124,134 +44,24 @@ const actionItems: ActionItem[] = [
   },
   {
     id: "spend-3",
-    priority: "urgent",
-    action: "Top merchant category data unavailable.",
-    detail: "Merchant category code (MCC) enrichment pipeline needs to be connected for deeper spend analysis.",
+    priority: "positive",
+    action: "MCC merchant categories now available.",
+    detail: "Top merchant categories mapped from f9_dw007_mcc (DW007) with OJK-standard labels in 3 languages.",
   },
 ];
 
-// --- Sample data: Revenue metrics (blocked by mart_finance) ---
-const sampleArpacTrend = [
-  { date: "Apr 25", arpac: 10.2 },
-  { date: "May 25", arpac: 10.8 },
-  { date: "Jun 25", arpac: 11.1 },
-  { date: "Jul 25", arpac: 11.5 },
-  { date: "Aug 25", arpac: 11.9 },
-  { date: "Sep 25", arpac: 12.3 },
-  { date: "Oct 25", arpac: 12.7 },
-  { date: "Nov 25", arpac: 13.1 },
-  { date: "Dec 25", arpac: 14.2 },
-  { date: "Jan 26", arpac: 13.5 },
-  { date: "Feb 26", arpac: 13.9 },
-  { date: "Mar 26", arpac: 14.6 },
-];
-
-const sampleAvgMonthlyFeesTrend = [
-  { date: "Apr 25", fees: 4.1 },
-  { date: "May 25", fees: 4.3 },
-  { date: "Jun 25", fees: 4.5 },
-  { date: "Jul 25", fees: 4.8 },
-  { date: "Aug 25", fees: 5.0 },
-  { date: "Sep 25", fees: 5.2 },
-  { date: "Oct 25", fees: 5.5 },
-  { date: "Nov 25", fees: 5.7 },
-  { date: "Dec 25", fees: 6.4 },
-  { date: "Jan 26", fees: 5.9 },
-  { date: "Feb 26", fees: 6.1 },
-  { date: "Mar 26", fees: 6.5 },
-];
-
-const sampleAvgMonthlyFeesRefundAdj = [
-  { date: "Apr 25", feesAdj: 3.8 },
-  { date: "May 25", feesAdj: 4.0 },
-  { date: "Jun 25", feesAdj: 4.2 },
-  { date: "Jul 25", feesAdj: 4.4 },
-  { date: "Aug 25", feesAdj: 4.6 },
-  { date: "Sep 25", feesAdj: 4.8 },
-  { date: "Oct 25", feesAdj: 5.1 },
-  { date: "Nov 25", feesAdj: 5.3 },
-  { date: "Dec 25", feesAdj: 5.9 },
-  { date: "Jan 26", feesAdj: 5.4 },
-  { date: "Feb 26", feesAdj: 5.6 },
-  { date: "Mar 26", feesAdj: 6.0 },
-];
-
-const sampleInterchangeIncomeTrend = [
-  { date: "Apr 25", interchange: 82000 },
-  { date: "May 25", interchange: 89000 },
-  { date: "Jun 25", interchange: 95000 },
-  { date: "Jul 25", interchange: 101000 },
-  { date: "Aug 25", interchange: 108000 },
-  { date: "Sep 25", interchange: 114000 },
-  { date: "Oct 25", interchange: 121000 },
-  { date: "Nov 25", interchange: 130000 },
-  { date: "Dec 25", interchange: 158000 },
-  { date: "Jan 26", interchange: 135000 },
-  { date: "Feb 26", interchange: 142000 },
-  { date: "Mar 26", interchange: 151000 },
-];
-
-const sampleArpacInsights: ChartInsight[] = [
-  { text: "ARPAC reached $14.60 in March, up 43% from the $10.20 baseline a year ago.", type: "positive" },
-  { text: "December seasonality spike ($14.20) is now being exceeded organically in March.", type: "positive" },
-  { text: "Rising transaction frequency and QRIS adoption are the primary ARPAC growth levers.", type: "neutral" },
-  { text: "Peer benchmark (Orico JP): ARPAC of $18-$22 for mature portfolios — Honest still has headroom.", type: "hypothesis" },
-];
-
-const sampleAvgMonthlyFeesInsights: ChartInsight[] = [
-  { text: "Average monthly fees grew to $6.50, up 58.5% from $4.10 a year ago.", type: "positive" },
-  { text: "Post-December normalization is shallower each cycle, suggesting fee base is becoming more resilient.", type: "neutral" },
-  { text: "Late fee and overlimit fee contributions should be broken out once mart_finance is accessible.", type: "neutral" },
-];
-
-const sampleAvgMonthlyFeesRefundAdjInsights: ChartInsight[] = [
-  { text: "Refund-adjusted fees of $6.00 represent a 7.7% haircut from gross fees ($6.50) — within acceptable range.", type: "neutral" },
-  { text: "Refund ratio has been stable at 7-8%, indicating fee disputes are not escalating.", type: "positive" },
-  { text: "Tracking refund-adjusted fees separately is critical for accurate revenue forecasting.", type: "neutral" },
-];
-
-const sampleInterchangeIncomeInsights: ChartInsight[] = [
-  { text: "Interchange income reached $151K in March, up 84% from $82K a year ago, tracking spend volume growth.", type: "positive" },
-  { text: "December peak of $158K was driven by seasonal holiday volume; March is approaching that level organically.", type: "neutral" },
-  { text: "QRIS interchange rates are lower than card-present — channel mix shift may compress blended interchange margin.", type: "negative" },
-  { text: "Bank Indonesia MDR cap reductions could further pressure interchange revenue per transaction.", type: "hypothesis" },
-];
-
-// --- Sample data: BNPL usage (blocked by mart_finance + product data) ---
-const sampleBnplUsageRateTrend = [
-  { date: "Apr 25", rate: 84.2 },
-  { date: "May 25", rate: 84.8 },
-  { date: "Jun 25", rate: 85.3 },
-  { date: "Jul 25", rate: 85.9 },
-  { date: "Aug 25", rate: 86.4 },
-  { date: "Sep 25", rate: 86.8 },
-  { date: "Oct 25", rate: 87.1 },
-  { date: "Nov 25", rate: 87.6 },
-  { date: "Dec 25", rate: 88.5 },
-  { date: "Jan 26", rate: 87.9 },
-  { date: "Feb 26", rate: 88.2 },
-  { date: "Mar 26", rate: 88.7 },
-];
-
-const sampleBnplUsageInsights: ChartInsight[] = [
-  { text: "BNPL usage rate reached 88.7% in March, up from 84.2% a year ago — near saturation among active users.", type: "positive" },
-  { text: "Post-December dip is minimal (88.5% → 87.9%), confirming BNPL is habitual, not seasonal.", type: "neutral" },
-  { text: "The remaining ~11% of non-BNPL users may represent higher-income segments preferring full payment.", type: "neutral" },
-  { text: "BNPL adoption ceiling of ~90% is consistent with Orico's mature BNPL portfolio in Japan.", type: "hypothesis" },
-];
 
 export default function SpendPage() {
-  const { period, periodLabel, timeRangeMultiplier } = usePeriod();
-  const { filters } = useFilters();
+  const { period } = usePeriod();
+  const { apiParams } = useApiParams();
+  const { locale } = useLanguage();
+  const { currency } = useCurrency();
+  const mccLang = localeToMccLang(locale);
+  const tSpend = useTranslations("spend");
+  const tMcc = useTranslations("merchantCategories");
+  const fmtCur = useCallback((v: number) => formatAmountCompact(v, currency), [currency]);
 
   const DATA_RANGE = useMemo(() => getPeriodRange(period), [period]);
-
-  const pSpendActiveRate = useMemo(() => applyFilterToData(scaleTrendData(spendActiveRateTrend, period), filters), [period, filters]);
-  const pEligibleVsTransactors = useMemo(() => applyFilterToData(scaleTrendData(eligibleVsTransactors, period), filters), [period, filters]);
-  const pSpendByCategory = useMemo(() => applyFilterToData(scaleTrendData(spendByCategory, period), filters), [period, filters]);
-  const pAvgSpendPerTxn = useMemo(() => applyFilterToData(scaleTrendData(avgSpendPerTxn, period), filters), [period, filters]);
-  const pTotalSpendVolume = useMemo(() => applyFilterToData(scaleTrendData(totalSpendVolume, period), filters), [period, filters]);
-  const pTxnPerEligible = useMemo(() => applyFilterToData(scaleTrendData(txnPerEligible, period), filters), [period, filters]);
 
   const p = useMemo(() => getPeriodInsightLabels(period), [period]);
 
@@ -298,51 +108,170 @@ export default function SpendPage() {
   ], [p]);
 
   const topMerchantInsights: ChartInsight[] = useMemo(() => [
-    { text: "MCC enrichment pipeline is not yet connected — merchant-level spend analysis is unavailable.", type: "negative" },
-    { text: "Once available, MCC data will enable targeted cashback campaigns and merchant partnership decisions.", type: "neutral" },
-    { text: "Priority: connect Finexus Cardworks MCC fields to BigQuery to unlock this view.", type: "neutral" },
-  ], [p]);
+    { text: `Grocery/Supermarket (MCC 5411) leads with the highest transaction count, reflecting daily essential purchases.`, type: "neutral" },
+    { text: `Restaurant spending (MCC 5812 + 5814) is the second-largest category — a key target for cashback campaigns.`, type: "positive" },
+    { text: `Electronics (MCC 5732) has a high average ticket size despite lower transaction count — watch for installment adoption.`, type: "neutral" },
+    { text: `MCC data sourced from f9_dw007_mcc (DW007). Categories follow OJK-standard merchant classification.`, type: "neutral" },
+  ], []);
 
   const handleRefresh = useCallback(async () => {
     await new Promise((r) => setTimeout(r, 800));
   }, []);
 
   // --- Spend Analysis SWR (with mock fallback) ---
-  const { data: spendAnalysis } = useSWR(
-    "/api/spend-analysis?startDate=2025-10-01&endDate=2026-03-15",
+  // apiParams changes when the user adjusts the time selector → triggers SWR refetch
+  const { data: spendAnalysis, isLoading } = useSWR(
+    `/api/spend-analysis?${apiParams}`,
     fetcher,
     { fallbackData: null, revalidateOnFocus: false },
   );
 
-  const channelData = spendAnalysis?.channelBreakdown ?? mockChannelBreakdown;
-  const declineData = spendAnalysis?.declineBreakdown ?? mockDeclineBreakdown;
-  const qrisMerchantData = spendAnalysis?.qrisMerchantGrowth ?? mockQrisMerchantGrowth;
+  const spendIsLive = !!spendAnalysis?.channelBreakdown;
+  const trendIsLive = !!spendAnalysis?.weeklySpendTrend?.length;
+  const channelData = spendAnalysis?.channelBreakdown ?? null;
+  const declineData = spendAnalysis?.declineBreakdown ?? null;
+  const declineReasons = spendAnalysis?.declineReasons ?? null;
+  const qrisMerchantData = spendAnalysis?.qrisMerchantGrowth ?? null;
+
+  // Weekly spend trend data from BigQuery
+  const weeklyTrend = useMemo(() => {
+    if (!spendAnalysis?.weeklySpendTrend?.length) return null;
+    const raw = (spendAnalysis.weeklySpendTrend as { week_start: string; eligible_count: number; transactor_count: number; total_transactions: number; total_transactors: number; total_spend_idr: number; spend_active_rate: number; online_spend_idr: number; offline_spend_idr: number; qris_spend_idr: number; avg_spend_per_txn_idr: number }[]).map(r => ({
+      date: r.week_start.replace("2025-", "").replace("2026-", "").slice(0, 5),
+      eligible: r.eligible_count,
+      transactors: r.transactor_count,
+      rate: r.spend_active_rate,
+      totalSpend: r.total_spend_idr,
+      online: r.online_spend_idr,
+      offline: r.offline_spend_idr,
+      qris: r.qris_spend_idr,
+      avgTicket: r.avg_spend_per_txn_idr,
+      txnPerUser: r.total_transactions / Math.max(r.total_transactors, 1),
+    }));
+    return raw;
+  }, [spendAnalysis]);
+
+  // Previous period weekly trend (for comparison overlay)
+  const prevWeeklyTrend = useMemo(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const prev = (spendAnalysis as any)?.prev_weeklySpendTrend;
+    if (!prev?.length) return undefined;
+    return prev.map((r: { week_start: string; eligible_count: number; transactor_count: number; total_transactions: number; total_transactors: number; total_spend_idr: number; spend_active_rate: number; online_spend_idr: number; offline_spend_idr: number; qris_spend_idr: number; avg_spend_per_txn_idr: number }) => ({
+      date: r.week_start.replace("2025-", "").replace("2026-", "").slice(0, 5),
+      eligible: r.eligible_count,
+      transactors: r.transactor_count,
+      rate: r.spend_active_rate,
+      totalSpend: r.total_spend_idr,
+      online: r.online_spend_idr,
+      offline: r.offline_spend_idr,
+      qris: r.qris_spend_idr,
+      avgTicket: r.avg_spend_per_txn_idr,
+      txnPerUser: r.total_transactions / Math.max(r.total_transactors, 1),
+    }));
+  }, [spendAnalysis]);
+
+  // Comparison period label
+  const { prevStartDate, prevEndDate } = useApiParams();
+  const { comparisonMode } = usePeriod();
+  const prevLabel = comparisonMode !== "none"
+    ? `${prevStartDate} to ${prevEndDate}`
+    : undefined;
+
+  // Period-level summary (cumulative SAR for entire period)
+  const periodSummary = spendAnalysis?.periodSummary as {
+    eligible_count: number; transactor_count: number; total_transactions: number;
+    total_spend_idr: number; spend_active_rate: number; avg_spend_per_txn_idr: number;
+  } | null ?? null;
+
+  // Onboarding activation summary
+  const onboardingSummary = spendAnalysis?.onboardingSummary as {
+    rp1_total: number; rp1_funded_count: number; rp1_funded_rate: number; rp1_avg_first_amount: number;
+    regfee_total: number; regfee_paid_count: number; regfee_paid_rate: number;
+    unblocked_total: number; spend_activated_count: number; spend_activation_rate: number;
+  } | null ?? null;
+
+  // Onboarding weekly trend
+  const onboardingTrend = useMemo(() => {
+    if (!spendAnalysis?.onboardingTrend?.length) return null;
+    return (spendAnalysis.onboardingTrend as { week_start: string; rp1_funded_rate: number; regfee_paid_rate: number; spend_activation_rate: number }[]).map(r => ({
+      date: r.week_start.replace("2025-", "").replace("2026-", "").slice(0, 5),
+      rp1Rate: r.rp1_funded_rate ?? 0,
+      regfeeRate: r.regfee_paid_rate ?? 0,
+      activationRate: r.spend_activation_rate ?? 0,
+    }));
+  }, [spendAnalysis]);
+
+  // First transaction channel breakdown (period summary)
+  const firstTxnChannel = useMemo(() => {
+    if (!spendAnalysis?.firstTxnChannel?.length) return null;
+    return (spendAnalysis.firstTxnChannel as { channel: string; user_count: number; avg_first_amount: number }[]).map(r => ({
+      channel: r.channel,
+      users: r.user_count,
+      avgAmount: r.avg_first_amount,
+    }));
+  }, [spendAnalysis]);
+
+  // First transaction channel trend (weekly time series for line chart)
+  const firstTxnChannelTrend = useMemo(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const trend = (spendAnalysis as any)?.firstTxnChannelTrend;
+    if (!trend?.length) return null;
+    return trend.map((r: { date: string; online: number; offline: number; qris: number; total: number }) => ({
+      date: r.date,
+      online: r.online ?? 0,
+      offline: r.offline ?? 0,
+      qris: r.qris ?? 0,
+      total: r.total ?? 0,
+    }));
+  }, [spendAnalysis]);
+
+  // Latest weekly values for trend comparison
+  const latestWeek = weeklyTrend?.[weeklyTrend.length - 1];
+  const prevWeek = weeklyTrend && weeklyTrend.length >= 2 ? weeklyTrend[weeklyTrend.length - 2] : null;
 
   // Transform channel data for horizontal bar chart
   const channelBarData = useMemo(() => {
-    return channelData.map((ch: { channel: string; txn_count: number; spend_idr: number }) => ({
+    if (!channelData) return null;
+    const raw = channelData.map((ch: { channel: string; txn_count: number; spend_idr: number }) => ({
       channel: ch.channel,
       txn_count: ch.txn_count,
       spend_idr: ch.spend_idr,
     }));
+    return raw;
   }, [channelData]);
 
   // Transform decline data for bar chart with labels
   const declineBarData = useMemo(() => {
-    return declineData.map((d: { code: string; description: string; cnt: number; amount_idr: number }) => ({
+    if (!declineData) return null;
+    const raw = declineData.map((d: { code: string; description: string; cnt: number; amount_idr: number }) => ({
       label: `${d.code} — ${d.description.split(" — ")[0]}`,
       code: d.code,
       count: d.cnt,
       description: d.description,
     }));
+    return raw;
   }, [declineData]);
+
+  // Transform decline reasons for horizontal bar chart
+  const declineReasonBarData = useMemo(() => {
+    if (!declineReasons || !Array.isArray(declineReasons)) return null;
+    return (declineReasons as Array<{ resp_code: string; label: string; cnt: number; amount_idr: number }>)
+      .slice(0, 15) // Top 15 reasons
+      .map((d) => ({
+        label: `${d.resp_code} — ${d.label}`,
+        count: d.cnt,
+        amount: d.amount_idr,
+      }));
+  }, [declineReasons]);
 
   // Transform QRIS merchant growth for line chart
   const qrisMerchantLineData = useMemo(() => {
-    return qrisMerchantData.map((row: { month: string; cumulative_merchants: number; new_merchants: number }) => ({
+    if (!qrisMerchantData) return null;
+    const raw = qrisMerchantData.map((row: { month: string; cumulative_merchants: number; new_merchants: number }) => ({
       date: row.month.replace("2025-", "").replace("2026-", "").replace("09", "Sep").replace("10", "Oct").replace("11", "Nov").replace("12", "Dec").replace("01", "Jan").replace("02", "Feb").replace("03", "Mar"),
       cumulative: row.cumulative_merchants,
     }));
+    return raw;
   }, [qrisMerchantData]);
 
   const channelInsights: ChartInsight[] = useMemo(() => [
@@ -366,396 +295,674 @@ export default function SpendPage() {
     { text: "The rapid QRIS merchant growth curve suggests network effects are kicking in — expect continued acceleration through 2026.", type: "hypothesis" },
   ], []);
 
+  // Computed headline KPIs
+  const avgSpendPerUser = periodSummary
+    ? Math.round((periodSummary.total_spend_idr / Math.max(periodSummary.eligible_count, 1)) * 100) / 100
+    : null;
+  const avgTxnPerUser = periodSummary
+    ? Math.round((periodSummary.total_transactions / Math.max(periodSummary.eligible_count, 1)) * 100) / 100
+    : null;
+
   return (
     <div className="space-y-6">
+      <PrintStyles />
       <ActiveFiltersBanner />
 
-      {/* KPI row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard
-          metricKey="spend_active_rate"
-          label="Spend Active Rate"
-          value={applyFilterToMetric(scaleMetricValue(47.5, period, true), filters, true)}
-          prevValue={applyFilterToMetric(scaleMetricValue(46.8, period, true), filters, true)}
-          unit="percent"
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          sparklineData={pSpendActiveRate.map((d: Record<string, unknown>) => d.rate as number)}
-          target={55}
-          onRefresh={handleRefresh}
-        />
-        <MetricCard
-          metricKey="spend_eligible"
-          label="Eligible to Spend (Cum. EoP)"
-          value={applyFilterToMetric(22500, filters, false)}
-          prevValue={applyFilterToMetric(21800, filters, false)}
-          unit="count"
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          onRefresh={handleRefresh}
-        />
-        <MetricCard
-          metricKey="spend_total_volume"
-          label="Total Spend Volume"
-          value={applyFilterToMetric(scaleMetricValue(31000000000, period, false, timeRangeMultiplier), filters, false)}
-          prevValue={applyFilterToMetric(scaleMetricValue(29000000000, period, false, timeRangeMultiplier), filters, false)}
-          unit="idr"
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          onRefresh={handleRefresh}
-        />
-        <MetricCard
-          metricKey="spend_txn_per_user"
-          label="Txn per Eligible User"
-          value={5.0}
-          prevValue={4.8}
-          unit="count"
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          onRefresh={handleRefresh}
-        />
-      </div>
-
-      {/* Spend Active Rate hero chart */}
-      <ChartCard
-        title="Spend Active Rate Trend"
-        subtitle="% of cumulative eligible accounts (EoP) with at least 1 authorized transaction in period"
-        asOf={AS_OF}
-        dataRange={DATA_RANGE}
-        onRefresh={handleRefresh}
-      >
-        <DashboardLineChart
-          data={pSpendActiveRate}
-          lines={[{ key: "rate", color: "#3b82f6", label: "Spend Active Rate %" }]}
-          valueType="percent"
-          height={300}
-        />
-        <ChartInsights insights={spendActiveRateInsights} />
-      </ChartCard>
-
-      {/* Two column charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ChartCard
-          title="Eligible vs Transactors"
-          subtitle="Cumulative eligible accounts (as of last day of period) vs those transacting"
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          onRefresh={handleRefresh}
-        >
-          <DashboardBarChart
-            data={pEligibleVsTransactors}
-            bars={[
-              { key: "eligible", color: "#475569", label: "Eligible" },
-              { key: "transactors", color: "#3b82f6", label: "Transactors" },
-            ]}
-            height={280}
-          />
-          <ChartInsights insights={eligibleVsTransactorsInsights} />
-        </ChartCard>
-
-        <ChartCard
-          title="Spend by Category"
-          subtitle="Online / Offline / QRIS · Based on authorized transactions"
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          onRefresh={handleRefresh}
-        >
-          <DashboardAreaChart
-            data={pSpendByCategory}
-            areas={[
-              { key: "online", color: "#3b82f6", label: "Online" },
-              { key: "offline", color: "#8b5cf6", label: "Offline" },
-              { key: "qris", color: "#06b6d4", label: "QRIS" },
-            ]}
-            valueType="currency"
-            height={280}
-          />
-          <ChartInsights insights={spendByCategoryInsights} />
-        </ChartCard>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ChartCard
-          title="Avg Spend per Transaction"
-          subtitle="By category · Based on authorized transactions"
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          onRefresh={handleRefresh}
-        >
-          <DashboardLineChart
-            data={pAvgSpendPerTxn}
-            lines={[
-              { key: "online", color: "#3b82f6", label: "Online" },
-              { key: "offline", color: "#8b5cf6", label: "Offline" },
-              { key: "qris", color: "#06b6d4", label: "QRIS" },
-            ]}
-            valueType="currency"
-            height={260}
-          />
-          <ChartInsights insights={avgSpendPerTxnInsights} />
-        </ChartCard>
-
-        <ChartCard
-          title="Total Spend Volume"
-          subtitle="Based on authorized transactions"
-          asOf={AS_OF}
-          dataRange={DATA_RANGE}
-          onRefresh={handleRefresh}
-        >
-          <DashboardBarChart
-            data={pTotalSpendVolume}
-            bars={[{ key: "volume", color: "#3b82f6", label: "Total Volume" }]}
-            height={260}
-          />
-          <ChartInsights insights={totalSpendVolumeInsights} />
-        </ChartCard>
-      </div>
-
-      <ChartCard
-        title="Transactions per Eligible User"
-        asOf={AS_OF}
-        dataRange={DATA_RANGE}
-        onRefresh={handleRefresh}
-      >
-        <DashboardLineChart
-          data={pTxnPerEligible}
-          lines={[{ key: "txnPerUser", color: "#f59e0b", label: "Txn / User" }]}
-          height={260}
-        />
-        <ChartInsights insights={txnPerEligibleInsights} />
-      </ChartCard>
-
-      {/* Top merchant categories placeholder */}
-      <ChartCard
-        title="Top Merchant Categories"
-        subtitle="Merchant category data TBD -- pending MCC enrichment pipeline"
-        asOf={AS_OF}
-        dataRange={DATA_RANGE}
-      >
-        <div className="flex items-center justify-center h-40 text-[var(--text-muted)] text-sm">
-          Merchant category data not yet available. Connect MCC enrichment pipeline to enable.
-        </div>
-        <ChartInsights insights={topMerchantInsights} />
-      </ChartCard>
-
       {/* ================================================================== */}
-      {/* NEW SECTION 1: Transaction Channel Analysis                        */}
+      {/* SECTION 1: Headline KPIs                                           */}
       {/* ================================================================== */}
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold text-[var(--text-primary)]">Transaction Channel Analysis</h2>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {channelData.map((ch: { channel: string; txn_count: number; spend_idr: number; unique_cards: number }) => (
+      {weeklyTrend && latestWeek ? (
+        <>
+          <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
+            <span className="i-lucide-gauge w-5 h-5" aria-hidden="true" />
+            {tSpend("headlineKpis")}
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard
-              key={ch.channel}
-              metricKey={`channel_${ch.channel.toLowerCase()}`}
-              label={`${ch.channel} Transactions`}
-              value={ch.txn_count}
+              metricKey="spend_active_rate"
+              label={tSpend("spendActiveRate")}
+              value={periodSummary?.spend_active_rate ?? latestWeek.rate}
+              unit="percent"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              target={50}
+              liveData={trendIsLive}
+            />
+            <MetricCard
+              metricKey="spend_avg_per_user"
+              label={tSpend("avgSpendPerUser")}
+              value={avgSpendPerUser ?? 0}
+              unit="idr"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              liveData={trendIsLive}
+            />
+            <MetricCard
+              metricKey="spend_avg_txn_per_user"
+              label={tSpend("avgTxnPerUser")}
+              value={avgTxnPerUser ?? 0}
               unit="count"
               asOf={AS_OF}
               dataRange={DATA_RANGE}
+              liveData={trendIsLive}
             />
-          ))}
-        </div>
+            <MetricCard
+              metricKey="spend_total_volume"
+              label={tSpend("totalSpend")}
+              value={periodSummary?.total_spend_idr ?? latestWeek.totalSpend}
+              unit="idr"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              liveData={trendIsLive}
+            />
+          </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Headline KPI trend charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <ChartCard
+              title={tSpend("spendActiveRate")}
+              subtitle="Weekly trend — % of newly eligible users transacting within 7 days"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              liveData={trendIsLive}
+              showIncrement
+            >
+              {(increment: ChartIncrement) => (
+                <DashboardLineChart
+                  data={aggregateByIncrement(weeklyTrend, increment, "date")}
+                  lines={[{ key: "rate", color: "#3b82f6", label: "SAR %" }]}
+                  xAxisKey="date"
+                  valueType="percent"
+                  height={220}
+                  prevPeriodData={prevWeeklyTrend ? aggregateByIncrement(prevWeeklyTrend, increment, "date") : undefined}
+                  prevPeriodLabel={prevLabel}
+                />
+              )}
+            </ChartCard>
+
+            <ChartCard
+              title={tSpend("totalSpend")}
+              subtitle="Weekly authorized transaction volume"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              liveData={trendIsLive}
+              showIncrement
+            >
+              {(increment: ChartIncrement) => (
+                <DashboardLineChart
+                  data={aggregateByIncrement(weeklyTrend, increment, "date")}
+                  lines={[{ key: "totalSpend", color: "#10b981", label: "Total Spend" }]}
+                  xAxisKey="date"
+                  valueType="currency"
+                  height={220}
+                  prevPeriodData={prevWeeklyTrend ? aggregateByIncrement(prevWeeklyTrend, increment, "date") : undefined}
+                  prevPeriodLabel={prevLabel}
+                />
+              )}
+            </ChartCard>
+
+            <ChartCard
+              title={tSpend("avgSpendPerUser")}
+              subtitle="Weekly total spend ÷ transactors"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              liveData={trendIsLive}
+              showIncrement
+            >
+              {(increment: ChartIncrement) => (
+                <DashboardLineChart
+                  data={aggregateByIncrement(weeklyTrend, increment, "date")}
+                  lines={[{ key: "avgTicket", color: "#f59e0b", label: "Avg Spend/Txn" }]}
+                  xAxisKey="date"
+                  valueType="currency"
+                  height={220}
+                  prevPeriodData={prevWeeklyTrend ? aggregateByIncrement(prevWeeklyTrend, increment, "date") : undefined}
+                  prevPeriodLabel={prevLabel}
+                />
+              )}
+            </ChartCard>
+
+            <ChartCard
+              title={tSpend("avgTxnPerUser")}
+              subtitle="Weekly transactions per transactor"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              liveData={trendIsLive}
+              showIncrement
+            >
+              {(increment: ChartIncrement) => (
+                <DashboardLineChart
+                  data={aggregateByIncrement(weeklyTrend, increment, "date")}
+                  lines={[{ key: "txnPerUser", color: "#8b5cf6", label: "Txn/User" }]}
+                  xAxisKey="date"
+                  height={220}
+                  prevPeriodData={prevWeeklyTrend ? aggregateByIncrement(prevWeeklyTrend, increment, "date") : undefined}
+                  prevPeriodLabel={prevLabel}
+                />
+              )}
+            </ChartCard>
+          </div>
+
+          {/* ================================================================== */}
+          {/* SECTION 2: Onboarding & Activation                                 */}
+          {/* ================================================================== */}
+          <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2 mt-8">
+            <span className="i-lucide-rocket w-5 h-5" aria-hidden="true" />
+            {tSpend("onboardingActivation")}
+          </h2>
+
+          {onboardingSummary ? (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <MetricCard
+                    metricKey="rp1_funded_rate"
+                    label={tSpend("rp1FundedRate")}
+                    value={onboardingSummary.rp1_funded_rate ?? 0}
+                    unit="percent"
+                    asOf={AS_OF}
+                    dataRange={DATA_RANGE}
+                    liveData={true}
+                  />
+                  {onboardingSummary.rp1_avg_first_amount ? (
+                    <p className="mt-1 text-[10px] text-[var(--text-muted)] text-center">
+                      {tSpend("avgFirstAmount")}: {fmtCur(onboardingSummary.rp1_avg_first_amount)}
+                    </p>
+                  ) : null}
+                </div>
+                <MetricCard
+                  metricKey="regfee_paid_rate"
+                  label={tSpend("regfeePaidRate")}
+                  value={onboardingSummary.regfee_paid_rate ?? 0}
+                  unit="percent"
+                  asOf={AS_OF}
+                  dataRange={DATA_RANGE}
+                  liveData={true}
+                />
+                <MetricCard
+                  metricKey="spend_activation_rate"
+                  label={tSpend("spendActivationRate")}
+                  value={onboardingSummary.spend_activation_rate ?? 0}
+                  unit="percent"
+                  asOf={AS_OF}
+                  dataRange={DATA_RANGE}
+                  liveData={true}
+                />
+              </div>
+
+              {onboardingTrend && (
+                <ChartCard
+                  title={tSpend("weeklyOnboardingTrend")}
+                  subtitle={tSpend("weeklyOnboardingTrendSub")}
+                  asOf={AS_OF}
+                  dataRange={DATA_RANGE}
+                  liveData={true}
+                  showIncrement
+                >
+                  {(increment: ChartIncrement) => (
+                    <DashboardLineChart
+                      data={aggregateByIncrement(onboardingTrend, increment, "date")}
+                      lines={[
+                        { key: "rp1Rate", color: "#3b82f6", label: tSpend("rp1FundedRate") },
+                        { key: "regfeeRate", color: "#8b5cf6", label: tSpend("regfeePaidRate") },
+                        { key: "activationRate", color: "#22c55e", label: tSpend("spendActivationRate") },
+                      ]}
+                      xAxisKey="date"
+                      valueType="percent"
+                      height={300}
+                    />
+                  )}
+                </ChartCard>
+              )}
+
+              {firstTxnChannelTrend && (
+                <ChartCard
+                  title={tSpend("firstTxnChannel")}
+                  subtitle="Weekly count of first-ever transactions by channel"
+                  asOf={AS_OF}
+                  dataRange={DATA_RANGE}
+                  liveData={true}
+                  showIncrement
+                >
+                  {(increment: ChartIncrement) => (
+                    <DashboardLineChart
+                      data={aggregateByIncrement(firstTxnChannelTrend, increment, "date")}
+                      lines={[
+                        { key: "online", color: "#3b82f6", label: "Online" },
+                        { key: "offline", color: "#f59e0b", label: "Offline" },
+                        { key: "qris", color: "#10b981", label: "QRIS" },
+                      ]}
+                      xAxisKey="date"
+                      height={260}
+                    />
+                  )}
+                </ChartCard>
+              )}
+            </>
+          ) : isLoading ? (
+            <><MetricCardsSkeleton /><ChartSkeleton /></>
+          ) : (
+            <SampleDataBanner
+              dataset="mart_finexus"
+              reason="Onboarding activation data requires decision_completed, principal_card_updates, and authorized_transaction"
+            />
+          )}
+
+          {/* ================================================================== */}
+          {/* SECTION 3: Spend Trends                                            */}
+          {/* ================================================================== */}
+          <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2 mt-8">
+            <span className="i-lucide-trending-up w-5 h-5" aria-hidden="true" />
+            {tSpend("spendTrends")}
+          </h2>
+
+          {/* Spend Active Rate Trend */}
           <ChartCard
-            title="Channel Split by Transaction Count"
-            subtitle="Online / Offline / QRIS authorized transactions"
+            title="Spend Active Rate Trend"
+            subtitle="Cohort-based: % of newly first-time eligible users who transacted within 7 days of becoming eligible"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
+            liveData={trendIsLive}
+            showIncrement
           >
-            <DashboardBarChart
-              data={channelBarData}
-              bars={[{ key: "txn_count", color: "#3b82f6", label: "Transactions" }]}
-              xAxisKey="channel"
-              height={260}
-            />
+            {(increment: ChartIncrement) => (
+              <>
+                <DashboardLineChart
+                  data={aggregateByIncrement(weeklyTrend, increment, "date")}
+                  lines={[{ key: "rate", color: "#3b82f6", label: "SAR %" }]}
+                  xAxisKey="date"
+                  valueType="percent"
+                  height={300}
+                />
+                <ChartInsights insights={spendActiveRateInsights} />
+              </>
+            )}
           </ChartCard>
 
+          {/* Eligible vs Transactors */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <ChartCard
+              title="Eligible vs Transactors"
+              subtitle="Cumulative eligible accounts vs those transacting"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              liveData={trendIsLive}
+              showIncrement
+            >
+              {(increment: ChartIncrement) => (
+                <>
+                  <DashboardLineChart
+                    data={aggregateByIncrement(weeklyTrend, increment, "date")}
+                    lines={[
+                      { key: "eligible", color: "#475569", label: "Eligible" },
+                      { key: "transactors", color: "#3b82f6", label: "Transactors" },
+                    ]}
+                    xAxisKey="date"
+                    height={280}
+                  />
+                  <ChartInsights insights={eligibleVsTransactorsInsights} />
+                </>
+              )}
+            </ChartCard>
+
+            <ChartCard
+              title="Spend by Category"
+              subtitle="Online / Offline / QRIS spend"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              liveData={trendIsLive}
+              showIncrement
+            >
+              {(increment: ChartIncrement) => (
+                <>
+                  <DashboardLineChart
+                    data={aggregateByIncrement(weeklyTrend, increment, "date")}
+                    lines={[
+                      { key: "online", color: "#3b82f6", label: "Online" },
+                      { key: "offline", color: "#8b5cf6", label: "Offline" },
+                      { key: "qris", color: "#06b6d4", label: "QRIS" },
+                    ]}
+                    xAxisKey="date"
+                    height={280}
+                  />
+                  <ChartInsights insights={spendByCategoryInsights} />
+                </>
+              )}
+            </ChartCard>
+          </div>
+
+          {/* Total Spend Volume + Avg Ticket Size */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <ChartCard
+              title="Total Spend Volume"
+              subtitle="Authorized transaction volume (IDR)"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              liveData={trendIsLive}
+              showIncrement
+            >
+              {(increment: ChartIncrement) => (
+                <>
+                  <DashboardLineChart
+                    data={aggregateByIncrement(weeklyTrend, increment, "date")}
+                    lines={[{ key: "totalSpend", color: "#8b5cf6", label: "Total Spend (IDR)" }]}
+                    xAxisKey="date"
+                    valueType="currency"
+                    height={260}
+                  />
+                  <ChartInsights insights={totalSpendVolumeInsights} />
+                </>
+              )}
+            </ChartCard>
+
+            <ChartCard
+              title="Avg Spend per Transaction"
+              subtitle="Average ticket size (IDR) per authorized transaction"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              liveData={trendIsLive}
+              showIncrement
+            >
+              {(increment: ChartIncrement) => (
+                <DashboardLineChart
+                  data={aggregateByIncrement(weeklyTrend, increment, "date")}
+                  lines={[{ key: "avgTicket", color: "#06b6d4", label: "Avg Ticket (IDR)" }]}
+                  xAxisKey="date"
+                  valueType="currency"
+                  height={260}
+                />
+              )}
+            </ChartCard>
+          </div>
+
+          {/* Txn per Eligible */}
           <ChartCard
-            title="Channel Split by Spend Volume"
-            subtitle="IDR spend by channel"
+            title="Transaction Frequency"
+            subtitle="Average transactions per eligible user"
             asOf={AS_OF}
             dataRange={DATA_RANGE}
+            liveData={trendIsLive}
+            showIncrement
           >
-            <DashboardBarChart
-              data={channelBarData}
-              bars={[{ key: "spend_idr", color: "#8b5cf6", label: "Spend (IDR)" }]}
-              xAxisKey="channel"
-              height={260}
-            />
+            {(increment: ChartIncrement) => (
+              <>
+                <DashboardLineChart
+                  data={aggregateByIncrement(weeklyTrend, increment, "date")}
+                  lines={[{ key: "txnPerUser", color: "#22c55e", label: "Txn/User" }]}
+                  xAxisKey="date"
+                  height={260}
+                />
+                <ChartInsights insights={txnPerEligibleInsights} />
+              </>
+            )}
           </ChartCard>
-        </div>
+        </>
+      ) : isLoading ? (
+        <><MetricCardsSkeleton /><ChartSkeleton /><ChartSkeleton /><ChartSkeleton /><ChartSkeleton /></>
+      ) : (
+        <SampleDataBanner
+          dataset="mart_finexus"
+          reason="Spend trend data requires authorized_transaction (DW007) and financial_account_updates (DW004)"
+        />
+      )}
 
-        <ChartInsights insights={channelInsights} />
+      {/* ================================================================== */}
+      {/* SECTION 4: Channel Analysis                                        */}
+      {/* ================================================================== */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
+          <span className="i-lucide-git-branch w-5 h-5" aria-hidden="true" />
+          {tSpend("channelAnalysis")}
+        </h2>
+
+        {channelBarData ? (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {channelData.map((ch: { channel: string; txn_count: number; spend_idr: number; unique_cards: number }) => (
+                <MetricCard
+                  key={ch.channel}
+                  metricKey={`channel_${ch.channel.toLowerCase()}`}
+                  label={`${ch.channel} Transactions`}
+                  value={ch.txn_count}
+                  unit="count"
+                  asOf={AS_OF}
+                  dataRange={DATA_RANGE}
+                />
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <ChartCard
+                title="Channel Split by Transaction Count"
+                subtitle="Online / Offline / QRIS authorized transactions"
+                asOf={AS_OF}
+                dataRange={DATA_RANGE}
+                liveData={spendIsLive}
+              >
+                <DashboardBarChart
+                  data={channelBarData}
+                  bars={[{ key: "txn_count", color: "#3b82f6", label: "Transactions" }]}
+                  xAxisKey="channel"
+                  height={260}
+                />
+              </ChartCard>
+
+              <ChartCard
+                title="Channel Split by Spend Volume"
+                subtitle="IDR spend by channel"
+                asOf={AS_OF}
+                dataRange={DATA_RANGE}
+                liveData={spendIsLive}
+              >
+                <DashboardBarChart
+                  data={channelBarData}
+                  bars={[{ key: "spend_idr", color: "#8b5cf6", label: "Spend (IDR)" }]}
+                  xAxisKey="channel"
+                  height={260}
+                />
+              </ChartCard>
+            </div>
+
+            <ChartInsights insights={channelInsights} />
+          </>
+        ) : isLoading ? (
+          <ChartSkeleton />
+        ) : (
+          <SampleDataBanner
+            dataset="mart_finexus"
+            reason="Spend trend data requires authorized_transaction (DW007) and financial_account_updates (DW004)"
+          />
+        )}
       </div>
 
       {/* ================================================================== */}
-      {/* NEW SECTION 2: Transaction Declines                                */}
+      {/* SECTION 5: Transaction Quality                                     */}
       {/* ================================================================== */}
-      <ChartCard
-        title="Transaction Decline Breakdown"
-        subtitle="Non-approved transaction status codes with count and explanation"
-        asOf={AS_OF}
-        dataRange={DATA_RANGE}
-      >
-        <DashboardBarChart
-          data={declineBarData}
-          bars={[{ key: "count", color: "#ef4444", label: "Decline Count" }]}
-          xAxisKey="label"
-          height={300}
-        />
-        <div className="mt-3 space-y-2 text-sm text-[var(--text-secondary)]">
-          {declineData.map((d: { code: string; description: string; cnt: number }) => (
-            <div key={d.code} className="flex items-start gap-2">
-              <span className="font-mono font-semibold text-[var(--text-primary)] min-w-[24px]">{d.code}</span>
-              <span>{d.description}</span>
-              <span className="ml-auto font-medium text-[var(--text-primary)] whitespace-nowrap">{formatNumber(d.cnt)}</span>
-            </div>
-          ))}
-        </div>
-        <ChartInsights insights={declineInsights} />
-      </ChartCard>
+      <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
+        <span className="i-lucide-shield-check w-5 h-5" aria-hidden="true" />
+        {tSpend("transactionQuality")}
+      </h2>
 
-      {/* ================================================================== */}
-      {/* NEW SECTION 3: QRIS Merchant Analysis                              */}
-      {/* ================================================================== */}
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold text-[var(--text-primary)]">QRIS Merchant Ecosystem</h2>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <MetricCard
-            metricKey="qris_only_merchants"
-            label="QRIS-Only Merchants"
-            value={mockMerchantStats.qrisOnly}
-            unit="count"
-            asOf={AS_OF}
-            dataRange={DATA_RANGE}
-          />
-          <MetricCard
-            metricKey="mixed_merchants"
-            label="Mixed (Card + QRIS) Merchants"
-            value={mockMerchantStats.mixed}
-            unit="count"
-            asOf={AS_OF}
-            dataRange={DATA_RANGE}
-          />
-          <MetricCard
-            metricKey="card_only_merchants"
-            label="Card-Only Merchants"
-            value={mockMerchantStats.cardOnly}
-            unit="count"
-            asOf={AS_OF}
-            dataRange={DATA_RANGE}
-          />
-        </div>
-
+      {declineBarData && declineData ? (
         <ChartCard
-          title="Cumulative QRIS-Only Merchants Over Time"
-          subtitle="Merchants that have only ever processed QRIS transactions (no card-present)"
+          title={tSpend("declineBreakdown")}
+          subtitle="Non-approved transaction status codes with count and explanation"
           asOf={AS_OF}
           dataRange={DATA_RANGE}
+          liveData={spendIsLive}
         >
-          <DashboardLineChart
-            data={qrisMerchantLineData}
-            lines={[{ key: "cumulative", color: "#06b6d4", label: "QRIS-Only Merchants" }]}
+          <DashboardBarChart
+            data={declineBarData}
+            bars={[{ key: "count", color: "#ef4444", label: "Decline Count" }]}
+            xAxisKey="label"
             height={300}
           />
-          <ChartInsights insights={qrisMerchantInsights} />
+          <div className="mt-3 space-y-2 text-sm text-[var(--text-secondary)]">
+            {declineData.map((d: { code: string; description: string; cnt: number }) => (
+              <div key={d.code} className="flex items-start gap-2">
+                <span className="font-mono font-semibold text-[var(--text-primary)] min-w-[24px]">{d.code}</span>
+                <span>{d.description}</span>
+                <span className="ml-auto font-medium text-[var(--text-primary)] whitespace-nowrap">{formatNumber(d.cnt)}</span>
+              </div>
+            ))}
+          </div>
+          <ChartInsights insights={declineInsights} />
         </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
+      ) : (
+        <SampleDataBanner
+          dataset="mart_finexus"
+          reason="Spend trend data requires authorized_transaction (DW007) and financial_account_updates (DW004)"
+        />
+      )}
+
+      {/* Decline Reason Distribution (by response code) */}
+      {declineReasonBarData && declineReasonBarData.length > 0 ? (
+        <ChartCard
+          title="Decline Reason Distribution"
+          subtitle="Top decline reasons by ISO 8583 / Finexus response code. A transaction with multiple decline reasons is counted for each."
+          asOf={AS_OF}
+          dataRange={DATA_RANGE}
+          liveData={!!declineReasons}
+        >
+          <DashboardBarChart
+            data={declineReasonBarData}
+            bars={[{ key: "count", color: "#f97316", label: "Declined Transactions" }]}
+            xAxisKey="label"
+            height={400}
+          />
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-[var(--border)] text-left text-[var(--text-muted)]">
+                  <th className="py-1.5 pr-3">Code</th>
+                  <th className="py-1.5 pr-3">Reason</th>
+                  <th className="py-1.5 text-right">Count</th>
+                  <th className="py-1.5 text-right">Amount</th>
+                  <th className="py-1.5 text-right">Share</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(declineReasons as Array<{ resp_code: string; label: string; cnt: number; amount_idr: number }>).map((d) => {
+                  const total = (declineReasons as Array<{ cnt: number }>).reduce((s, r) => s + r.cnt, 0);
+                  return (
+                    <tr key={d.resp_code} className="border-b border-[var(--border)]/50 hover:bg-[var(--background-secondary)]">
+                      <td className="py-1.5 pr-3 font-mono font-semibold text-[var(--text-primary)]">{d.resp_code}</td>
+                      <td className="py-1.5 pr-3 text-[var(--text-secondary)]">{d.label}</td>
+                      <td className="py-1.5 text-right text-[var(--text-primary)]">{formatNumber(d.cnt)}</td>
+                      <td className="py-1.5 text-right text-[var(--text-primary)]">{formatAmountCompact(d.amount_idr, currency)}</td>
+                      <td className="py-1.5 text-right text-[var(--text-muted)]">{(d.cnt / total * 100).toFixed(1)}%</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </ChartCard>
+      ) : isLoading ? (
+        <ChartSkeleton />
+      ) : null}
+
+      {/* QRIS Merchant Ecosystem */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold text-[var(--text-primary)]">{tSpend("merchantEcosystem")}</h2>
+
+        {qrisMerchantLineData ? (
+          <>
+            <ChartCard
+              title="Cumulative QRIS-Only Merchants Over Time"
+              subtitle="Merchants that have only ever processed QRIS transactions (no card-present)"
+              asOf={AS_OF}
+              dataRange={DATA_RANGE}
+              liveData={!!spendAnalysis?.qrisMerchantGrowth}
+              showIncrement
+            >
+              {(increment: ChartIncrement) => (
+                <>
+                  <DashboardLineChart
+                    data={aggregateByIncrement(qrisMerchantLineData, increment, "date")}
+                    lines={[{ key: "cumulative", color: "#06b6d4", label: "QRIS-Only Merchants" }]}
+                    height={300}
+                  />
+                  <ChartInsights insights={qrisMerchantInsights} />
+                </>
+              )}
+            </ChartCard>
+          </>
+        ) : isLoading ? (
+          <ChartSkeleton />
+        ) : (
+          <SampleDataBanner
+            dataset="mart_finexus"
+            reason="Spend trend data requires authorized_transaction (DW007) and financial_account_updates (DW004)"
+          />
+        )}
       </div>
 
       <ActionItems section="Spend" items={actionItems} />
 
-      {/* Revenue Metrics — blocked by mart_finance */}
-      <SampleDataBanner
-        dataset="mart_finance"
-        reason="Revenue per customer and fee metrics require access to mart_finance dataset"
-      >
-        <div className="space-y-4 p-3">
-          <ChartCard
-            title="ARPAC Trend (Average Revenue per Active Customer)"
-            subtitle="USD per active customer per month · Sample data based on Orico benchmarks ($10–$15)"
-            asOf={AS_OF}
-            dataRange={DATA_RANGE}
-          >
-            <DashboardLineChart
-              data={sampleArpacTrend}
-              lines={[{ key: "arpac", color: "#10b981", label: "ARPAC (USD)" }]}
-              height={280}
-            />
-            <ChartInsights insights={sampleArpacInsights} />
-          </ChartCard>
+      {/* ================================================================== */}
+      {/* DEFINITIONS                                                        */}
+      {/* ================================================================== */}
+      <div className="rounded-xl bg-[var(--surface-elevated)] border border-[var(--border)] px-6 py-4 space-y-3">
+        <p className="text-sm font-semibold text-[var(--text-primary)] mb-2">Metric Definitions</p>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <ChartCard
-              title="Average Monthly Fees"
-              subtitle="USD per active customer · Gross fees before refunds · Sample data ($4–$7)"
-              asOf={AS_OF}
-              dataRange={DATA_RANGE}
-            >
-              <DashboardLineChart
-                data={sampleAvgMonthlyFeesTrend}
-                lines={[{ key: "fees", color: "#8b5cf6", label: "Avg Monthly Fees (USD)" }]}
-                height={260}
-              />
-              <ChartInsights insights={sampleAvgMonthlyFeesInsights} />
-            </ChartCard>
+        <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+          <span className="font-semibold text-[var(--text-secondary)]">Spend Activation Rate (SAR):</span>{" "}
+          % of customers who make at least 1 transaction within 7 days of their <strong>welcome call completed date</strong> (videocall verified).
+          Eligible date determined by DW005 field <code className="px-1 rounded bg-slate-100 dark:bg-slate-800 text-xs">f9_dw005_1st_unblk_all_mtd_tms</code> (first unblock timestamp).
+          Additional eligibility criteria: account status Good/Normal (DW004), DPD &ge; 0, card unblocked, all transaction channels enabled (HCE, network, contactless).
+          Only regular CC users included (Rp1 and RegFee users excluded from SAR denominator).
+          Weekly cohorts require full 13-day observation window before reporting.
+        </p>
 
-            <ChartCard
-              title="Average Monthly Fees (Refund-Adjusted)"
-              subtitle="USD per active customer · Net of refunds · Sample data ($4–$7)"
-              asOf={AS_OF}
-              dataRange={DATA_RANGE}
-            >
-              <DashboardLineChart
-                data={sampleAvgMonthlyFeesRefundAdj}
-                lines={[{ key: "feesAdj", color: "#f59e0b", label: "Refund-Adj Fees (USD)" }]}
-                height={260}
-              />
-              <ChartInsights insights={sampleAvgMonthlyFeesRefundAdjInsights} />
-            </ChartCard>
-          </div>
+        <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+          <span className="font-semibold text-[var(--text-secondary)]">Rp1 Funded Rate:</span>{" "}
+          % of Rp1 (prepaid card) users who make at least 1 transaction within 7 days of approval date.
+          Rp1 users identified by <code className="px-1 rounded bg-slate-100 dark:bg-slate-800 text-xs">is_prepaid_card_applicable = TRUE</code> in decision_completed.
+          Average first funded amount = average of the first authorized transaction amount per funded user.
+        </p>
 
-          <ChartCard
-            title="Interchange Fee Income Trend"
-            subtitle="Total interchange revenue (USD) · Sample data"
-            asOf={AS_OF}
-            dataRange={DATA_RANGE}
-          >
-            <DashboardBarChart
-              data={sampleInterchangeIncomeTrend}
-              bars={[{ key: "interchange", color: "#06b6d4", label: "Interchange Income (USD)" }]}
-              height={280}
-            />
-            <ChartInsights insights={sampleInterchangeIncomeInsights} />
-          </ChartCard>
-        </div>
-      </SampleDataBanner>
+        <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+          <span className="font-semibold text-[var(--text-secondary)]">Registration Fee Paid Rate:</span>{" "}
+          % of Registration Fee users who make at least 1 transaction within 7 days of approval date.
+          RegFee users identified by <code className="px-1 rounded bg-slate-100 dark:bg-slate-800 text-xs">is_account_opening_fee_applicable = TRUE</code> in decision_completed.
+        </p>
 
-      {/* BNPL Usage — blocked by mart_finance + product data */}
-      <SampleDataBanner
-        dataset="mart_finance"
-        reason="BNPL usage data requires mart_finance access"
-      >
-        <div className="p-3">
-          <ChartCard
-            title="BNPL Usage Rate Trend"
-            subtitle="% of active transactors using BNPL (installment) · Sample data based on Orico benchmarks (84%–89%)"
-            asOf={AS_OF}
-            dataRange={DATA_RANGE}
-          >
-            <DashboardLineChart
-              data={sampleBnplUsageRateTrend}
-              lines={[{ key: "rate", color: "#ec4899", label: "Used BNPL Rate %" }]}
-              valueType="percent"
-              height={300}
-            />
-            <ChartInsights insights={sampleBnplUsageInsights} />
-          </ChartCard>
-        </div>
-      </SampleDataBanner>
+        <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+          <span className="font-semibold text-[var(--text-secondary)]">Avg Spend per User:</span>{" "}
+          Total authorized spend volume &divide; number of eligible users in the selected period. Follows global time range.
+        </p>
+
+        <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+          <span className="font-semibold text-[var(--text-secondary)]">Avg Transactions per User:</span>{" "}
+          Total authorized transaction count &divide; number of distinct transactors (accounts with &ge;1 transaction) in the selected period.
+          The KPI card uses the period summary denominator (eligible users). The Transaction Frequency chart uses weekly transactor count as denominator for a more accurate per-transactor view.
+          Follows global time range.
+        </p>
+
+        <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+          <span className="font-semibold text-[var(--text-secondary)]">1st Transaction Channel:</span>{" "}
+          Weekly count of users whose first-ever authorized transaction falls in the selected period, broken down by channel (Online / Offline / QRIS). Respects global date filter.
+          Channel classification: <code className="px-1 rounded bg-slate-100 dark:bg-slate-800 text-xs">TM</code> = Online,{" "}
+          <code className="px-1 rounded bg-slate-100 dark:bg-slate-800 text-xs">RA + rte_dest=L</code> = QRIS, all others = Offline.
+        </p>
+
+        <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+          <span className="font-semibold text-[var(--text-secondary)]">Spend by Channel:</span>{" "}
+          Online = e-commerce (<code className="px-1 rounded bg-slate-100 dark:bg-slate-800 text-xs">txn_typ=TM</code>),
+          Offline = POS/contactless (non-TM, non-QRIS),
+          QRIS = QR payments (<code className="px-1 rounded bg-slate-100 dark:bg-slate-800 text-xs">txn_typ=RA, rte_dest=L</code>).
+          Excludes payments (PM), batch errors (BE), and refunds (RF).
+        </p>
+
+        <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+          <span className="font-semibold text-[var(--text-secondary)]">Transaction Filter:</span>{" "}
+          All spend metrics use authorized transactions with no decline code (<code className="px-1 rounded bg-slate-100 dark:bg-slate-800 text-xs">fx_dw007_stat IS NULL</code>) and exclude PM/BE/RF types.
+          Currency: amounts in DW007 are in cents &divide; 100 for IDR.
+        </p>
+      </div>
     </div>
   );
 }

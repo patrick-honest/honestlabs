@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, useMemo, type ReactNode } from "react";
 import { RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTranslations } from "next-intl";
+import { useTheme } from "@/hooks/use-theme";
 import { QueryInspectorButton, type QueryInfo } from "@/components/query-inspector/query-inspector";
 import { BreakdownFilter, type ActiveBreakdowns, type BreakdownDimension } from "@/components/filters/breakdown-filter";
-import { ChartDateRange, type DateRangeOverride } from "@/components/charts/chart-date-range";
+
+export type ChartIncrement = "daily" | "weekly" | "monthly";
 
 interface ChartCardProps {
   title: string;
@@ -13,7 +16,7 @@ interface ChartCardProps {
   asOf: string;
   dataRange: { start: string; end: string };
   onRefresh?: () => Promise<void>;
-  children: ReactNode;
+  children: ReactNode | ((increment: ChartIncrement) => ReactNode);
   className?: string;
   /** SQL query info for the inspector */
   query?: QueryInfo;
@@ -21,12 +24,33 @@ interface ChartCardProps {
   breakdowns?: ActiveBreakdowns;
   onBreakdownChange?: (b: ActiveBreakdowns) => void;
   availableBreakdowns?: BreakdownDimension[];
-  /** Chart-level date range override (controlled mode) */
-  dateOverride?: DateRangeOverride | null;
-  onDateOverride?: (range: DateRangeOverride | null) => void;
-  /** Set false to hide the date picker (default: true) */
-  showDatePicker?: boolean;
+  /** Show star badge indicating data is from BigQuery (not mock) */
+  liveData?: boolean;
+  /** Show the time increment selector (daily/weekly/monthly). Default: false */
+  showIncrement?: boolean;
+  /** Default increment. Default: "weekly" */
+  defaultIncrement?: ChartIncrement;
+  /** Controlled increment (overrides internal state) */
+  increment?: ChartIncrement;
+  /** Called when user changes increment */
+  onIncrementChange?: (inc: ChartIncrement) => void;
 }
+
+/**
+ * Compute the number of days in the date range.
+ */
+function daysBetween(start: string, end: string): number {
+  const a = new Date(start);
+  const b = new Date(end);
+  if (isNaN(a.getTime()) || isNaN(b.getTime())) return 1;
+  return Math.max(1, Math.round(Math.abs(b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24)));
+}
+
+const INCREMENT_OPTIONS: { value: ChartIncrement; label: string; minDays: number }[] = [
+  { value: "daily", label: "D", minDays: 1 },
+  { value: "weekly", label: "W", minDays: 7 },
+  { value: "monthly", label: "M", minDays: 28 },
+];
 
 export function ChartCard({
   title,
@@ -40,25 +64,35 @@ export function ChartCard({
   breakdowns,
   onBreakdownChange,
   availableBreakdowns,
-  dateOverride: controlledDateOverride,
-  onDateOverride: controlledOnDateOverride,
-  showDatePicker = true,
+  liveData,
+  showIncrement = false,
+  defaultIncrement = "weekly",
+  increment: controlledIncrement,
+  onIncrementChange,
 }: ChartCardProps) {
+  const tMetrics = useTranslations("metrics");
+  const { isDark } = useTheme();
   const [refreshing, setRefreshing] = useState(false);
-  // Self-managed date override when no external control is provided
-  const [internalDateOverride, setInternalDateOverride] = useState<DateRangeOverride | null>(null);
-  const dateOverride = controlledOnDateOverride ? controlledDateOverride ?? null : internalDateOverride;
-  const onDateOverride = controlledOnDateOverride ?? setInternalDateOverride;
+  const [lastRefreshed, setLastRefreshed] = useState<string | null>(null);
+  const [internalIncrement, setInternalIncrement] = useState<ChartIncrement>(defaultIncrement);
+
+  const increment = controlledIncrement ?? internalIncrement;
+  const setIncrement = onIncrementChange ?? setInternalIncrement;
+
+  const rangeDays = useMemo(() => daysBetween(dataRange.start, dataRange.end), [dataRange]);
 
   async function handleRefresh() {
     if (!onRefresh || refreshing) return;
     setRefreshing(true);
     try {
       await onRefresh();
+      setLastRefreshed(new Date().toLocaleString());
     } finally {
       setRefreshing(false);
     }
   }
+
+  const displayTimestamp = lastRefreshed ?? asOf;
 
   return (
     <div className={cn(
@@ -69,27 +103,58 @@ export function ChartCard({
       <div className="flex items-start justify-between gap-2 bg-[var(--surface-elevated)]/50 px-4 py-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-[var(--text-primary)]">{title}</h3>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+              {title}
+              {liveData && (
+                <span className={cn("ml-1 text-[9px]", isDark ? "text-[#FFD166]" : "text-amber-500")} title="Live BigQuery data">&#9733;</span>
+              )}
+            </h3>
             {query && <QueryInspectorButton query={query} />}
           </div>
           {subtitle && (
             <p className="text-xs text-[var(--text-secondary)] mt-0.5">{subtitle}</p>
           )}
           <p className="text-[10px] text-[var(--text-muted)] mt-0.5">
-            {(dateOverride ?? dataRange).start} &ndash; {(dateOverride ?? dataRange).end}
+            {dataRange.start} &ndash; {dataRange.end}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {showDatePicker && (
-            <ChartDateRange override={dateOverride} onOverride={onDateOverride} />
+          {/* Time increment selector */}
+          {showIncrement && (
+            <div className="flex items-center rounded-md border border-[var(--border)] overflow-hidden">
+              {INCREMENT_OPTIONS.map((opt) => {
+                const enabled = rangeDays >= opt.minDays;
+                const active = increment === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    onClick={() => enabled && setIncrement(opt.value)}
+                    disabled={!enabled}
+                    title={!enabled ? "Selected time range too small" : opt.value.charAt(0).toUpperCase() + opt.value.slice(1)}
+                    className={cn(
+                      "px-2 py-1 text-[10px] font-semibold transition-colors",
+                      active
+                        ? isDark
+                          ? "bg-[#5B22FF] text-white"
+                          : "bg-[#D00083] text-white"
+                        : enabled
+                          ? "text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]"
+                          : "text-[var(--text-muted)]/40 cursor-not-allowed opacity-40",
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
           )}
-          <span className="text-[10px] text-[var(--text-muted)]">As of: {asOf}</span>
+          <span className="text-[10px] text-[var(--text-muted)]">{tMetrics("asOf")}: {displayTimestamp}</span>
           {onRefresh && (
             <button
               onClick={handleRefresh}
               disabled={refreshing}
               className="text-[var(--text-muted)] hover:text-[var(--accent-light)] transition-colors disabled:opacity-50"
-              aria-label={`Refresh ${title}`}
+              aria-label={tMetrics("refresh") + " " + title}
             >
               <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
             </button>
@@ -115,7 +180,7 @@ export function ChartCard({
             <RefreshCw className="h-5 w-5 animate-spin text-[var(--accent-light)]" />
           </div>
         )}
-        {children}
+        {typeof children === "function" ? children(increment) : children}
       </div>
     </div>
   );

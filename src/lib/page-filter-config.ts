@@ -15,7 +15,7 @@ import type { FilterSelections } from "@/hooks/use-filters";
 export type FilterKey = keyof FilterSelections;
 
 /** Account-level filters applicable to almost every page */
-const ACCT: FilterKey[] = ["cardType", "productType", "cohort"];
+const ACCT: FilterKey[] = ["cardType", "productType", "cohort", "cycleDate"];
 
 /** Full risk group */
 const RISK: FilterKey[] = ["riskCategory", "decisioningModel"];
@@ -96,6 +96,10 @@ export const PAGE_FILTER_CONFIG: { prefix: string; filters: FilterKey[] | null }
   },
   {
     prefix: "/deep-dive/points-program",
+    filters: [...ACCT],
+  },
+  {
+    prefix: "/deep-dive/billing-cycle",
     filters: [...ACCT],
   },
   {

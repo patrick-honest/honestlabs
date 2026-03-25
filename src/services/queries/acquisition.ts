@@ -7,6 +7,7 @@ import { toSqlDate } from "@/lib/dates";
 
 export interface AcquisitionFunnelRow {
   stage: string;
+  label: string;
   count: number;
   conversion_from_prev_pct: number | null;
 }
@@ -22,25 +23,46 @@ export interface ApprovalsByProductRow {
 // Funnel stage ordering (matches milestone_complete application_status values)
 // ---------------------------------------------------------------------------
 
+/**
+ * Funnel stages in logical onboarding order.
+ * Values must EXACTLY match `application_status` in milestone_complete.
+ *
+ * Early stages (Apply button pressed, Application started) have very low
+ * distinct-user counts in recent data (legacy flow), so they're placed first
+ * but will naturally show as small counts if users skip them.
+ */
 const FUNNEL_STAGES = [
-  "Waitlisted",
-  "Apply button pressed",
-  "Application started",
-  "Agreements accepted",
-  "Mobile verified",
   "OTP login started",
+  "Mobile verified",
+  "Application agreements accepted",
   "KYC complete",
-  "Personal details",
-  "Decision complete",
+  "Personal details entered",
+  "Personal info details part 2 complete",
   "Application submitted",
-  "Income details",
-  "Personal info pt2",
+  "Decision complete",
   "Cardholder agreement viewed",
   "Cardholder agreement accepted",
   "Tutorial complete",
-  "Delivery address",
+  "Delivery Address Entered",
   "PIN set",
 ] as const;
+
+/** Short display labels for the UI */
+const STAGE_LABELS: Record<string, string> = {
+  "OTP login started": "OTP Started",
+  "Mobile verified": "Mobile Verified",
+  "Application agreements accepted": "Agreements Accepted",
+  "KYC complete": "KYC Complete",
+  "Personal details entered": "Personal Details",
+  "Personal info details part 2 complete": "Personal Info Pt2",
+  "Application submitted": "Application Submitted",
+  "Decision complete": "Decision Complete",
+  "Cardholder agreement viewed": "CMA Viewed",
+  "Cardholder agreement accepted": "CMA Accepted",
+  "Tutorial complete": "Tutorial Complete",
+  "Delivery Address Entered": "Delivery Address",
+  "PIN set": "PIN Set",
+};
 
 // ---------------------------------------------------------------------------
 // 1. Acquisition Funnel
@@ -50,16 +72,41 @@ export async function getAcquisitionFunnel(
   startDate: Date,
   endDate: Date,
 ): Promise<AcquisitionFunnelRow[]> {
+  // True funnel: each step only counts users who completed ALL previous steps.
+  // We pivot each user's milestones into a single row, then cumulatively
+  // intersect: step N = users who completed steps 1..N.
   const stageList = FUNNEL_STAGES.map((s) => `'${s}'`).join(", ");
 
+  // Step 1: For each user, find which stages they completed in the date range
+  // Step 2: Build cumulative funnel — stage N requires stages 1..N all present
   const sql = `
-    SELECT
-      application_status AS stage,
-      COUNT(DISTINCT user_id) AS count
-    FROM ${TABLES.milestone_complete}
-    WHERE DATE(timestamp, 'Asia/Jakarta') BETWEEN @startDate AND @endDate
-      AND application_status IN (${stageList})
-    GROUP BY application_status
+    WITH user_stages AS (
+      SELECT
+        user_id,
+        application_status AS stage
+      FROM ${TABLES.milestone_complete}
+      WHERE DATE(timestamp, 'Asia/Jakarta') BETWEEN @startDate AND @endDate
+        AND application_status IN (${stageList})
+      GROUP BY user_id, application_status
+    ),
+    user_stage_flags AS (
+      SELECT
+        user_id,
+        ${FUNNEL_STAGES.map(
+          (s, i) =>
+            `MAX(CASE WHEN stage = '${s}' THEN 1 ELSE 0 END) AS s${i}`
+        ).join(",\n        ")}
+      FROM user_stages
+      GROUP BY user_id
+    ),
+    cumulative_funnel AS (
+      ${FUNNEL_STAGES.map((s, i) => {
+        // Each stage requires all previous stages (s0 AND s1 AND ... AND si)
+        const conditions = Array.from({ length: i + 1 }, (_, j) => `s${j} = 1`).join(" AND ");
+        return `SELECT '${s}' AS stage, COUNT(*) AS count FROM user_stage_flags WHERE ${conditions}`;
+      }).join("\n      UNION ALL\n      ")}
+    )
+    SELECT stage, count FROM cumulative_funnel
   `;
 
   const rows = await runQuery<{ stage: string; count: number }>(sql, {
@@ -86,6 +133,7 @@ export async function getAcquisitionFunnel(
 
     result.push({
       stage,
+      label: STAGE_LABELS[stage] ?? stage,
       count,
       conversion_from_prev_pct: conversion,
     });
@@ -97,7 +145,98 @@ export async function getAcquisitionFunnel(
 }
 
 // ---------------------------------------------------------------------------
-// 2. Approvals by Product
+// 2. Decision Breakdown — APPROVED / DECLINED / WAITLISTED counts
+// ---------------------------------------------------------------------------
+
+export interface DecisionBreakdownRow {
+  decision: string;
+  cnt: number;
+}
+
+export async function getDecisionBreakdown(
+  startDate: Date,
+  endDate: Date,
+): Promise<DecisionBreakdownRow[]> {
+  const sql = `
+    SELECT decision, COUNT(*) AS cnt
+    FROM ${TABLES.decision_completed}
+    WHERE DATE(timestamp, 'Asia/Jakarta') BETWEEN @startDate AND @endDate
+    GROUP BY decision
+  `;
+
+  return runQuery<DecisionBreakdownRow>(sql, {
+    startDate: toSqlDate(startDate),
+    endDate: toSqlDate(endDate),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 3. Product Mix — approved accounts by product type
+// ---------------------------------------------------------------------------
+
+export interface ProductMixRow {
+  product_type: string;
+  cnt: number;
+}
+
+export async function getProductMix(
+  startDate: Date,
+  endDate: Date,
+): Promise<ProductMixRow[]> {
+  const sql = `
+    SELECT
+      CASE
+        WHEN is_prepaid_card_applicable = TRUE THEN 'RP1'
+        WHEN is_account_opening_fee_applicable = TRUE THEN 'Registration Fee'
+        ELSE 'Standard CC'
+      END AS product_type,
+      COUNT(*) AS cnt
+    FROM ${TABLES.decision_completed}
+    WHERE decision = 'APPROVED'
+      AND DATE(timestamp, 'Asia/Jakarta') BETWEEN @startDate AND @endDate
+    GROUP BY product_type
+  `;
+
+  return runQuery<ProductMixRow>(sql, {
+    startDate: toSqlDate(startDate),
+    endDate: toSqlDate(endDate),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 4. Approval Rate Trend — weekly approval rate
+// ---------------------------------------------------------------------------
+
+export interface ApprovalRateTrendRow {
+  week_start: string;
+  total: number;
+  approved: number;
+  approval_rate: number;
+}
+
+export async function getApprovalRateTrend(
+  startDate: Date,
+  endDate: Date,
+): Promise<ApprovalRateTrendRow[]> {
+  const sql = `
+    SELECT
+      FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(DATE(timestamp, 'Asia/Jakarta'), WEEK(MONDAY))) AS week_start,
+      COUNT(*) AS total,
+      COUNTIF(decision = 'APPROVED') AS approved,
+      ROUND(SAFE_DIVIDE(COUNTIF(decision = 'APPROVED'), COUNT(*)) * 100, 2) AS approval_rate
+    FROM ${TABLES.decision_completed}
+    WHERE DATE(timestamp, 'Asia/Jakarta') BETWEEN @startDate AND @endDate
+    GROUP BY week_start ORDER BY week_start
+  `;
+
+  return runQuery<ApprovalRateTrendRow>(sql, {
+    startDate: toSqlDate(startDate),
+    endDate: toSqlDate(endDate),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 5. Approvals by Product (weekly, with avg credit line)
 // ---------------------------------------------------------------------------
 
 export async function getApprovalsByProduct(
@@ -108,7 +247,7 @@ export async function getApprovalsByProduct(
     SELECT
       FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(DATE(timestamp, 'Asia/Jakarta'), ISOWEEK)) AS week_start,
       CASE
-        WHEN is_prepaid_card_applicable = TRUE THEN 'Prepaid Card'
+        WHEN is_prepaid_card_applicable = TRUE THEN 'RP1 Card'
         WHEN is_account_opening_fee_applicable = TRUE THEN 'Opening Fee Card'
         ELSE 'Standard Credit Card'
       END AS product_type,

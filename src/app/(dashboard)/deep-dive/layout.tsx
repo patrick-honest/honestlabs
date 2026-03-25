@@ -1,30 +1,53 @@
 "use client";
 
-import { useCallback } from "react";
+import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { usePeriod } from "@/hooks/use-period";
 import { Header } from "@/components/layout/header";
-import { generateReportPdf } from "@/lib/report-pdf";
+import { PdfDownloadModal } from "@/components/dashboard/pdf-download-modal";
 import { Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
+import { useTranslations } from "next-intl";
 
-const PAGE_LABELS: Record<string, string> = {
-  "/deep-dive/acquisition": "Acquisition",
-  "/deep-dive/activation": "Activation",
-  "/deep-dive/referral": "Referrals",
-  "/deep-dive/spend": "Spend",
-  "/deep-dive/transaction-auth": "Transaction Auth",
-  "/deep-dive/points-program": "Points Program",
-  "/deep-dive/credit-line": "Credit Line",
-  "/deep-dive/portfolio": "Portfolio",
-  "/deep-dive/risk": "Risk",
-  "/deep-dive/collections": "Collections",
-  "/deep-dive/repayments": "Repayments",
-  "/deep-dive/app-health": "App Health",
-  "/deep-dive/customer-service": "Customer Service",
-  "/deep-dive/users": "Users",
-  "/deep-dive/cards": "Cards",
+// Maps pathname to the nav translation key for each deep-dive page
+const PAGE_NAV_KEYS: Record<string, string> = {
+  "/deep-dive/acquisition": "acquisition",
+  "/deep-dive/activation": "activation",
+  "/deep-dive/referral": "referrals",
+  "/deep-dive/spend": "spend",
+  "/deep-dive/transaction-auth": "txnAuth",
+  "/deep-dive/points-program": "points",
+  "/deep-dive/credit-line": "creditLine",
+  "/deep-dive/portfolio": "portfolio",
+  "/deep-dive/risk": "risk",
+  "/deep-dive/collections": "collections",
+  "/deep-dive/repayments": "repayments",
+  "/deep-dive/app-health": "appHealth",
+  "/deep-dive/customer-service": "customerService",
+  "/deep-dive/users": "users",
+  "/deep-dive/cards": "cards",
+  "/deep-dive/billing-cycle": "billingCycle",
+};
+
+// Maps pathname segments to PDF report IDs
+const PAGE_REPORT_IDS: Record<string, string> = {
+  "acquisition": "acquisition",
+  "activation": "activation",
+  "referral": "referral",
+  "spend": "spend-analysis",
+  "transaction-auth": "transaction-auth",
+  "points-program": "points-program",
+  "credit-line": "credit-line",
+  "portfolio": "portfolio",
+  "risk": "risk",
+  "collections": "collections",
+  "repayments": "repayments",
+  "app-health": "app-health",
+  "customer-service": "customer-service",
+  "users": "users-overview",
+  "cards": "cards-overview",
+  "billing-cycle": "billing-cycle",
 };
 
 export default function DeepDiveLayout({
@@ -35,34 +58,28 @@ export default function DeepDiveLayout({
   const pathname = usePathname();
   const { isDark } = useTheme();
   const { period, periodLabel, dateRange, timeRange } = usePeriod();
+  const tNav = useTranslations("nav");
+  const tTime = useTranslations("time");
+  const tCommon = useTranslations("common");
 
-  const sectionLabel = PAGE_LABELS[pathname] ?? "Deep Dive";
-  const title = `${sectionLabel} Deep Dive`;
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
 
-  // Time range label for display
+  // Strip basePath prefix and trailing slash so the key always matches
+  const normalizedPath = pathname.replace(/\/$/, "").replace(/^\/honestlabs/, "");
+  const navKey = PAGE_NAV_KEYS[normalizedPath];
+  const sectionLabel = navKey ? tNav(navKey) : "";
+  const title = sectionLabel ? `${sectionLabel} ${tNav("deepDive")}` : tNav("deepDive");
+
+  // Determine the report ID from the last path segment
+  const lastSegment = pathname.split("/").filter(Boolean).pop() ?? "";
+  const reportId = PAGE_REPORT_IDS[lastSegment] ?? `deep-dive-${lastSegment}`;
+
+  // Time range label for display — now translated
   const timeRangeLabels: Record<string, string> = {
-    last_full: period === "weekly" ? "Last Full Week" : period === "monthly" ? "Last Full Month" : period === "quarterly" ? "Last Full Quarter" : "Last Full Year",
-    xtd: period === "weekly" ? "Week to Date" : period === "monthly" ? "Month to Date" : period === "quarterly" ? "Quarter to Date" : "Year to Date",
-    full: period === "weekly" ? "Full Week" : period === "monthly" ? "Full Month" : period === "quarterly" ? "Full Quarter" : "Full Year",
+    last_full: period === "weekly" ? tTime("lastFullWeek") : period === "monthly" ? tTime("lastFullMonth") : period === "quarterly" ? tTime("lastFullQuarter") : periodLabel,
+    xtd: period === "weekly" ? tTime("weekToDate") : period === "monthly" ? tTime("monthToDate") : period === "quarterly" ? tTime("quarterToDate") : tTime("yearToDate"),
+    full: period === "weekly" ? tTime("weekly") : period === "monthly" ? tTime("monthly") : period === "quarterly" ? tTime("quarterly") : tTime("yearly"),
   };
-
-  const handleDownloadPdf = useCallback(() => {
-    generateReportPdf({
-      id: `deep-dive-${pathname.split("/").pop()}`,
-      cycle: period,
-      periodStart: dateRange.start.toISOString().slice(0, 10),
-      periodEnd: dateRange.end.toISOString().slice(0, 10),
-      section: `${sectionLabel} Deep Dive`,
-      title: `${sectionLabel} Deep Dive — ${timeRangeLabels[timeRange] ?? periodLabel}`,
-      generatedAt: new Date().toISOString(),
-      kpis: [],
-      trends: [
-        `This report covers the ${timeRangeLabels[timeRange] ?? periodLabel} period.`,
-        `Data range: ${dateRange.label}.`,
-        "For detailed metrics and charts, refer to the webapp dashboard.",
-      ],
-    });
-  }, [sectionLabel, pathname, period, periodLabel, dateRange, timeRange, timeRangeLabels]);
 
   return (
     <div className="flex flex-col h-full">
@@ -79,22 +96,33 @@ export default function DeepDiveLayout({
             </p>
           </div>
           <button
-            onClick={handleDownloadPdf}
+            onClick={() => setPdfModalOpen(true)}
             className={cn(
               "flex items-center gap-1.5 shrink-0 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
               isDark
                 ? "text-[#7C4DFF] hover:bg-[#5B22FF]/15 border border-[#5B22FF]/30"
                 : "text-[#D00083] hover:bg-[#D00083]/10 border border-[#D00083]/30"
             )}
-            title={`Save ${sectionLabel} as PDF`}
+            title={`${tCommon("savePdf")} — ${sectionLabel}`}
           >
             <Download className="h-3.5 w-3.5" />
-            Save PDF
+            {tCommon("savePdf")}
           </button>
         </div>
 
         {children}
       </div>
+
+      {/* PDF Download Modal */}
+      <PdfDownloadModal
+        isOpen={pdfModalOpen}
+        onClose={() => setPdfModalOpen(false)}
+        reportId={reportId}
+        reportTitle={title}
+        defaultStartDate={dateRange.start.toISOString().slice(0, 10)}
+        defaultEndDate={dateRange.end.toISOString().slice(0, 10)}
+        defaultPeriod={period}
+      />
     </div>
   );
 }

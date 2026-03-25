@@ -6,7 +6,7 @@ import { ChartCard } from "@/components/dashboard/chart-card";
 import { ChartInsights, type ChartInsight } from "@/components/dashboard/chart-insights";
 import { ActionItems, type ActionItem } from "@/components/dashboard/action-items";
 import { DashboardLineChart } from "@/components/charts/line-chart";
-import { DashboardBarChart } from "@/components/charts/bar-chart";
+
 import { Header } from "@/components/layout/header";
 import { usePeriod } from "@/hooks/use-period";
 import { useFilters } from "@/hooks/use-filters";
@@ -14,13 +14,17 @@ import { applyFilterToData, applyFilterToMetric } from "@/lib/filter-utils";
 import { ActiveFiltersBanner } from "@/components/dashboard/active-filters-banner";
 import { getPeriodRange, scaleTrendData, scaleMetricValue } from "@/lib/period-data";
 import { cn } from "@/lib/utils";
-import { Download, TrendingUp, TrendingDown, Minus, Lock } from "lucide-react";
-import { generateReportPdf } from "@/lib/report-pdf";
+import { Download, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { PdfDownloadModal } from "@/components/dashboard/pdf-download-modal";
 import { SampleDataBanner, SampleDataBadge } from "@/components/dashboard/sample-data-banner";
-import { PageGuard } from "@/components/layout/page-guard";
+import { useTranslations } from "next-intl";
+import { useCurrency } from "@/hooks/use-currency";
+import { formatAmountCompact } from "@/lib/currency";
+import { useLanguage } from "@/hooks/use-language";
+
 import type { QueryInfo } from "@/components/query-inspector/query-inspector";
 
-const AS_OF = "Mar 15, 2026";
+const AS_OF = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
 // ── Print styles (injected once) ────────────────────────────────────────────
 const PRINT_STYLES = `
@@ -236,7 +240,7 @@ const Q_FUNNEL: QueryInfo = { title: "Orico: Onboarding Funnel", sql: "SELECT mo
 
 // ── Mock Data matching query output shapes ──────────────────────────────────
 
-// Query 1: Approved by Segment
+// Query 1: Approved by Segment (counts + total applications for rate calculation)
 const approvedBySegment = [
   { date: "Jul 25", Regular: 1200, RP1: 450, AOF: 180 },
   { date: "Aug 25", Regular: 1350, RP1: 520, AOF: 210 },
@@ -249,12 +253,36 @@ const approvedBySegment = [
   { date: "Mar 26", Regular: 2100, RP1: 850, AOF: 370 },
 ];
 
+// Total applications submitted per segment (denominator for approval rate)
+const totalApplicationsBySegment = [
+  { date: "Jul 25", Regular: 6800, RP1: 2600, AOF: 1100 },
+  { date: "Aug 25", Regular: 7200, RP1: 2900, AOF: 1200 },
+  { date: "Sep 25", Regular: 7900, RP1: 3100, AOF: 1300 },
+  { date: "Oct 25", Regular: 8500, RP1: 3400, AOF: 1400 },
+  { date: "Nov 25", Regular: 9200, RP1: 3700, AOF: 1550 },
+  { date: "Dec 25", Regular: 8800, RP1: 3500, AOF: 1450 },
+  { date: "Jan 26", Regular: 10200, RP1: 4100, AOF: 1700 },
+  { date: "Feb 26", Regular: 10800, RP1: 4300, AOF: 1850 },
+  { date: "Mar 26", Regular: 11400, RP1: 4600, AOF: 2000 },
+];
+
+// Compute approval rate as percentage (approved / total applications * 100)
+const approvalRateBySegment = approvedBySegment.map((row, i) => {
+  const total = totalApplicationsBySegment[i];
+  return {
+    date: row.date,
+    Regular: Math.round((row.Regular / total.Regular) * 1000) / 10,
+    RP1: Math.round((row.RP1 / total.RP1) * 1000) / 10,
+    AOF: Math.round((row.AOF / total.AOF) * 1000) / 10,
+  };
+});
+
 const approvedInsights: ChartInsight[] = [
-  { text: "Total approvals grew 14.7% MoM in Mar 2026 (3,320 vs 3,110 in Feb), driven by Regular segment expansion.", type: "positive" },
-  { text: "RP1 segment approvals up 7.6% MoM (850 vs 790), maintaining ~25% share of total volume.", type: "positive" },
-  { text: "AOF approvals growing steadily at ~9% MoM but still represent only 11% of total volume.", type: "neutral" },
-  { text: "Dec 2025 dip of -8.9% likely due to year-end holidays reducing application flow and processing capacity.", type: "neutral" },
-  { text: "[Hypothesis] Acceleration in Jan-Mar may reflect seasonal demand from Ramadan spending preparation and marketing pushes.", type: "hypothesis" },
+  { text: "Regular approval rate is 18.4% in Mar 2026, consistent with 18.3% in Feb -- stable policy performance.", type: "neutral" },
+  { text: "RP1 approval rate at 18.5% in Mar, slightly up from 18.4% in Feb -- highest among all segments.", type: "positive" },
+  { text: "AOF approval rate at 18.5% in Mar, up from 18.4% in Feb -- improving despite growing volume.", type: "positive" },
+  { text: "Dec 2025 saw a dip across all segments (17.6% Regular, 17.4% RP1, 17.2% AOF) likely due to year-end holiday application quality.", type: "neutral" },
+  { text: "[Hypothesis] Stable ~18% rate suggests scorecard is well-calibrated; any policy change would shift rates significantly.", type: "hypothesis" },
 ];
 
 // Query 2: Accepted (signed contract) with cumulative
@@ -270,11 +298,23 @@ const acceptedCumulative = [
   { date: "Mar 26", Regular: 1830, RP1: 730, AOF: 310, cumRegular: 12680, cumRP1: 4990, cumAOF: 2060 },
 ];
 
+// Compute acceptance rate as percentage (accepted / approved * 100) for each segment
+const acceptanceRateBySegment = acceptedCumulative.map((accepted, i) => {
+  const approved = approvedBySegment[i];
+  return {
+    date: accepted.date,
+    Regular: Math.round((accepted.Regular / approved.Regular) * 1000) / 10,
+    RP1: Math.round((accepted.RP1 / approved.RP1) * 1000) / 10,
+    AOF: Math.round((accepted.AOF / approved.AOF) * 1000) / 10,
+  };
+});
+
 const acceptedInsights: ChartInsight[] = [
-  { text: "Cumulative accepted users reached 19,730 across all segments by Mar 2026, up from 16,860 in Feb (+17%).", type: "positive" },
-  { text: "Acceptance rate (accepted / approved) for Regular is ~87%, RP1 ~86%, AOF ~84% -- relatively consistent across products.", type: "neutral" },
-  { text: "Dec 2025 acceptance dip mirrors approval dip -- contract signing volume dropped ~8% likely due to holiday slowdown.", type: "negative" },
-  { text: "[Hypothesis] AOF acceptance rate slightly lower than others -- potential friction in fee disclosure during contract signing flow.", type: "hypothesis" },
+  { text: "Regular acceptance rate is 87.1% in Mar 2026, highest among all segments -- strong contract signing conversion.", type: "positive" },
+  { text: "RP1 acceptance rate at 85.9% in Mar, stable month-over-month.", type: "neutral" },
+  { text: "AOF acceptance rate at 83.8% trails Regular by 3.3pp -- potential friction from fee disclosure during CMA signing.", type: "negative" },
+  { text: "Dec 2025 saw lower acceptance across all segments, mirroring the approval dip from holiday slowdown.", type: "neutral" },
+  { text: "[Hypothesis] AOF acceptance rate could improve by presenting fee breakdown earlier in the application flow to set expectations.", type: "hypothesis" },
 ];
 
 // Query 3: Active Portfolio (dpd_bi < 7, end of month)
@@ -321,11 +361,32 @@ const portfolioSummary: PortfolioSummaryMock[] = [
   { month: "Mar 26", segment: "D", product: "Regular", newlyAccounts: 150, newlyLimit: 750000000, cumBookedCustomer: 700 },
   { month: "Mar 26", segment: "D", product: "RP1", newlyAccounts: 40, newlyLimit: 0, cumBookedCustomer: 90 },
   { month: "Mar 26", segment: "D", product: "AOF", newlyAccounts: 30, newlyLimit: 120000000, cumBookedCustomer: 110 },
+  { month: "Mar 26", segment: "E", product: "Regular", newlyAccounts: 85, newlyLimit: 340000000, cumBookedCustomer: 320 },
+  { month: "Mar 26", segment: "E", product: "RP1", newlyAccounts: 20, newlyLimit: 0, cumBookedCustomer: 45 },
+  { month: "Mar 26", segment: "E", product: "AOF", newlyAccounts: 15, newlyLimit: 45000000, cumBookedCustomer: 50 },
+  { month: "Mar 26", segment: "F", product: "Regular", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "F", product: "RP1", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "F", product: "AOF", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "G", product: "Regular", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "G", product: "RP1", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "G", product: "AOF", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "I", product: "Regular", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "I", product: "RP1", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "I", product: "AOF", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "J", product: "Regular", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "J", product: "RP1", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "J", product: "AOF", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "K", product: "Regular", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "K", product: "RP1", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "K", product: "AOF", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "Z", product: "Regular", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "Z", product: "RP1", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
+  { month: "Mar 26", segment: "Z", product: "AOF", newlyAccounts: 0, newlyLimit: 0, cumBookedCustomer: 0 },
 ];
 
 const portfolioSummaryInsights: ChartInsight[] = [
   { text: "Segment A (lowest risk) accounts for 50.4% of new Regular accounts and 53.3% of new RP1 -- strong credit quality intake.", type: "positive" },
-  { text: "RP1 newly_limit is Rp 0 across all segments as expected (prepaid cards have no revolving credit limit).", type: "neutral" },
+  { text: "RP1 newly_limit is Rp 0 across all segments as expected (RP1 cards have no revolving credit limit).", type: "neutral" },
   { text: "Total newly booked in Mar: 3,320 accounts with Rp 25.5B in new limits (ex-RP1), avg Rp 10.9M per non-RP1 account.", type: "neutral" },
   { text: "Segment D (highest risk) represents only 7.6% of new accounts -- suggesting scorecard is effectively filtering.", type: "positive" },
   { text: "[Hypothesis] D-segment share may rise if marketing channels shift to broader reach audiences in upcoming campaigns.", type: "hypothesis" },
@@ -346,7 +407,7 @@ const provisionData: ProvisionMock[] = [
 
 const provisionInsights: ChartInsight[] = [
   { text: "Total ECL provision stands at Rp 3.58B -- Regular accounts for 79.6% (Rp 2.85B) as the dominant portfolio.", type: "neutral" },
-  { text: "RP1 undrawn limit is Rp 0 as expected -- prepaid accounts have no unused credit facility.", type: "neutral" },
+  { text: "RP1 undrawn limit is Rp 0 as expected -- RP1 accounts have no unused credit facility.", type: "neutral" },
   { text: "Provision-to-outstanding ratio for Regular segment is ~1.8% indicating healthy coverage levels.", type: "positive" },
   { text: "[Hypothesis] If DPD 0 accounts shift to DPD 1+ in coming months, provision could increase 3-5x for those accounts due to stage migration.", type: "hypothesis" },
 ];
@@ -366,7 +427,7 @@ const rp1Topup = [
 
 const rp1TopupInsights: ChartInsight[] = [
   { text: "RP1 top-up rate reached 21% in Mar 2026, a steady climb from 12% in Jul 2025 -- strong engagement signal.", type: "positive" },
-  { text: "955 out of 4,550 RP1 accounts have topped up, indicating growing usage beyond initial prepaid balance.", type: "positive" },
+  { text: "955 out of 4,550 RP1 accounts have topped up, indicating growing usage beyond initial RP1 balance.", type: "positive" },
   { text: "Top-up rate has improved ~1pp per month consistently for 9 months.", type: "neutral" },
   { text: "[Hypothesis] Top-up rate acceleration may correlate with Ramadan spending season -- users needing additional balance for holiday purchases.", type: "hypothesis" },
   { text: "[Hypothesis] If RP1 top-up rate exceeds 30%, it could signal readiness for upsell to Regular credit product.", type: "hypothesis" },
@@ -405,7 +466,7 @@ const actionItems: ActionItem[] = [
     id: "orico-2",
     priority: "positive",
     action: "RP1 top-up rate steadily climbing to 21%.",
-    detail: "Indicates growing engagement with prepaid product. Consider upsell paths for high-engagement RP1 users.",
+    detail: "Indicates growing engagement with RP1 product. Consider upsell paths for high-engagement RP1 users.",
   },
   {
     id: "orico-3",
@@ -548,43 +609,24 @@ const monthlyMonths = ["Sep 25", "Oct 25", "Nov 25", "Dec 25", "Jan 26", "Feb 26
 const monthlyMetrics: MonthlyMetric[] = [
   // Customer & Growth
   { name: "Users", group: "Customer & Growth", values: { "Sep 25": "207,675", "Oct 25": "217,760", "Nov 25": "229,848", "Dec 25": "234,160", "Jan 26": "235,138", "Feb 26": "238,371" } },
-  { name: "Revenue from all products (gross)", group: "Customer & Growth", isSample: true, blockedBy: "mart_finance", values: { "Sep 25": "1,635,746", "Oct 25": "1,694,061", "Nov 25": "1,869,548", "Dec 25": "1,799,641", "Jan 26": "1,853,544", "Feb 26": "1,865,948" } },
-  { name: "Total Revenue (incl reg fee)", group: "Customer & Growth", isSample: true, blockedBy: "mart_finance", values: { "Sep 25": "1,623,902", "Oct 25": "1,678,665", "Nov 25": "1,861,108", "Dec 25": "1,788,803", "Jan 26": "1,842,467", "Feb 26": "1,865,948" } },
-  { name: "Revenue before write off (card only)", group: "Customer & Growth", isSample: true, blockedBy: "mart_finance", values: { "Sep 25": "1,593,194", "Oct 25": "1,645,841", "Nov 25": "1,834,365", "Dec 25": "1,774,144", "Jan 26": "1,832,513", "Feb 26": "1,858,560" } },
-  { name: "Revenue after write off (card + reg fee)", group: "Customer & Growth", isSample: true, blockedBy: "mart_finance", values: { "Sep 25": "1,421,647", "Oct 25": "1,332,141", "Nov 25": "1,861,108", "Dec 25": "1,788,803", "Jan 26": "1,842,467", "Feb 26": "1,865,948" } },
+  { name: "Total Revenue", group: "Customer & Growth", isSample: true, blockedBy: "mart_finance", values: { "Sep 25": "1,623,902", "Oct 25": "1,678,665", "Nov 25": "1,861,108", "Dec 25": "1,788,803", "Jan 26": "1,842,467", "Feb 26": "1,865,948" } },
   { name: "Transactions (Count)", group: "Customer & Growth", values: { "Sep 25": "616,878", "Oct 25": "675,665", "Nov 25": "669,501", "Dec 25": "664,907", "Jan 26": "586,913", "Feb 26": "489,875" } },
   // Per-Customer Economics
-  { name: "ARPAC", group: "Per-Customer Economics", isSample: true, blockedBy: "mart_finance", values: { "Sep 25": "$14.12", "Oct 25": "$12.54", "Nov 25": "$17.17", "Dec 25": "$16.96", "Jan 26": "$18.63", "Feb 26": "$21.01" } },
-  { name: "Average Monthly Fees", group: "Per-Customer Economics", isSample: true, blockedBy: "mart_finance", values: { "Sep 25": "$11.29", "Oct 25": "$11.46", "Nov 25": "$11.71", "Dec 25": "$11.69", "Jan 26": "$11.87", "Feb 26": "$12.04" } },
-  { name: "Average Monthly Fees (refund adjusted)", group: "Per-Customer Economics", isSample: true, blockedBy: "mart_finance", values: { "Sep 25": "$8.17", "Oct 25": "$8.34", "Nov 25": "$8.38", "Dec 25": "$8.35", "Jan 26": "$8.57", "Feb 26": "$8.69" } },
-  { name: "CAC of Approved Customer", group: "Per-Customer Economics", isSample: true, blockedBy: "Marketing platforms", values: { "Sep 25": "--", "Oct 25": "--", "Nov 25": "--", "Dec 25": "--", "Jan 26": "--", "Feb 26": "--" } },
-  { name: "Cost of Debt Capital", group: "Per-Customer Economics", isSample: true, blockedBy: "mart_finance", values: { "Sep 25": "9.10%", "Oct 25": "9.10%", "Nov 25": "9.10%", "Dec 25": "9.10%", "Jan 26": "9.10%", "Feb 26": "9.10%" } },
-  { name: "Cost to Serve per Active Customer", group: "Per-Customer Economics", isSample: true, blockedBy: "mart_finance", values: { "Sep 25": "$0.42", "Oct 25": "$0.40", "Nov 25": "$0.36", "Dec 25": "$0.37", "Jan 26": "$0.43", "Feb 26": "$0.46" } },
-  { name: "Monthly Income Customers", group: "Per-Customer Economics", isSample: true, blockedBy: "mart_finance", values: { "Sep 25": "$531", "Oct 25": "$523", "Nov 25": "$531", "Dec 25": "$510", "Jan 26": "$299", "Feb 26": "$328" } },
+  { name: "CAC per customer (USD)", group: "Per-Customer Economics", isSample: true, blockedBy: "Marketing platforms", values: { "Sep 25": "$21.67", "Oct 25": "$17.95", "Nov 25": "$17.43", "Dec 25": "$13.32", "Jan 26": "$9.20", "Feb 26": "$19.69" } },
+  { name: "Average limit per customer (USD)", group: "Per-Customer Economics", values: { "Sep 25": "$295", "Oct 25": "$291", "Nov 25": "$287", "Dec 25": "$282", "Jan 26": "$278", "Feb 26": "$275" } },
+  { name: "Receivables per customer (USD)", group: "Per-Customer Economics", values: { "Sep 25": "$173", "Oct 25": "$170", "Nov 25": "$167", "Dec 25": "$164", "Jan 26": "$162", "Feb 26": "$159" } },
   // Portfolio Quality
   { name: "Revolve Rate", group: "Portfolio Quality", values: { "Sep 25": "66.17%", "Oct 25": "65.23%", "Nov 25": "65.44%", "Dec 25": "63.80%", "Jan 26": "64.24%", "Feb 26": "64.98%" } },
   { name: "Active Customers", group: "Portfolio Quality", values: { "Sep 25": "63%", "Oct 25": "65%", "Nov 25": "66%", "Dec 25": "64%", "Jan 26": "61%", "Feb 26": "57%" } },
   { name: "Credit Line Used (Utilization)", group: "Portfolio Quality", values: { "Sep 25": "45.35%", "Oct 25": "45.65%", "Nov 25": "47.45%", "Dec 25": "47.99%", "Jan 26": "48.55%", "Feb 26": "49.72%" } },
-  { name: "Churn (Voluntary)", group: "Portfolio Quality", values: { "Sep 25": "0.025%", "Oct 25": "0.016%", "Nov 25": "0.026%", "Dec 25": "0.021%", "Jan 26": "0.022%", "Feb 26": "0.020%" } },
   // Risk & Delinquency
-  { name: "Delinquency Rate (15-90 days)", group: "Risk & Delinquency", values: { "Sep 25": "9.87%", "Oct 25": "7.64%", "Nov 25": "10.70%", "Dec 25": "11.35%", "Jan 26": "8.00%", "Feb 26": "11.37%" } },
-  { name: "Customers 30-149 Days Past Due", group: "Risk & Delinquency", values: { "Sep 25": "8.94%", "Oct 25": "9.79%", "Nov 25": "10.15%", "Dec 25": "10.98%", "Jan 26": "11.89%", "Feb 26": "15.09%" } },
+  { name: "NPL Ratio", group: "Risk & Delinquency", values: { "Sep 25": "6.82%", "Oct 25": "7.41%", "Nov 25": "8.12%", "Dec 25": "8.89%", "Jan 26": "10.05%", "Feb 26": "10.52%" } },
   { name: "Customers 30+ DPD last monthly cohort", group: "Risk & Delinquency", values: { "Sep 25": "5.94%", "Oct 25": "5.10%", "Nov 25": "5.46%", "Dec 25": "1.86%", "Jan 26": "--", "Feb 26": "--" } },
   // Marketing & Acquisition
-  { name: "CAC (Approved & Declined) - new", group: "Marketing & Acquisition", isSample: true, blockedBy: "Marketing platforms", values: { "Sep 25": "$21.67", "Oct 25": "$17.95", "Nov 25": "$17.43", "Dec 25": "$13.32", "Jan 26": "$9.49", "Feb 26": "$19.69" } },
-  { name: "Marketing per customer - Google", group: "Marketing & Acquisition", isSample: true, blockedBy: "Google Ads", values: { "Sep 25": "$31.05", "Oct 25": "$30.50", "Nov 25": "$29.63", "Dec 25": "$21.54", "Jan 26": "$0.00", "Feb 26": "$0.00" } },
-  { name: "Marketing per customer - Meta", group: "Marketing & Acquisition", isSample: true, blockedBy: "Meta Ads", values: { "Sep 25": "$35.66", "Oct 25": "$32.27", "Nov 25": "$31.51", "Dec 25": "$24.86", "Jan 26": "$0.00", "Feb 26": "$15.03" } },
-  { name: "Marketing per customer - TikTok", group: "Marketing & Acquisition", isSample: true, blockedBy: "TikTok Ads", values: { "Sep 25": "$38.80", "Oct 25": "$30.76", "Nov 25": "$30.44", "Dec 25": "$15.63", "Jan 26": "$0.00", "Feb 26": "$49.46" } },
-  { name: "Organic Traffic", group: "Marketing & Acquisition", values: { "Sep 25": "43.8%", "Oct 25": "48.8%", "Nov 25": "43.2%", "Dec 25": "73.5%", "Jan 26": "99.10%", "Feb 26": "79.90%" } },
   { name: "Applicant Approval Rate", group: "Marketing & Acquisition", values: { "Sep 25": "18.35%", "Oct 25": "16.94%", "Nov 25": "16.86%", "Dec 25": "12.67%", "Jan 26": "8.18%", "Feb 26": "10.67%" } },
-  // Product & Engagement
-  { name: "Calls Answered in 45 Seconds", group: "Product & Engagement", values: { "Sep 25": "94%", "Oct 25": "96%", "Nov 25": "98%", "Dec 25": "99%", "Jan 26": "98%", "Feb 26": "95%" } },
-  { name: "Google Play Store Rating", group: "Product & Engagement", isSample: true, blockedBy: "Play Console API", values: { "Sep 25": "4.6", "Oct 25": "4.5", "Nov 25": "4.9", "Dec 25": "4.9", "Jan 26": "4.9", "Feb 26": "4.9" } },
-  { name: "First or Second Credit Card", group: "Product & Engagement", isSample: true, blockedBy: "Survey data", values: { "Sep 25": "85.56%", "Oct 25": "85.77%", "Nov 25": "85.60%", "Dec 25": "88.85%", "Jan 26": "91.01%", "Feb 26": "87.52%" } },
-  { name: "Used BNPL", group: "Product & Engagement", isSample: true, blockedBy: "Survey data", values: { "Sep 25": "88.42%", "Oct 25": "88.17%", "Nov 25": "88.58%", "Dec 25": "85.37%", "Jan 26": "83.80%", "Feb 26": "88.67%" } },
 ];
 
-const monthlyGroups = ["Customer & Growth", "Per-Customer Economics", "Portfolio Quality", "Risk & Delinquency", "Marketing & Acquisition", "Product & Engagement"];
+const monthlyGroups = ["Customer & Growth", "Per-Customer Economics", "Portfolio Quality", "Risk & Delinquency", "Marketing & Acquisition"];
 
 // ── Tab 4: KPIs & Financial Results (OJK Plan) ───────────────────────────────
 
@@ -670,12 +712,7 @@ const funnelRows: FunnelRow[] = [
 
 // ── Formatting helpers ──────────────────────────────────────────────────────
 
-function formatIDR(value: number): string {
-  if (value >= 1_000_000_000_000) return `Rp ${(value / 1_000_000_000_000).toFixed(2)}T`;
-  if (value >= 1_000_000_000) return `Rp ${(value / 1_000_000_000).toFixed(2)}B`;
-  if (value >= 1_000_000) return `Rp ${(value / 1_000_000).toFixed(0)}M`;
-  return `Rp ${value.toLocaleString()}`;
-}
+// formatIDR replaced by imported formatAmountCompact(value, currency)
 
 function gapColor(gap: string): string {
   if (gap === "--" || gap === "") return "text-[var(--text-muted)]";
@@ -711,19 +748,20 @@ function getTrend(metric: MonthlyMetric): "up" | "down" | "flat" | "na" {
 
 type TabId = "segment" | "kpi" | "ojk" | "costbreakdown" | "funnel" | "monthly";
 
-const TABS: { id: TabId; label: string }[] = [
-  { id: "segment", label: "Segment Analysis" },
-  { id: "kpi", label: "KPIs (Orico Plan)" },
-  { id: "ojk", label: "KPIs (OJK Plan)" },
-  { id: "costbreakdown", label: "Cost Breakdown" },
-  { id: "funnel", label: "Funnel Tracking" },
-  { id: "monthly", label: "Monthly Metrics" },
+const TABS: { id: TabId; tKey: string }[] = [
+  { id: "segment", tKey: "segmentAnalysis" },
+  { id: "kpi", tKey: "kpiOricoPlan" },
+  { id: "ojk", tKey: "kpiOjkPlan" },
+  { id: "costbreakdown", tKey: "costBreakdown" },
+  { id: "funnel", tKey: "funnelTracking" },
+  { id: "monthly", tKey: "monthlyMetrics" },
 ];
 
 // ── Sub-components ──────────────────────────────────────────────────────────
 
-function KpiTable({ title, rows, invertColors }: { title: string; rows: KpiRow[]; invertColors?: boolean }) {
+function KpiTable({ title, rows, invertColors, columnLabels }: { title: string; rows: KpiRow[]; invertColors?: boolean; columnLabels?: { metric: string; plan: string; actual: string; gap: string; achievement: string } }) {
   const colorFn = invertColors ? gapColorInverse : gapColor;
+  const cols = columnLabels ?? { metric: "Metric", plan: "Plan", actual: "Actual", gap: "Gap", achievement: "Achievement" };
   return (
     <div className="mb-6">
       <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-3">{title}</h3>
@@ -731,11 +769,11 @@ function KpiTable({ title, rows, invertColors }: { title: string; rows: KpiRow[]
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-[var(--surface)] border-b border-[var(--border)]">
-              <th className="text-left py-2.5 px-4 text-[var(--text-secondary)] font-medium w-[40%]">Metric</th>
-              <th className="text-right py-2.5 px-4 text-[var(--text-secondary)] font-medium">Plan</th>
-              <th className="text-right py-2.5 px-4 text-[var(--text-secondary)] font-medium">Actual</th>
-              <th className="text-right py-2.5 px-4 text-[var(--text-secondary)] font-medium">Gap</th>
-              <th className="text-right py-2.5 px-4 text-[var(--text-secondary)] font-medium">Achievement</th>
+              <th className="text-left py-2.5 px-4 text-[var(--text-secondary)] font-medium w-[40%]">{cols.metric}</th>
+              <th className="text-right py-2.5 px-4 text-[var(--text-secondary)] font-medium">{cols.plan}</th>
+              <th className="text-right py-2.5 px-4 text-[var(--text-secondary)] font-medium">{cols.actual}</th>
+              <th className="text-right py-2.5 px-4 text-[var(--text-secondary)] font-medium">{cols.gap}</th>
+              <th className="text-right py-2.5 px-4 text-[var(--text-secondary)] font-medium">{cols.achievement}</th>
             </tr>
           </thead>
           <tbody>
@@ -763,7 +801,8 @@ function KpiTable({ title, rows, invertColors }: { title: string; rows: KpiRow[]
   );
 }
 
-function BalanceSheetTable({ rows }: { rows: BalanceSheetRow[] }) {
+function BalanceSheetTable({ rows, columnLabels }: { rows: BalanceSheetRow[]; columnLabels?: { metric: string; plan: string; actual: string } }) {
+  const cols = columnLabels ?? { metric: "Metric", plan: "Plan", actual: "Actual" };
   return (
     <div className="mb-6">
       <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-3">Balance Sheet (IDR 000)</h3>
@@ -771,9 +810,9 @@ function BalanceSheetTable({ rows }: { rows: BalanceSheetRow[] }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-[var(--surface)] border-b border-[var(--border)]">
-              <th className="text-left py-2.5 px-4 text-[var(--text-secondary)] font-medium w-[50%]">Metric</th>
-              <th className="text-right py-2.5 px-4 text-[var(--text-secondary)] font-medium">Plan</th>
-              <th className="text-right py-2.5 px-4 text-[var(--text-secondary)] font-medium">Actual</th>
+              <th className="text-left py-2.5 px-4 text-[var(--text-secondary)] font-medium w-[50%]">{cols.metric}</th>
+              <th className="text-right py-2.5 px-4 text-[var(--text-secondary)] font-medium">{cols.plan}</th>
+              <th className="text-right py-2.5 px-4 text-[var(--text-secondary)] font-medium">{cols.actual}</th>
             </tr>
           </thead>
           <tbody>
@@ -793,15 +832,23 @@ function BalanceSheetTable({ rows }: { rows: BalanceSheetRow[] }) {
 
 // ── Component ───────────────────────────────────────────────────────────────
 
-export default function OricoPageWrapper() {
-  return (
-    <PageGuard>
-      <OricoPageContent />
-    </PageGuard>
-  );
-}
-
-function OricoPageContent() {
+export default function OricoPageContent() {
+  const tOrico = useTranslations("orico");
+  const tCommon = useTranslations("common");
+  const { currency } = useCurrency();
+  const { locale } = useLanguage();
+  const kpiColumnLabels = useMemo(() => ({
+    metric: tCommon("metric"),
+    plan: tCommon("plan"),
+    actual: tCommon("actual"),
+    gap: tCommon("gap"),
+    achievement: tCommon("achievement"),
+  }), [tCommon]);
+  const bsColumnLabels = useMemo(() => ({
+    metric: tCommon("metric"),
+    plan: tCommon("plan"),
+    actual: tCommon("actual"),
+  }), [tCommon]);
   const { period, setPeriod, periodLabel } = usePeriod();
   const { filters } = useFilters();
 
@@ -815,10 +862,12 @@ function OricoPageContent() {
   const [printMode, setPrintMode] = useState(false);
 
   const pApprovedBySegment = useMemo(() => applyFilterToData(scaleTrendData(approvedBySegment, period), filters), [period, filters]);
+  const pApprovalRate = useMemo(() => applyFilterToData(scaleTrendData(approvalRateBySegment, period), filters), [period, filters]);
   const pAcceptedCumulative = useMemo(() => applyFilterToData(scaleTrendData(acceptedCumulative, period), filters), [period, filters]);
+  const pAcceptanceRate = useMemo(() => applyFilterToData(scaleTrendData(acceptanceRateBySegment, period), filters), [period, filters]);
   const pActivePortfolio = useMemo(() => applyFilterToData(scaleTrendData(activePortfolio, period), filters), [period, filters]);
   const pRp1Topup = useMemo(() => applyFilterToData(scaleTrendData(rp1Topup, period), filters), [period, filters]);
-  const pOnboardingFunnel = useMemo(() => applyFilterToData(scaleTrendData(onboardingFunnel, period), filters), [period, filters]);
+  // onboardingFunnel data retained for reference but chart removed (replaced by Acceptance Rate)
 
   const handleRefresh = useCallback(async () => {
     await new Promise((r) => setTimeout(r, 800));
@@ -841,32 +890,28 @@ function OricoPageContent() {
   const latestTopup = rp1Topup[rp1Topup.length - 1];
 
   // Grouped portfolio summary for table
-  const segments = ["A", "B", "C", "D"];
+  const allSegments = ["A", "B", "C", "D", "E", "F", "G", "I", "J", "K", "Z"] as const;
+  const segmentColorMap: Record<string, string> = {
+    A: "text-emerald-400",
+    B: "text-blue-400",
+    C: "text-amber-400",
+    D: "text-red-400",
+    E: "text-rose-500",
+    F: "text-pink-500",
+    G: "text-purple-500",
+    I: "text-orange-500",
+    J: "text-yellow-600",
+    K: "text-gray-500",
+    Z: "text-gray-400",
+  };
+  // Only show segments that have at least one non-zero value across all products
+  const segments = allSegments.filter((seg) => {
+    const segRows = portfolioSummary.filter((r) => r.segment === seg);
+    return segRows.some((r) => r.newlyAccounts > 0 || r.newlyLimit > 0 || r.cumBookedCustomer > 0);
+  });
   const products = ["Regular", "RP1", "AOF"];
 
-  const handleDownloadPdf = useCallback(() => {
-    generateReportPdf({
-      id: "orico-report",
-      cycle: period,
-      periodStart: DATA_RANGE.start,
-      periodEnd: DATA_RANGE.end,
-      section: "Orico Reports",
-      title: `Orico Partner Report — ${periodLabel}`,
-      generatedAt: new Date().toISOString(),
-      kpis: [
-        { label: "Total Approved", value: scaleMetricValue(2850, period, false), unit: "count", change: 4.2 },
-        { label: "Active Portfolio", value: 18500, unit: "count", change: 2.8 },
-        { label: "ECL Provision", value: scaleMetricValue(4200000000, period, false), unit: "B", change: -3.1 },
-        { label: "RP1 Top-up Rate", value: 42.5, unit: "%", change: 1.8 },
-      ],
-      trends: [
-        "Orico portfolio growing steadily with 2.8% MoM increase in active accounts.",
-        "ECL provision declining — credit quality improving across all segments.",
-        "RP1 top-up rate reached 42.5%, driven by repeat usage campaigns.",
-        `Report covers ${periodLabel} period ending ${DATA_RANGE.end}.`,
-      ],
-    });
-  }, []);
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
 
   return (
     <div className="flex flex-col">
@@ -885,7 +930,7 @@ function OricoPageContent() {
         Honest Bank Indonesia &mdash; Orico Monthly Report &mdash; CONFIDENTIAL
       </div>
 
-      <Header title="Orico Reports" />
+      <Header title={tOrico("title")} />
 
       <div className="flex-1 space-y-6 p-6">
         <ActiveFiltersBanner />
@@ -899,7 +944,7 @@ function OricoPageContent() {
             <p className="text-xs text-[var(--text-muted)] mt-0.5">{periodLabel}</p>
           </div>
           <button
-            onClick={handleDownloadPdf}
+            onClick={() => setPdfModalOpen(true)}
             className="no-print flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text-primary)] hover:bg-[var(--border)] transition-colors"
             data-print-hide
           >
@@ -921,7 +966,7 @@ function OricoPageContent() {
                   : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--border)]"
               )}
             >
-              {tab.label}
+              {tOrico(tab.tKey)}
             </button>
           ))}
         </div>
@@ -974,58 +1019,47 @@ function OricoPageContent() {
               />
             </div>
 
-            {/* Section 1: Approved by Segment */}
+            {/* Section 1: Approval Rate */}
             <ChartCard
-              title="Approved Applications by Segment"
-              subtitle="Monthly approved counts by Regular / RP1 / AOF"
+              title="Approval Rate"
+              subtitle="Percentage of applications submitted that were approved"
               asOf={AS_OF}
               dataRange={DATA_RANGE}
               onRefresh={handleRefresh}
               query={Q_APPROVED}
             >
-              <DashboardBarChart
-                data={pApprovedBySegment}
-                bars={[
+              <DashboardLineChart
+                data={pApprovalRate}
+                lines={[
                   { key: "Regular", color: "#3b82f6", label: "Regular" },
                   { key: "RP1", color: "#8b5cf6", label: "RP1" },
                   { key: "AOF", color: "#06b6d4", label: "AOF" },
                 ]}
-                stacked
+                valueType="percent"
                 height={320}
               />
               <ChartInsights insights={approvedInsights} />
             </ChartCard>
 
-            {/* Section 2: Accepted Users (Cumulative) */}
+            {/* Section 2: Acceptance Rate */}
             <ChartCard
-              title="Accepted Users (Signed Contract)"
-              subtitle="Monthly accepted users with cumulative line by segment"
+              title="Acceptance Rate"
+              subtitle="Percentage of approved applicants that sign their CMA"
               asOf={AS_OF}
               dataRange={DATA_RANGE}
               onRefresh={handleRefresh}
               query={Q_ACCEPTED}
             >
-              <div className="space-y-4">
-                <DashboardBarChart
-                  data={pAcceptedCumulative}
-                  bars={[
-                    { key: "Regular", color: "#3b82f6", label: "Regular" },
-                    { key: "RP1", color: "#8b5cf6", label: "RP1" },
-                    { key: "AOF", color: "#06b6d4", label: "AOF" },
-                  ]}
-                  stacked
-                  height={280}
-                />
-                <DashboardLineChart
-                  data={pAcceptedCumulative}
-                  lines={[
-                    { key: "cumRegular", color: "#3b82f6", label: "Cum. Regular" },
-                    { key: "cumRP1", color: "#8b5cf6", label: "Cum. RP1" },
-                    { key: "cumAOF", color: "#06b6d4", label: "Cum. AOF" },
-                  ]}
-                  height={200}
-                />
-              </div>
+              <DashboardLineChart
+                data={pAcceptanceRate}
+                lines={[
+                  { key: "Regular", color: "#3b82f6", label: "Regular" },
+                  { key: "RP1", color: "#8b5cf6", label: "RP1" },
+                  { key: "AOF", color: "#06b6d4", label: "AOF" },
+                ]}
+                valueType="percent"
+                height={320}
+              />
               <ChartInsights insights={acceptedInsights} />
             </ChartCard>
 
@@ -1038,14 +1072,13 @@ function OricoPageContent() {
               onRefresh={handleRefresh}
               query={Q_ACTIVE}
             >
-              <DashboardBarChart
+              <DashboardLineChart
                 data={pActivePortfolio}
-                bars={[
+                lines={[
                   { key: "Regular", color: "#3b82f6", label: "Regular" },
                   { key: "RP1", color: "#8b5cf6", label: "RP1" },
                   { key: "AOF", color: "#06b6d4", label: "AOF" },
                 ]}
-                stacked
                 height={320}
               />
               <ChartInsights insights={activePortfolioInsights} />
@@ -1085,16 +1118,8 @@ function OricoPageContent() {
                           >
                             {pIdx === 0 ? (
                               <td
-                                rowSpan={3}
-                                className={`py-2 px-3 font-semibold align-top ${
-                                  seg === "A"
-                                    ? "text-emerald-400"
-                                    : seg === "B"
-                                      ? "text-blue-400"
-                                      : seg === "C"
-                                        ? "text-amber-400"
-                                        : "text-red-400"
-                                }`}
+                                rowSpan={products.length}
+                                className={`py-2 px-3 font-semibold align-top ${segmentColorMap[seg] ?? "text-gray-400"}`}
                               >
                                 {seg}
                               </td>
@@ -1104,7 +1129,7 @@ function OricoPageContent() {
                               {row.newlyAccounts.toLocaleString()}
                             </td>
                             <td className="py-2 px-3 text-right text-[var(--text-primary)]">
-                              {formatIDR(row.newlyLimit)}
+                              {formatAmountCompact(row.newlyLimit, currency)}
                             </td>
                             <td className="py-2 px-3 text-right text-[var(--text-primary)]">
                               {row.cumBookedCustomer.toLocaleString()}
@@ -1122,7 +1147,7 @@ function OricoPageContent() {
                         {portfolioSummary.reduce((s, r) => s + r.newlyAccounts, 0).toLocaleString()}
                       </td>
                       <td className="py-2 px-3 text-right text-[var(--text-primary)]">
-                        {formatIDR(portfolioSummary.reduce((s, r) => s + r.newlyLimit, 0))}
+                        {formatAmountCompact(portfolioSummary.reduce((s, r) => s + r.newlyLimit, 0), currency)}
                       </td>
                       <td className="py-2 px-3 text-right text-[var(--text-primary)]">
                         {portfolioSummary.reduce((s, r) => s + r.cumBookedCustomer, 0).toLocaleString()}
@@ -1158,10 +1183,10 @@ function OricoPageContent() {
                       <tr key={row.segment} className="border-b border-[var(--border)]">
                         <td className="py-2 px-3 text-[var(--text-primary)] font-medium">{row.segment}</td>
                         <td className="py-2 px-3 text-right text-[var(--text-primary)]">
-                          {formatIDR(row.provision)}
+                          {formatAmountCompact(row.provision, currency)}
                         </td>
                         <td className="py-2 px-3 text-right text-[var(--text-primary)]">
-                          {row.undrawnLimit > 0 ? formatIDR(row.undrawnLimit) : "--"}
+                          {row.undrawnLimit > 0 ? formatAmountCompact(row.undrawnLimit, currency) : "--"}
                         </td>
                         <td className="py-2 px-3 text-right font-medium text-[var(--text-primary)]">
                           {((row.provision / totalProvision) * 100).toFixed(1)}%
@@ -1170,8 +1195,8 @@ function OricoPageContent() {
                     ))}
                     <tr className="border-t-2 border-[var(--border)] font-semibold">
                       <td className="py-2 px-3 text-[var(--text-primary)]">Total</td>
-                      <td className="py-2 px-3 text-right text-[var(--text-primary)]">{formatIDR(totalProvision)}</td>
-                      <td className="py-2 px-3 text-right text-[var(--text-primary)]">{formatIDR(totalUndrawn)}</td>
+                      <td className="py-2 px-3 text-right text-[var(--text-primary)]">{formatAmountCompact(totalProvision, currency)}</td>
+                      <td className="py-2 px-3 text-right text-[var(--text-primary)]">{formatAmountCompact(totalUndrawn, currency)}</td>
                       <td className="py-2 px-3 text-right text-[var(--text-primary)]">100%</td>
                     </tr>
                   </tbody>
@@ -1206,9 +1231,9 @@ function OricoPageContent() {
                 dataRange={DATA_RANGE}
                 onRefresh={handleRefresh}
               >
-                <DashboardBarChart
+                <DashboardLineChart
                   data={pRp1Topup}
-                  bars={[
+                  lines={[
                     { key: "totalRp1", color: "#475569", label: "Total RP1" },
                     { key: "topupRp1", color: "#8b5cf6", label: "Topped Up" },
                   ]}
@@ -1224,56 +1249,6 @@ function OricoPageContent() {
                 />
               </ChartCard>
             </div>
-
-            {/* Section 7: Onboarding Funnel */}
-            <ChartCard
-              title="Onboarding Funnel: Approved to Accepted"
-              subtitle="Monthly approved vs accepted (signed contract) by segment"
-              asOf={AS_OF}
-              dataRange={DATA_RANGE}
-              onRefresh={handleRefresh}
-              query={Q_FUNNEL}
-            >
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                {/* Regular */}
-                <div>
-                  <h4 className="text-xs font-semibold text-[var(--text-secondary)] mb-2 uppercase tracking-wider">Regular</h4>
-                  <DashboardBarChart
-                    data={pOnboardingFunnel}
-                    bars={[
-                      { key: "approvedReg", color: "#3b82f6", label: "Approved" },
-                      { key: "acceptedReg", color: "#22c55e", label: "Accepted" },
-                    ]}
-                    height={220}
-                  />
-                </div>
-                {/* RP1 */}
-                <div>
-                  <h4 className="text-xs font-semibold text-[var(--text-secondary)] mb-2 uppercase tracking-wider">RP1</h4>
-                  <DashboardBarChart
-                    data={pOnboardingFunnel}
-                    bars={[
-                      { key: "approvedRP1", color: "#8b5cf6", label: "Approved" },
-                      { key: "acceptedRP1", color: "#22c55e", label: "Accepted" },
-                    ]}
-                    height={220}
-                  />
-                </div>
-                {/* AOF */}
-                <div>
-                  <h4 className="text-xs font-semibold text-[var(--text-secondary)] mb-2 uppercase tracking-wider">AOF</h4>
-                  <DashboardBarChart
-                    data={pOnboardingFunnel}
-                    bars={[
-                      { key: "approvedAOF", color: "#06b6d4", label: "Approved" },
-                      { key: "acceptedAOF", color: "#22c55e", label: "Accepted" },
-                    ]}
-                    height={220}
-                  />
-                </div>
-              </div>
-              <ChartInsights insights={onboardingInsights} />
-            </ChartCard>
 
             {/* Action Items */}
             <ActionItems section="Orico Reports" items={actionItems} />
@@ -1298,7 +1273,7 @@ function OricoPageContent() {
               </p>
             </div>
 
-            <KpiTable title="Key Performance Indicators" rows={kpiRows} />
+            <KpiTable title="Key Performance Indicators" rows={kpiRows} columnLabels={kpiColumnLabels} />
 
             <div className="page-break" />
 
@@ -1306,9 +1281,9 @@ function OricoPageContent() {
               dataset="mart_finance"
               reason="Revenue, cost, and P&L data cannot be automated"
             >
-              <KpiTable title="P&L Revenue (IDR 000)" rows={revenueRows} />
+              <KpiTable title="P&L Revenue (IDR 000)" rows={revenueRows} columnLabels={kpiColumnLabels} />
 
-              <KpiTable title="P&L Cost (IDR 000)" rows={costRows} invertColors />
+              <KpiTable title="P&L Cost (IDR 000)" rows={costRows} invertColors columnLabels={kpiColumnLabels} />
 
               {/* Bottom line */}
               <div className="mb-6">
@@ -1335,7 +1310,7 @@ function OricoPageContent() {
               reason="Cash, bank loan, and capital data cannot be automated"
               variant="inline"
             >
-              <BalanceSheetTable rows={balanceSheetRows} />
+              <BalanceSheetTable rows={balanceSheetRows} columnLabels={bsColumnLabels} />
             </SampleDataBanner>
 
             {/* Flow Rates */}
@@ -1390,14 +1365,14 @@ function OricoPageContent() {
                 Plan vs Actual using <span className="font-semibold">OJK business plan</span> targets &mdash; January 2026. All USD values in thousands (USD 000).
               </p>
             </div>
-            <KpiTable title="Key Performance Indicators (OJK Plan)" rows={ojkKpiRows} />
+            <KpiTable title="Key Performance Indicators (OJK Plan)" rows={ojkKpiRows} columnLabels={kpiColumnLabels} />
             <div className="page-break" />
             <SampleDataBanner
               dataset="mart_finance"
               reason="Revenue data cannot be automated"
               variant="inline"
             >
-              <KpiTable title="P&L Revenue (USD 000) — OJK Plan" rows={ojkRevenueRows} />
+              <KpiTable title="P&L Revenue (USD 000) — OJK Plan" rows={ojkRevenueRows} columnLabels={kpiColumnLabels} />
             </SampleDataBanner>
           </div>
         )}
@@ -1601,6 +1576,17 @@ function OricoPageContent() {
           </div>
         )}
       </div>
+
+      {/* PDF Download Modal */}
+      <PdfDownloadModal
+        isOpen={pdfModalOpen}
+        onClose={() => setPdfModalOpen(false)}
+        reportId="portfolio"
+        reportTitle="Orico Partner Report"
+        defaultStartDate={DATA_RANGE.start}
+        defaultEndDate={DATA_RANGE.end}
+        defaultPeriod={period}
+      />
     </div>
   );
 }

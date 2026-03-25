@@ -155,12 +155,19 @@ const CARD_TYPE_MAP: Record<string, string> = {
   V: "Virtual",
 };
 
-const PRODUCT_TYPE_MAP: Record<string, string> = {
-  "10012": "Standard CC (Legacy)",
-  "10013": "Standard CC",
-  "10014": "RP1 (Prepaid)",
-  "10015": "Opening Fee",
-};
+/** Card programs known to be RP1 or Registration Fee; everything else = Regular */
+const RP1_PROGRAMS = new Set(["10014", "00014"]);
+const REG_FEE_PROGRAMS = new Set(["10015", "00015"]);
+
+function resolveProductType(decisionProductType: string | null, cardPgm: string | null): string | null {
+  // Prefer decision-derived type when available
+  if (decisionProductType) return decisionProductType;
+  // Fallback to card program mapping
+  if (!cardPgm) return null;
+  if (RP1_PROGRAMS.has(cardPgm)) return "RP1";
+  if (REG_FEE_PROGRAMS.has(cardPgm)) return "Registration Fee";
+  return "Regular";  // Default: all other programs are Regular
+}
 
 const CARD_BRAND_MAP: Record<string, string> = {
   VS: "Visa",
@@ -262,7 +269,14 @@ export async function searchUserById(
       SELECT
         FORMAT_DATE('%Y-%m-%d', DATE(MIN(timestamp), 'Asia/Jakarta')) AS decision_date,
         -- Get credit risk category from the most recent decision
-        ARRAY_AGG(credit_risk_category ORDER BY timestamp DESC LIMIT 1)[OFFSET(0)] AS credit_risk_category
+        ARRAY_AGG(credit_risk_category ORDER BY timestamp DESC LIMIT 1)[OFFSET(0)] AS credit_risk_category,
+        -- Derive product type from decision flags (NULL when no decision rows exist)
+        CASE
+          WHEN COUNT(*) = 0 THEN NULL
+          WHEN LOGICAL_OR(CAST(is_prepaid_card_applicable AS BOOL)) THEN 'RP1'
+          WHEN LOGICAL_OR(CAST(is_account_opening_fee_applicable AS BOOL)) THEN 'Registration Fee'
+          ELSE 'Regular'
+        END AS decision_product_type
       FROM ${TABLES.decision_completed}
       WHERE user_id = @userId
     ),
@@ -340,6 +354,7 @@ export async function searchUserById(
       cl_stat.card_status,
       d.decision_date,
       d.credit_risk_category,
+      d.decision_product_type,
       vc.videocall_verified_date,
       ps.pin_set_date,
       cma.cma_accepted_date,
@@ -471,7 +486,7 @@ export async function searchUserById(
     current_urn_date: (masked.current_urn_date as string) ?? null,
     card_type: rawCardType ? (CARD_TYPE_MAP[rawCardType] ?? rawCardType) : null,
     card_pgm: rawCardPgm,
-    product_type: rawCardPgm ? (PRODUCT_TYPE_MAP[rawCardPgm] ?? rawCardPgm) : null,
+    product_type: resolveProductType((masked.decision_product_type as string) ?? null, rawCardPgm),
     card_brand: rawCardBrand ? (CARD_BRAND_MAP[rawCardBrand] ?? rawCardBrand) : null,
     credit_limit: (masked.credit_limit as number) ?? null,
     previous_urns: previousUrns,

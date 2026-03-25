@@ -8,10 +8,10 @@
       "port": 3000
     },
     {
-      "name": "Next.js Production Server",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "start"],
-      "port": 3000
+      "name": "API Server",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["tsx", "local-api-server.ts"],
+      "port": 3099
     }
   ]
 }

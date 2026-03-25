@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { hasPageAccess, APP_OWNER } from "@/lib/access-control";
 import { IS_STATIC_EXPORT } from "@/lib/static-mode";
 import { Lock } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 /**
  * Wraps a page and checks if the current user is on the allowlist.
@@ -14,15 +15,30 @@ import { Lock } from "lucide-react";
 export function PageGuard({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
   const pathname = usePathname();
+  const tAuth = useTranslations("auth");
+  const tCommon = useTranslations("common");
 
-  // Static export mode — bypass access control
-  if (IS_STATIC_EXPORT) return <>{children}</>;
+  // Static export mode — require login but bypass page-level access control
+  if (IS_STATIC_EXPORT) {
+    if (status === "loading") {
+      return (
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-pulse text-[var(--text-muted)] text-sm">{tCommon("loading")}</div>
+        </div>
+      );
+    }
+    if (!session?.user) {
+      if (typeof window !== "undefined") window.location.replace("/login/");
+      return null;
+    }
+    return <>{children}</>;
+  }
 
   // While loading session, show nothing (avoids flash)
   if (status === "loading") {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-pulse text-[var(--text-muted)] text-sm">Loading...</div>
+        <div className="animate-pulse text-[var(--text-muted)] text-sm">{tCommon("loading")}</div>
       </div>
     );
   }
@@ -42,28 +58,26 @@ export function PageGuard({ children }: { children: React.ReactNode }) {
           {/* Title */}
           <div>
             <h2 className="text-xl font-bold text-[var(--text-primary)]">
-              Access Restricted
+              {tAuth("accessRestricted")}
             </h2>
             <p className="mt-2 text-sm text-[var(--text-muted)]">
-              This page is restricted to authorized users only.
-              Your account ({email || "unknown"}) is not on the access list.
+              {tAuth("accessMessage", { email: email || "unknown" })}
             </p>
           </div>
 
           {/* Request access */}
           <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-left">
             <p className="text-sm text-[var(--text-secondary)] font-medium mb-1">
-              Need access?
+              {tAuth("needAccess")}
             </p>
             <p className="text-xs text-[var(--text-muted)]">
-              Contact the app administrator at{" "}
+              {tAuth("contactAdmin")}{" "}
               <a
                 href={`mailto:${APP_OWNER}?subject=Access request: ${pathname}`}
                 className="text-blue-500 hover:underline font-medium"
               >
                 {APP_OWNER}
-              </a>{" "}
-              to request access to this page.
+              </a>
             </p>
           </div>
 
@@ -72,7 +86,7 @@ export function PageGuard({ children }: { children: React.ReactNode }) {
             href="/dashboard"
             className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text-primary)] hover:bg-[var(--border)] transition-colors"
           >
-            Go to Dashboard
+            {tAuth("goToDashboard")}
           </a>
         </div>
       </div>
