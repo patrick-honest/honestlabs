@@ -10,10 +10,9 @@
 export const IS_STATIC_EXPORT =
   process.env.NEXT_PUBLIC_STATIC_EXPORT === "true" ||
   process.env.NEXT_PUBLIC_DEMO_MODE === "true" ||
-  // Local dev: NextAuth API routes don't exist (wrangler pages dev or
-  // Next.js dev with API proxied to local-api-server). Use static auth
-  // unless NEXT_PUBLIC_NEXTAUTH_ENABLED is explicitly set.
-  process.env.NEXT_PUBLIC_NEXTAUTH_ENABLED !== "true";
+  // Local dev: NextAuth API routes don't exist when using local-api-server.
+  // Use static auth unless NEXTAUTH_URL is set or explicitly enabled.
+  (!process.env.NEXTAUTH_URL && process.env.NEXT_PUBLIC_NEXTAUTH_ENABLED !== "true");
 
 /** Key used to persist login state in localStorage */
 export const AUTH_STORAGE_KEY = "honestinfo_authenticated";

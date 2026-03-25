@@ -20,6 +20,7 @@ const nextConfig: NextConfig = {
           "better-sqlite3",
         ],
         // Proxy /api/* to local API server in dev mode
+        skipTrailingSlashRedirect: true,
         async rewrites() {
           return [
             {
