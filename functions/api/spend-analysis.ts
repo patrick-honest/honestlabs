@@ -349,7 +349,7 @@ async function querySpendAnalysis(startDate: string, endDate: string, env: Env, 
       ORDER BY w.week_start`,
       { startDate, endDate }, env,
     ),
-    // Query 7: First Transaction Channel (lifetime, no date filter)
+    // Query 7: First Transaction Channel — respects global date filter, weekly time series
     runQuery(
       `WITH card_map AS (
         SELECT DISTINCT f9_dw005_crn AS crn, f9_dw005_loc_acct AS loc_acct
@@ -358,6 +358,7 @@ async function querySpendAnalysis(startDate: string, endDate: string, env: Env, 
       first_txn AS (
         SELECT cm.loc_acct,
           ARRAY_AGG(STRUCT(
+            t.f9_dw007_dt AS txn_date,
             CASE
               WHEN t.fx_dw007_txn_typ = 'TM' THEN 'Online'
               WHEN t.fx_dw007_txn_typ = 'RA' AND t.fx_dw007_rte_dest = 'L' THEN 'QRIS'
@@ -369,15 +370,35 @@ async function querySpendAnalysis(startDate: string, endDate: string, env: Env, 
         INNER JOIN card_map cm ON t.f9_dw007_prin_crn = cm.crn
         WHERE (t.fx_dw007_stat IS NULL OR TRIM(t.fx_dw007_stat) = '' OR t.fx_dw007_stat = ' ')
           AND t.fx_dw007_txn_typ NOT IN ('PM', 'BE', 'RF')
+          AND t.f9_dw007_dt >= @startDate AND t.f9_dw007_dt < @endDate
         GROUP BY cm.loc_acct
+      ),
+      -- Period summary (for KPI cards)
+      summary AS (
+        SELECT first.channel AS channel,
+          COUNT(*) AS user_count,
+          ROUND(AVG(first.amount), 2) AS avg_first_amount
+        FROM first_txn
+        WHERE first.txn_date >= @kpiStart AND first.txn_date < @endDate
+        GROUP BY first.channel
+      ),
+      -- Weekly time series for line chart
+      weekly AS (
+        SELECT FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(first.txn_date, ISOWEEK)) AS week_start,
+          COUNTIF(first.channel = 'Online') AS online,
+          COUNTIF(first.channel = 'Offline') AS offline,
+          COUNTIF(first.channel = 'QRIS') AS qris,
+          COUNT(*) AS total
+        FROM first_txn
+        GROUP BY 1
       )
-      SELECT first.channel AS channel,
-        COUNT(*) AS user_count,
-        ROUND(AVG(first.amount), 2) AS avg_first_amount
-      FROM first_txn
-      GROUP BY first.channel
-      ORDER BY user_count DESC`,
-      undefined, env,
+      SELECT 'summary' AS result_type, channel, user_count, avg_first_amount, NULL AS week_start, NULL AS online, NULL AS offline, NULL AS qris, NULL AS total
+      FROM summary
+      UNION ALL
+      SELECT 'weekly' AS result_type, NULL, NULL, NULL, week_start, online, offline, qris, total
+      FROM weekly
+      ORDER BY result_type, week_start`,
+      { startDate, endDate, kpiStart: kpiStartDate }, env,
     ),
     // Query 8: Decline reason distribution by response code (fx_dw007_given_resp_cde)
     // A transaction can have multiple decline reasons; each is counted separately
@@ -410,7 +431,12 @@ async function querySpendAnalysis(startDate: string, endDate: string, env: Env, 
     periodSummary: (periodSummaryRows as unknown[])[0] ?? null,
     onboardingSummary: (onboardingSummaryRows as unknown[])[0] ?? null,
     onboardingTrend: onboardingTrendRows,
-    firstTxnChannel: firstTxnChannelRows,
+    firstTxnChannel: (firstTxnChannelRows as Record<string, unknown>[]).filter(r => r.result_type === "summary").map(r => ({
+      channel: r.channel, user_count: r.user_count, avg_first_amount: r.avg_first_amount,
+    })),
+    firstTxnChannelTrend: (firstTxnChannelRows as Record<string, unknown>[]).filter(r => r.result_type === "weekly").map(r => ({
+      date: r.week_start, online: r.online, offline: r.offline, qris: r.qris, total: r.total,
+    })),
     declineReasons: (declineReasonRows as Array<{ resp_code: string; cnt: number; amount_idr: number }>).map((r) => ({
       resp_code: r.resp_code,
       label: RESPONSE_CODE_LABELS[r.resp_code] ?? `Unknown (${r.resp_code})`,

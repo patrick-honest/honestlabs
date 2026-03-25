@@ -2,10 +2,16 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "RunbookBot",
-      "runtimeExecutable": "/usr/bin/env",
-      "runtimeArgs": ["npm", "run", "dev:full"],
+      "name": "Next.js Dev Server",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
       "port": 3000
+    },
+    {
+      "name": "API Server",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["tsx", "local-api-server.ts"],
+      "port": 3099
     }
   ]
 }

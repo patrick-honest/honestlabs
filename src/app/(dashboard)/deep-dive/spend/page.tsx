@@ -201,13 +201,27 @@ export default function SpendPage() {
     }));
   }, [spendAnalysis]);
 
-  // First transaction channel breakdown
+  // First transaction channel breakdown (period summary)
   const firstTxnChannel = useMemo(() => {
     if (!spendAnalysis?.firstTxnChannel?.length) return null;
     return (spendAnalysis.firstTxnChannel as { channel: string; user_count: number; avg_first_amount: number }[]).map(r => ({
       channel: r.channel,
       users: r.user_count,
       avgAmount: r.avg_first_amount,
+    }));
+  }, [spendAnalysis]);
+
+  // First transaction channel trend (weekly time series for line chart)
+  const firstTxnChannelTrend = useMemo(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const trend = (spendAnalysis as any)?.firstTxnChannelTrend;
+    if (!trend?.length) return null;
+    return trend.map((r: { date: string; online: number; offline: number; qris: number; total: number }) => ({
+      date: r.date,
+      online: r.online ?? 0,
+      offline: r.offline ?? 0,
+      qris: r.qris ?? 0,
+      total: r.total ?? 0,
     }));
   }, [spendAnalysis]);
 
@@ -501,20 +515,27 @@ export default function SpendPage() {
                 </ChartCard>
               )}
 
-              {firstTxnChannel && (
+              {firstTxnChannelTrend && (
                 <ChartCard
                   title={tSpend("firstTxnChannel")}
-                  subtitle={tSpend("firstTxnChannelSub")}
+                  subtitle="Weekly count of first-ever transactions by channel"
                   asOf={AS_OF}
                   dataRange={DATA_RANGE}
                   liveData={true}
+                  showIncrement
                 >
-                  <DashboardBarChart
-                    data={firstTxnChannel}
-                    bars={[{ key: "users", color: "#06b6d4", label: tSpend("userCount") }]}
-                    xAxisKey="channel"
-                    height={260}
-                  />
+                  {(increment: ChartIncrement) => (
+                    <DashboardLineChart
+                      data={aggregateByIncrement(firstTxnChannelTrend, increment, "date")}
+                      lines={[
+                        { key: "online", color: "#3b82f6", label: "Online" },
+                        { key: "offline", color: "#f59e0b", label: "Offline" },
+                        { key: "qris", color: "#10b981", label: "QRIS" },
+                      ]}
+                      xAxisKey="date"
+                      height={260}
+                    />
+                  )}
                 </ChartCard>
               )}
             </>
@@ -923,7 +944,7 @@ export default function SpendPage() {
 
         <p className="text-xs text-[var(--text-muted)] leading-relaxed">
           <span className="font-semibold text-[var(--text-secondary)]">1st Transaction Channel:</span>{" "}
-          Distribution of each user&apos;s first-ever authorized transaction by channel (Online / Offline / QRIS). Lifetime metric, not filtered by selected period.
+          Weekly count of users whose first-ever authorized transaction falls in the selected period, broken down by channel (Online / Offline / QRIS). Respects global date filter.
           Channel classification: <code className="px-1 rounded bg-slate-100 dark:bg-slate-800 text-xs">TM</code> = Online,{" "}
           <code className="px-1 rounded bg-slate-100 dark:bg-slate-800 text-xs">RA + rte_dest=L</code> = QRIS, all others = Offline.
         </p>
